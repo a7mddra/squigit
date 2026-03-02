@@ -53,6 +53,10 @@ export const commands = {
   cancelDownloadOcrModel: (modelId: string) =>
     invoke("cancel_download_ocr_model", { modelId }),
 
+  // UI audio
+  playUiSound: (effect: "dialog-warning" = "dialog-warning") =>
+    invoke("play_ui_sound", { effect }),
+
   // Utils
   openExternalUrl: (url: string) => invoke("open_external_url", { url }),
   getAppConstants: () =>

@@ -12,6 +12,7 @@ pub mod commands;
 pub mod constants;
 pub mod services;
 
+use commands::audio::play_ui_sound;
 use commands::auth::{
     cache_avatar, cancel_google_auth, get_api_key, get_user_data, logout, start_google_auth,
 };
@@ -70,6 +71,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::new())
+        .manage(services::audio::UiSoundPlayer::new())
         .manage(SpeechState::default())
         .invoke_handler(tauri::generate_handler![
             // Image processing
@@ -108,6 +110,7 @@ pub fn run() {
             set_always_on_top,
             get_always_on_top,
             show_window,
+            play_ui_sound,
             // Constants
             get_app_constants,
             // OCR

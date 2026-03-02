@@ -8,7 +8,6 @@ import React, { useEffect, useRef } from "react";
 
 import { createPortal } from "react-dom";
 import { AlertCircle, AlertTriangle, Info, Sparkles } from "lucide-react";
-import { playWarning } from "@/assets";
 import styles from "./Dialog.module.css";
 
 export type DialogVariant = "error" | "warning" | "info" | "update";
@@ -20,7 +19,7 @@ export interface DialogAction {
   disabled?: boolean;
 }
 
-import { getDialogs, DialogContent } from "@/lib";
+import { getDialogs, DialogContent, commands } from "@/lib";
 
 interface DialogProps {
   variant?: DialogVariant;
@@ -77,7 +76,9 @@ export const Dialog: React.FC<DialogProps> = ({
   useEffect(() => {
     if (isOpen) {
       document.body.classList.add("has-open-dialog");
-      playWarning();
+      void commands.playUiSound("dialog-warning").catch((error) => {
+        console.warn("[dialog] Failed to play ui sound:", error);
+      });
     } else {
       document.body.classList.remove("has-open-dialog");
     }
