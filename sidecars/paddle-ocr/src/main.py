@@ -1,16 +1,16 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # Copyright 2026 a7mddra
 # SPDX-License-Identifier: Apache-2.0
 
-import base64
+import argparse
+import contextlib
 import json
 import os
 import sys
-import tempfile
-import threading
 import traceback
 import warnings
 from pathlib import Path
+from typing import Any
 
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -65,9 +65,6 @@ def _get_frozen_paddle_lib_dir() -> str | None:
 def _bootstrap_frozen_loader_env() -> None:
     """
     Re-exec frozen sidecar with loader env pointing to bundled Paddle libs.
-
-    Paddle may dlopen CPU libs by bare soname (e.g., libmklml_intel.so),
-    so the dynamic loader search path must be ready before those calls.
     """
     if os.name == "nt":
         return
@@ -94,14 +91,10 @@ def _bootstrap_frozen_loader_env() -> None:
     env = os.environ.copy()
     env[key] = f"{paddle_lib_dir}{sep}{current}" if current else paddle_lib_dir
     env["SNAPLLM_PADDLE_LIBPATH_BOOTSTRAPPED"] = "1"
-    # Preserve user arguments on re-exec; avoid duplicating argv[0] as input.
     os.execvpe(sys.executable, [sys.executable, *sys.argv[1:]], env)
 
 
 def _configure_frozen_lib_paths() -> None:
-    """
-    Ensure Paddle bundled shared libs are discoverable in frozen builds.
-    """
     paddle_lib_dir = _get_frozen_paddle_lib_dir()
     if not paddle_lib_dir:
         return
@@ -117,12 +110,6 @@ def _configure_frozen_lib_paths() -> None:
 
 
 def _preload_frozen_paddle_libs() -> None:
-    """
-    Preload Paddle CPU runtime libs in frozen builds.
-
-    This avoids loader-order issues where libmklml is requested before
-    libiomp5 is resolved from the bundled runtime tree.
-    """
     if os.name == "nt":
         return
 
@@ -169,7 +156,7 @@ _preload_frozen_paddle_libs()
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src import OCREngine, NumpyEncoder, EngineConfig
+from src import EngineConfig, NumpyEncoder, OCREngine
 
 
 def _format_exception(exc: Exception) -> str:
@@ -183,216 +170,70 @@ def _format_exception(exc: Exception) -> str:
     return str(exc)
 
 
-def _create_config(config_dict: dict) -> EngineConfig:
-    """
-    Create EngineConfig from dictionary.
+def _emit_json(payload: Any) -> None:
+    stream = sys.__stdout__
+    stream.write(json.dumps(payload, cls=NumpyEncoder))
+    stream.flush()
 
-    @param config_dict Dictionary with config values.
-    @return Configured EngineConfig object.
-    """
-    if not config_dict:
-        return None
 
+def _emit_error(message: str) -> int:
+    _emit_json({"error": message})
+    return 1
+
+
+def _create_config(args: argparse.Namespace) -> EngineConfig:
     return EngineConfig(
-        lang=config_dict.get("lang", "en"),
-        use_angle_cls=config_dict.get("use_angle_cls", True),
-        det_model_path=config_dict.get("det_model_dir"),
-        rec_model_path=config_dict.get("rec_model_dir"),
-        cls_model_path=config_dict.get("cls_model_dir"),
+        lang=args.lang,
+        use_angle_cls=args.use_angle_cls,
+        det_model_path=args.det_model_dir,
+        rec_model_path=args.rec_model_dir,
+        cls_model_path=args.cls_model_dir,
     )
 
 
-def process_path(image_path: str, config_dict: dict = None) -> int:
-    """
-    Process an image file by path.
-
-    @param image_path Path to the image file.
-    @param config_dict Optional configuration dictionary.
-    @return Exit code (0 for success, 1 for error).
-    """
+def process_path(image_path: str, args: argparse.Namespace) -> int:
     if not Path(image_path).exists():
-        error = {"error": f"Image not found: {image_path}"}
-        print(json.dumps(error))
-        return 1
+        return _emit_error(f"Image not found: {image_path}")
 
     try:
-        config = _create_config(config_dict)
-        engine = OCREngine(config)
-        results = engine.process(image_path)
-        output = [result.to_dict() for result in results]
-        print(json.dumps(output, cls=NumpyEncoder))
-        return 0
-    except Exception as e:
-        error = {"error": _format_exception(e)}
-        print(json.dumps(error))
-        return 1
-
-
-def process_base64(base64_data: str, config_dict: dict = None) -> int:
-    """
-    Process a base64-encoded image.
-
-    @param base64_data Base64-encoded image data.
-    @param config_dict Optional configuration dictionary.
-    @return Exit code (0 for success, 1 for error).
-    """
-    try:
-        if "," in base64_data:
-            base64_data = base64_data.split(",", 1)[1]
-
-        image_bytes = base64.b64decode(base64_data)
-
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-            tmp.write(image_bytes)
-            tmp_path = tmp.name
-
-        try:
-            config = _create_config(config_dict)
+        config = _create_config(args)
+        # Route noisy Python-level prints from third-party code away from stdout.
+        with contextlib.redirect_stdout(sys.stderr):
             engine = OCREngine(config)
-            results = engine.process(tmp_path)
-            output = [result.to_dict() for result in results]
-            print(json.dumps(output, cls=NumpyEncoder))
-            return 0
-        finally:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-
-    except Exception as e:
-        error = {"error": _format_exception(e)}
-        print(json.dumps(error))
-        return 1
+            results = engine.process(image_path)
+        output = [result.to_dict() for result in results]
+        _emit_json(output)
+        return 0
+    except Exception as exc:
+        return _emit_error(_format_exception(exc))
 
 
-def process_stdin() -> int:
-    """
-    Process IPC request from stdin using length-prefixed protocol.
-
-    Protocol:
-    1. Read first line: payload length in bytes
-    2. Read exactly that many bytes: JSON payload
-    3. Stdin stays open - a daemon thread monitors it for CANCEL signal
-
-    JSON format:
-    - {"type": "path", "data": "/path/to/image.png", "config": {...}}
-    - {"type": "base64", "data": "iVBORw0KGgo...", "config": {...}}
-
-    @return Exit code (0 for success, 1 for error, 2 for cancelled).
-    """
-    stdin_buffer = sys.stdin.buffer
-
-    def _read_exact(stream, total_bytes: int) -> bytes:
-        chunks = []
-        received = 0
-        while received < total_bytes:
-            chunk = stream.read(total_bytes - received)
-            if not chunk:
-                break
-            chunks.append(chunk)
-            received += len(chunk)
-        return b"".join(chunks)
-
-    def _cancel_listener():
-        """
-        Daemon thread: reads stdin lines after the payload.
-        If 'CANCEL' is received, immediately terminates the process.
-        os._exit(2) works even when the main thread is deep in C extensions
-        (OpenCV/PaddlePaddle), making it cross-platform safe.
-        """
-        try:
-            for line in stdin_buffer:
-                if line.decode("utf-8", errors="ignore").strip().upper() == "CANCEL":
-                    os._exit(2)
-        except Exception:
-            pass  # stdin closed or broken pipe - main thread handles exit
-
-    try:
-        # Read length-prefixed payload from bytes stream to match Rust's byte count.
-        length_line_bytes = stdin_buffer.readline()
-        length_line = length_line_bytes.decode("utf-8", errors="replace").strip()
-
-        if not length_line:
-            # Legacy fallback: raw JSON with no length prefix.
-            raw_payload_bytes = stdin_buffer.read().strip()
-            if not raw_payload_bytes:
-                error = {"error": "Empty stdin input"}
-                print(json.dumps(error))
-                return 1
-        else:
-            try:
-                payload_len = int(length_line)
-            except ValueError:
-                # Legacy mode: first line is JSON content.
-                remaining = stdin_buffer.read()
-                raw_payload_bytes = (length_line_bytes + remaining).strip()
-                if not raw_payload_bytes:
-                    error = {"error": "Empty stdin input"}
-                    print(json.dumps(error))
-                    return 1
-            else:
-                raw_payload_bytes = _read_exact(stdin_buffer, payload_len)
-                if len(raw_payload_bytes) != payload_len:
-                    error = {
-                        "error": (
-                            f"Incomplete payload: expected {payload_len} bytes, "
-                            f"received {len(raw_payload_bytes)} bytes"
-                        )
-                    }
-                    print(json.dumps(error))
-                    return 1
-
-        # Start cancel listener AFTER reading the payload
-        # (stdin is now free for cancel signals).
-        cancel_thread = threading.Thread(target=_cancel_listener, daemon=True)
-        cancel_thread.start()
-
-        raw_input = raw_payload_bytes.decode("utf-8")
-        request = json.loads(raw_input)
-
-        req_type = request.get("type", "")
-        data = request.get("data", "")
-        config = request.get("config", None)
-
-        if not data:
-            error = {"error": "Missing 'data' field in request"}
-            print(json.dumps(error))
-            return 1
-
-        if req_type == "path":
-            return process_path(data, config)
-        elif req_type == "base64":
-            return process_base64(data, config)
-        else:
-            error = {"error": f"Unknown request type: {req_type}"}
-            print(json.dumps(error))
-            return 1
-
-    except UnicodeDecodeError as e:
-        error = {"error": f"Invalid UTF-8 input: {e}"}
-        print(json.dumps(error))
-        return 1
-    except json.JSONDecodeError as e:
-        error = {"error": f"Invalid JSON input: {e}"}
-        print(json.dumps(error))
-        return 1
-    except Exception as e:
-        error = {"error": _format_exception(e)}
-        print(json.dumps(error))
-        return 1
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="SnapLLM PaddleOCR sidecar (CLI mode).")
+    parser.add_argument("image_path", help="Path to image file.")
+    parser.add_argument("--lang", default="en", help="Language hint (default: en).")
+    parser.add_argument("--det-model-dir", default=None, help="Detection model directory.")
+    parser.add_argument("--rec-model-dir", default=None, help="Recognition model directory.")
+    parser.add_argument("--cls-model-dir", default=None, help="Textline orientation model directory.")
+    parser.add_argument(
+        "--use-angle-cls",
+        dest="use_angle_cls",
+        action="store_true",
+        default=True,
+        help="Enable textline orientation model.",
+    )
+    parser.add_argument(
+        "--no-angle-cls",
+        dest="use_angle_cls",
+        action="store_false",
+        help="Disable textline orientation model.",
+    )
+    return parser
 
 
 def main() -> int:
-    """
-    Main entry point for the OCR engine.
-
-    Determines mode based on command-line arguments:
-    - With args: CLI mode (process file path)
-    - Without args: IPC mode (read from stdin with cancel support)
-
-    @return Exit code (0 for success, 1 for error, 2 for cancelled).
-    """
-    if len(sys.argv) >= 2:
-        return process_path(sys.argv[1])
-    return process_stdin()
+    args = _build_parser().parse_args()
+    return process_path(args.image_path, args)
 
 
 if __name__ == "__main__":

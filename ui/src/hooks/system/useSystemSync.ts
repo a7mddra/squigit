@@ -13,6 +13,7 @@ import {
   commands,
   hasAgreedFlag,
   setAgreedFlag,
+  resolveOcrModelId,
 } from "@/lib";
 import { useSystemPreferences } from "./useSystemPreferences";
 import { useSystemProfile } from "./useSystemProfile";
@@ -138,13 +139,18 @@ export const useSystemSync = () => {
             (appConstants.defaultCaptureType as "rectangular" | "squiggle"),
         );
 
-        if (loadedPrefs.ocrLanguage) {
-          prefs.setStartupOcrLanguage(loadedPrefs.ocrLanguage);
-          prefs.setSessionOcrLanguage(loadedPrefs.ocrLanguage);
-        } else {
-          prefs.setStartupOcrLanguage(appConstants.defaultOcrLanguage);
-          prefs.setSessionOcrLanguage(appConstants.defaultOcrLanguage);
-        }
+        const loadedOcrLanguage = resolveOcrModelId(
+          loadedPrefs.ocrLanguage,
+          appConstants.defaultOcrLanguage,
+        );
+        prefs.setStartupOcrLanguage(loadedOcrLanguage);
+        prefs.setSessionOcrLanguage(
+          loadedPrefs.ocrEnabled !== undefined
+            ? loadedPrefs.ocrEnabled
+              ? loadedOcrLanguage
+              : ""
+            : loadedOcrLanguage,
+        );
 
         if (loadedPrefs.theme) {
           prefs.setTheme(loadedPrefs.theme);
@@ -194,10 +200,18 @@ export const useSystemSync = () => {
             (appConstants.defaultCaptureType as "rectangular" | "squiggle"),
         );
 
-        const loadedOcrLanguage =
-          loadedPrefs.ocrLanguage || appConstants.defaultOcrLanguage;
+        const loadedOcrLanguage = resolveOcrModelId(
+          loadedPrefs.ocrLanguage,
+          appConstants.defaultOcrLanguage,
+        );
         prefs.setStartupOcrLanguage(loadedOcrLanguage);
-        prefs.setSessionOcrLanguage(loadedOcrLanguage);
+        prefs.setSessionOcrLanguage(
+          loadedPrefs.ocrEnabled !== undefined
+            ? loadedPrefs.ocrEnabled
+              ? loadedOcrLanguage
+              : ""
+            : loadedOcrLanguage,
+        );
 
         try {
           await invoke("logout");
@@ -400,7 +414,9 @@ export const useSystemSync = () => {
   const resetSession = () => {
     state.setStartupImage(null);
     state.setSessionChatTitle(null);
-    prefs.setSessionOcrLanguage(prefs.startupOcrLanguage);
+    prefs.setSessionOcrLanguage(
+      prefs.ocrEnabled ? resolveOcrModelId(prefs.startupOcrLanguage) : "",
+    );
   };
 
   return {

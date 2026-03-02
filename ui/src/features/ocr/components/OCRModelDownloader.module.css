@@ -112,7 +112,7 @@
 }
 
 .spin {
-  animation: "rotate" 1s linear infinite;
+  animation: rotate 1s linear infinite;
 }
 
 .circularProgress {
@@ -141,4 +141,27 @@
   stroke-linecap: round;
   stroke: var(--c-raw-036);
   transition: stroke-dasharray 0.3s ease;
+}
+
+.spinnerOrbit {
+  transform-origin: center;
+  animation: ocrDownloaderSpinnerOrbit 1.2s linear infinite;
+}
+
+.spinnerArc {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke: var(--c-raw-036);
+  animation: ocrDownloaderSpinnerPingPong 0.95s ease-in-out infinite alternate;
+}
+
+.spinnerPaused .spinnerOrbit {
+  animation-duration: 1.8s;
+  opacity: 0.85;
+}
+
+.spinnerPaused .spinnerArc {
+  animation-duration: 1.35s;
+  opacity: 0.85;
 }

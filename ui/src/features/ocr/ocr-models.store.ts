@@ -9,7 +9,7 @@ import { OcrModelStatus, AVAILABLE_MODELS } from "./ocr-models.types";
 import { getInstalledModelIds } from "./services/modelRegistry";
 import { downloadModel } from "./services/modelDownloader";
 
-import { commands, DEFAULT_OCR_MODEL_ID, migrateOcrModelId } from "@/lib";
+import { commands, DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@/lib";
 
 interface DownloadProgressPayload {
   id: string;
@@ -18,6 +18,43 @@ interface DownloadProgressPayload {
   total: number;
   status: "checking" | "downloading" | "extracting" | "paused";
 }
+
+const clampProgress = (value: number): number =>
+  Math.max(0, Math.min(100, Math.round(value)));
+
+const resolveProgress = (
+  currentProgress: number | undefined,
+  payload: DownloadProgressPayload,
+): number => {
+  const current = currentProgress ?? 0;
+
+  const ratioProgress =
+    payload.total > 0 && payload.loaded > 0
+      ? clampProgress((payload.loaded / payload.total) * 100)
+      : 0;
+
+  const reportedProgress = clampProgress(payload.progress || 0);
+  const nextKnownProgress = Math.max(reportedProgress, ratioProgress);
+
+  if (payload.status === "extracting") {
+    return 100;
+  }
+
+  if (nextKnownProgress > 0) {
+    return Math.max(current, nextKnownProgress);
+  }
+
+  if (
+    (payload.status === "checking" ||
+      payload.status === "paused" ||
+      payload.status === "downloading") &&
+    current > 0
+  ) {
+    return current;
+  }
+
+  return 0;
+};
 
 export interface ModelsState {
   models: OcrModelStatus[];
@@ -40,9 +77,9 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   refresh: async () => {
     set({ isLoading: true });
     try {
-      const installedIds = (await getInstalledModelIds()).map(
-        (id) => migrateOcrModelId(id) || id,
-      );
+      const installedIds = (await getInstalledModelIds())
+        .map((id) => resolveOcrModelId(id, ""))
+        .filter((id) => id.length > 0);
 
       if (!installedIds.includes(DEFAULT_OCR_MODEL_ID)) {
         installedIds.push(DEFAULT_OCR_MODEL_ID);
@@ -85,7 +122,9 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 
     set((state) => ({
       models: state.models.map((m) =>
-        m.id === modelId ? { ...m, state: "checking", progress: 0 } : m,
+        m.id === modelId
+          ? { ...m, state: "checking", progress: m.progress ?? 0 }
+          : m,
       ),
     }));
 
@@ -120,7 +159,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 useModelsStore.getState().refresh();
 
 listen<DownloadProgressPayload>("download-progress", (event) => {
-  const { id, progress, status } = event.payload;
+  const { id, status } = event.payload;
   useModelsStore.setState((state) => ({
     models: state.models.map((m) => {
       if (m.id !== id) return m;
@@ -132,7 +171,11 @@ listen<DownloadProgressPayload>("download-progress", (event) => {
       else if (status === "extracting") newState = "extracting";
       else if (status === "paused") newState = "paused";
 
-      return { ...m, progress, state: newState };
+      return {
+        ...m,
+        progress: resolveProgress(m.progress, event.payload),
+        state: newState,
+      };
     }),
   }));
 });

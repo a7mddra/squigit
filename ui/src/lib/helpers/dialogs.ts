@@ -106,10 +106,10 @@ export const getAppBusyDialog = (reason: string): DialogContent => ({
   ],
 });
 
-import { parseGeminiError } from "./error-parser";
+import { parseAppError } from "./error-parser";
 
 export const getErrorDialog = (error: any): DialogContent => {
-  const parsed = parseGeminiError(error);
+  const parsed = parseAppError(error);
 
   return {
     title: parsed.title,

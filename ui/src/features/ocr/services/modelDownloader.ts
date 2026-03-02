@@ -16,7 +16,7 @@ export const downloadModel = async (model: OcrModel): Promise<string> => {
   try {
     const downloadedPath = await invoke<string>("download_ocr_model", {
       url: model.downloadUrl,
-      filename: model.id,
+      modelId: model.id,
     });
     return downloadedPath;
   } catch (error) {

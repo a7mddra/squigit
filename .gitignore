@@ -31,7 +31,7 @@ sidecars/whisper-stt/models/
 # Tauri / Application Binaries
 # -----------------------------------------------------------------------------
 app/binaries/
-qt-runtime/
+_internal/
 
 # -----------------------------------------------------------------------------
 # Secrets & Credentials

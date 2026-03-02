@@ -92,8 +92,9 @@ export async function getImagePath(hash: string): Promise<string> {
 export async function createChat(
   title: string,
   imageHash: string,
+  ocrLang?: string | null,
 ): Promise<ChatMetadata> {
-  return invoke("create_chat", { title, imageHash });
+  return invoke("create_chat", { title, imageHash, ocrLang });
 }
 
 /** Load a chat by ID (full data including messages). */
@@ -169,9 +170,13 @@ export async function initOcrFrame(
   return invoke("init_ocr_frame", { chatId, modelIds });
 }
 
-/** Cancel the currently running OCR job. Fire-and-forget. */
-export function cancelOcrJob(): void {
-  invoke("cancel_ocr_job").catch(() => {});
+/** Cancel the currently running OCR job. */
+export async function cancelOcrJob(): Promise<void> {
+  try {
+    await invoke("cancel_ocr_job");
+  } catch {
+    // Ignore cancellation races (no active job, late teardown, etc.).
+  }
 }
 
 // =============================================================================

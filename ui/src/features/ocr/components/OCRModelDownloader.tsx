@@ -31,25 +31,36 @@ const CircularProgress: React.FC<{ progress: number }> = ({ progress }) => (
   </div>
 );
 
-const CircularSpinner: React.FC = () => (
-  <div className={`${styles.circularProgress} ${styles.spin}`}>
-    <svg viewBox="0 0 36 36" className={styles.circularChart}>
-      <path
-        className={styles.circleBg}
-        d="M18 2.0845
+const CircularSpinner: React.FC<{ paused?: boolean; progressHint?: number }> = ({
+  paused = false,
+  progressHint = 0,
+}) => {
+  const dashHead = Math.max(12, Math.min(36, Math.round(progressHint * 0.35)));
+  return (
+    <div
+      className={`${styles.circularProgress} ${paused ? styles.spinnerPaused : ""}`}
+    >
+      <svg
+        viewBox="0 0 36 36"
+        className={`${styles.circularChart} ${styles.spinnerOrbit}`}
+      >
+        <path
+          className={styles.circleBg}
+          d="M18 2.0845
            a 15.9155 15.9155 0 0 1 0 31.831
            a 15.9155 15.9155 0 0 1 0 -31.831"
-      />
-      <path
-        className={styles.circle}
-        strokeDasharray="25, 100"
-        d="M18 2.0845
+        />
+        <path
+          className={styles.spinnerArc}
+          strokeDasharray={`${dashHead}, 100`}
+          d="M18 2.0845
            a 15.9155 15.9155 0 0 1 0 31.831
            a 15.9155 15.9155 0 0 1 0 -31.831"
-      />
-    </svg>
-  </div>
-);
+        />
+      </svg>
+    </div>
+  );
+};
 
 export const OCRModelDownloader: React.FC = () => {
   const models = useModelsStore((s) => s.models);
@@ -142,7 +153,7 @@ export const OCRModelDownloader: React.FC = () => {
                   justStartedDownload !== model.id ? (
                     <X size={16} />
                   ) : (
-                    <CircularSpinner />
+                    <CircularSpinner progressHint={model.progress || 0} />
                   ))}
 
                 {model.state === "downloading" &&
@@ -150,7 +161,7 @@ export const OCRModelDownloader: React.FC = () => {
                   justStartedDownload !== model.id ? (
                     <X size={16} />
                   ) : (model.progress || 0) <= 0 ? (
-                    <CircularSpinner />
+                    <CircularSpinner progressHint={model.progress || 0} />
                   ) : (
                     <CircularProgress progress={model.progress || 0} />
                   ))}
@@ -160,7 +171,10 @@ export const OCRModelDownloader: React.FC = () => {
                   justStartedDownload !== model.id ? (
                     <X size={16} />
                   ) : (
-                    <CircularSpinner />
+                    <CircularSpinner
+                      paused
+                      progressHint={model.progress || 0}
+                    />
                   ))}
 
                 {model.state === "extracting" && (

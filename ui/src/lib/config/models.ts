@@ -18,21 +18,31 @@ export const MODELS = [
 
 export const DEFAULT_OCR_MODEL_ID = "pp-ocr-v5-en";
 
-export const LEGACY_OCR_MODEL_ID_MAP: Record<string, string> = {
-  "pp-ocr-v4-en": "pp-ocr-v5-en",
-  "pp-ocr-v4-ru": "pp-ocr-v5-cyrillic",
-  "pp-ocr-v4-ko": "pp-ocr-v5-korean",
-  "pp-ocr-v4-ja": "pp-ocr-v5-cjk",
-  "pp-ocr-v4-zh": "pp-ocr-v5-cjk",
-  "pp-ocr-v4-es": "pp-ocr-v5-latin",
-  "pp-ocr-v4-it": "pp-ocr-v5-latin",
-  "pp-ocr-v4-pt": "pp-ocr-v5-latin",
-  "pp-ocr-v4-hi": "pp-ocr-v5-devanagari",
+export const SUPPORTED_OCR_MODEL_IDS = [
+  "pp-ocr-v5-en",
+  "pp-ocr-v5-latin",
+  "pp-ocr-v5-cyrillic",
+  "pp-ocr-v5-korean",
+  "pp-ocr-v5-cjk",
+  "pp-ocr-v5-devanagari",
+] as const;
+
+const SUPPORTED_OCR_MODEL_ID_SET = new Set<string>(SUPPORTED_OCR_MODEL_IDS);
+
+export const isSupportedOcrModelId = (modelId?: string | null): boolean => {
+  if (!modelId) return false;
+  return SUPPORTED_OCR_MODEL_ID_SET.has(modelId);
 };
 
-export const migrateOcrModelId = (
+export const resolveOcrModelId = (
   modelId?: string | null,
-): string | undefined => {
-  if (!modelId) return undefined;
-  return LEGACY_OCR_MODEL_ID_MAP[modelId] || modelId;
+  fallback: string = DEFAULT_OCR_MODEL_ID,
+): string => {
+  if (modelId && isSupportedOcrModelId(modelId)) {
+    return modelId;
+  }
+  if (fallback === "") {
+    return "";
+  }
+  return isSupportedOcrModelId(fallback) ? fallback : DEFAULT_OCR_MODEL_ID;
 };

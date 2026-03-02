@@ -1,10 +1,10 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 
-//! OCR command module for Tauri-Python IPC.
+//! OCR command module for Tauri <-> Python sidecar execution.
 //!
-//! This module provides Tauri commands to run and cancel OCR on images
-//! using the PaddleOCR Python sidecar via stdin/stdout IPC.
+//! This module runs OCR by spawning the PaddleOCR sidecar in CLI mode
+//! with an image path argument and parsing JSON from stdout.
 //!
 //! Safety controls:
 //! - Thread-limiting env vars (defense-in-depth, Python also sets them)
@@ -12,18 +12,20 @@
 //! - I/O priority via ionice on Linux
 //! - Timeout with automatic process kill (120s default)
 //! - Single-job mutex to prevent concurrent OCR calls
-//! - Cancellation via stdin CANCEL signal + fallback kill
+//! - Cancellation via cross-platform process termination
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::LazyLock;
 use tauri::Manager;
 use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 use tokio::time::{timeout, Duration};
 
+use crate::commands::chat::resolve_attachment_path_internal;
 use crate::services::models::ModelManager;
 use crate::state::{AppState, OcrJobHandle};
 
@@ -108,27 +110,6 @@ pub struct OcrBox {
     pub confidence: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OcrModelConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    lang: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    det_model_dir: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    rec_model_dir: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    cls_model_dir: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct OcrRequest {
-    #[serde(rename = "type")]
-    request_type: String,
-    data: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    config: Option<OcrModelConfig>,
-}
-
 #[derive(Debug, Deserialize)]
 struct RawOcrResult {
     text: String,
@@ -143,21 +124,49 @@ struct OcrError {
     error: String,
 }
 
-/// Send CANCEL to sidecar stdin and wait for graceful shutdown,
-/// with fallback to kill if the process doesn't exit in time.
+/// Kill sidecar process and wait for shutdown.
 async fn cancel_job_handle(mut handle: OcrJobHandle) {
-    // Send CANCEL via stdin
-    let _ = handle.stdin.write_all(b"CANCEL\n").await;
-    let _ = handle.stdin.flush().await;
-
-    // Wait 500ms for graceful exit (Python os._exit(2))
-    match timeout(Duration::from_millis(500), handle.child.wait()).await {
-        Ok(_) => {} // Process exited
-        Err(_) => {
-            // Fallback: force kill
-            let _ = handle.child.kill().await;
-            let _ = handle.child.wait().await;
+    #[cfg(unix)]
+    {
+        fn signal_process_group(pid: u32, sig: i32) {
+            let group_id = -(pid as i32);
+            unsafe {
+                libc::kill(group_id, sig);
+            }
         }
+
+        if let Some(pid) = handle.child.id() {
+            signal_process_group(pid, libc::SIGINT);
+        }
+        if timeout(Duration::from_millis(300), handle.child.wait())
+            .await
+            .is_ok()
+        {
+            return;
+        }
+
+        if let Some(pid) = handle.child.id() {
+            signal_process_group(pid, libc::SIGTERM);
+        }
+        if timeout(Duration::from_millis(1200), handle.child.wait())
+            .await
+            .is_ok()
+        {
+            return;
+        }
+
+        if let Some(pid) = handle.child.id() {
+            signal_process_group(pid, libc::SIGHUP);
+        }
+        let _ = timeout(Duration::from_millis(800), handle.child.wait()).await;
+        return;
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = handle.child.start_kill();
+        let _ = timeout(Duration::from_millis(800), handle.child.wait()).await;
+        return;
     }
 }
 
@@ -179,6 +188,50 @@ async fn read_stderr_to_string(pipe: Option<tokio::process::ChildStderr>) -> Str
     } else {
         String::new()
     }
+}
+
+fn extract_json_payload(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if serde_json::from_str::<Value>(trimmed).is_ok() {
+        return Some(trimmed.to_string());
+    }
+
+    for line in trimmed.lines().rev() {
+        let candidate = line.trim();
+        if candidate.is_empty() {
+            continue;
+        }
+        if !candidate.starts_with('{') && !candidate.starts_with('[') {
+            continue;
+        }
+        if serde_json::from_str::<Value>(candidate).is_ok() {
+            return Some(candidate.to_string());
+        }
+    }
+
+    let candidates: Vec<usize> = trimmed
+        .char_indices()
+        .filter_map(|(idx, ch)| {
+            if ch == '{' || ch == '[' {
+                Some(idx)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    for idx in candidates.into_iter().rev() {
+        let candidate = &trimmed[idx..];
+        if serde_json::from_str::<Value>(candidate).is_ok() {
+            return Some(candidate.to_string());
+        }
+    }
+
+    None
 }
 
 #[tauri::command]
@@ -219,41 +272,37 @@ pub async fn ocr_image(
         eprintln!("OCR sidecar executable: {}", sidecar_path.display());
     }
 
-    let mut model_config: Option<OcrModelConfig> = None;
+    if is_base64 {
+        return Err(
+            "OCR sidecar is path-only. Pass a stored CAS path instead of base64 data.".to_string(),
+        );
+    }
 
-    if let Some(name) = model_name {
+    let resolved_image_path = resolve_attachment_path_internal(&image_data)?;
+
+    let mut rec_model_dir_override: Option<String> = None;
+    if let Some(name) = model_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
         let manager = ModelManager::new().map_err(|e| e.to_string())?;
-
-        let model_dir = manager.get_model_dir(&name);
-        if manager.is_model_installed(&name) {
-            let lang_code = name.split('-').last().unwrap_or("en").to_string();
-
-            model_config = Some(OcrModelConfig {
-                lang: Some(lang_code),
-                det_model_dir: None,
-                rec_model_dir: Some(model_dir.to_string_lossy().to_string()),
-                cls_model_dir: None,
-            });
+        if manager.is_model_installed(name) {
+            let model_dir = manager.get_model_dir(name);
+            rec_model_dir_override = Some(model_dir.to_string_lossy().to_string());
         }
     }
 
-    let request = OcrRequest {
-        request_type: if is_base64 {
-            "base64".to_string()
-        } else {
-            "path".to_string()
-        },
-        data: image_data,
-        config: model_config,
-    };
-
-    let request_json = serde_json::to_string(&request)
-        .map_err(|e| format!("Failed to serialize request: {}", e))?;
-
     let mut cmd = tokio::process::Command::new(&sidecar_path);
-    cmd.stdin(Stdio::piped())
+    cmd.arg(&resolved_image_path)
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    if let Some(ref rec_model_dir) = rec_model_dir_override {
+        cmd.arg("--rec-model-dir").arg(rec_model_dir);
+    }
+
     if let Some(ref dir) = runtime_dir {
         cmd.current_dir(dir);
     }
@@ -275,6 +324,10 @@ pub async fn ocr_image(
     {
         unsafe {
             cmd.pre_exec(|| {
+                if libc::setsid() == -1 {
+                    return Err(io::Error::last_os_error());
+                }
+
                 libc::nice(10);
 
                 #[cfg(target_os = "linux")]
@@ -295,36 +348,14 @@ pub async fn ocr_image(
         .spawn()
         .map_err(|e| format!("Failed to spawn OCR sidecar: {}", e))?;
 
-    // Write length-prefixed payload, then keep stdin open for cancel signals
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| "Failed to get sidecar stdin".to_string())?;
-
-    let payload_bytes = request_json.as_bytes();
-    let length_header = format!("{}\n", payload_bytes.len());
-
-    stdin
-        .write_all(length_header.as_bytes())
-        .await
-        .map_err(|e| format!("Failed to write length header: {}", e))?;
-    stdin
-        .write_all(payload_bytes)
-        .await
-        .map_err(|e| format!("Failed to write payload: {}", e))?;
-    stdin
-        .flush()
-        .await
-        .map_err(|e| format!("Failed to flush stdin: {}", e))?;
-
-    // Store the job handle for external cancellation.
-    // We need stdout/stderr before storing, so take them first.
     let stdout_pipe = child.stdout.take();
     let stderr_pipe = child.stderr.take();
+    let stdout_task = tokio::spawn(read_pipe_to_string(stdout_pipe));
+    let stderr_task = tokio::spawn(read_stderr_to_string(stderr_pipe));
 
     {
         let mut job_lock = state.ocr_job.lock().await;
-        *job_lock = Some(OcrJobHandle { stdin, child });
+        *job_lock = Some(OcrJobHandle { child });
     }
 
     // Wait for the child to exit by polling through the stored handle
@@ -361,7 +392,7 @@ pub async fn ocr_image(
             Err(_) => {
                 // Timeout
                 eprintln!(
-                    "OCR sidecar timed out after {}s, killing process",
+                    "OCR sidecar timed out after {}s, terminating process",
                     ocr_timeout_secs
                 );
 
@@ -381,20 +412,15 @@ pub async fn ocr_image(
         }
     };
 
-    // Exit code 2 = cancelled by our stdin CANCEL signal
-    if let Some(code) = exit_status.code() {
-        if code == 2 {
-            return Err("OCR job was cancelled".to_string());
-        }
-    }
-
-    // Always collect both streams so error reporting can include stdout JSON payloads.
-    let stdout_text = read_pipe_to_string(stdout_pipe).await;
-    let stderr_text = read_stderr_to_string(stderr_pipe).await;
+    let stdout_text = stdout_task.await.unwrap_or_default();
+    let stderr_text = stderr_task.await.unwrap_or_default();
+    let stdout_json = extract_json_payload(&stdout_text);
 
     if !exit_status.success() {
-        if let Ok(err) = serde_json::from_str::<OcrError>(&stdout_text) {
-            return Err(format!("OCR sidecar failed: {}", err.error));
+        if let Some(payload) = stdout_json.as_deref() {
+            if let Ok(err) = serde_json::from_str::<OcrError>(payload) {
+                return Err(format!("OCR sidecar failed: {}", err.error));
+            }
         }
 
         let stderr_trimmed = stderr_text.trim();
@@ -415,16 +441,27 @@ pub async fn ocr_image(
         return Err("OCR sidecar failed with no error output".to_string());
     }
 
-    if stdout_text.is_empty() {
-        return Err("No stdout from sidecar".to_string());
-    }
+    let stdout_payload = stdout_json.ok_or_else(|| {
+        format!(
+            "Failed to parse OCR output: no JSON payload found in stdout.\nstdout={}\nstderr={}",
+            stdout_text.trim(),
+            stderr_text.trim()
+        )
+    })?;
 
-    if let Ok(err) = serde_json::from_str::<OcrError>(&stdout_text) {
+    if let Ok(err) = serde_json::from_str::<OcrError>(&stdout_payload) {
         return Err(err.error);
     }
 
-    let raw_results: Vec<RawOcrResult> = serde_json::from_str(&stdout_text)
-        .map_err(|e| format!("Failed to parse OCR output: {} - {}", e, stdout_text))?;
+    let raw_results: Vec<RawOcrResult> = serde_json::from_str(&stdout_payload).map_err(|e| {
+        format!(
+            "Failed to parse OCR output: {} - payload={}\nstdout={}\nstderr={}",
+            e,
+            stdout_payload,
+            stdout_text.trim(),
+            stderr_text.trim()
+        )
+    })?;
 
     let results: Vec<OcrBox> = raw_results
         .into_iter()
@@ -439,17 +476,18 @@ pub async fn ocr_image(
 }
 
 /// Cancel the currently running OCR job.
-/// Sends CANCEL to the sidecar's stdin, waits briefly, then force-kills.
+/// Kills the sidecar process and waits briefly for shutdown.
 /// This is fire-and-forget from the frontend's perspective.
 #[tauri::command]
 pub async fn cancel_ocr_job(app: tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();
-    let mut job_lock = state.ocr_job.lock().await;
+    let handle = {
+        let mut job_lock = state.ocr_job.lock().await;
+        job_lock.take()
+    };
 
-    if let Some(handle) = job_lock.take() {
-        tokio::spawn(async move {
-            cancel_job_handle(handle).await;
-        });
+    if let Some(handle) = handle {
+        cancel_job_handle(handle).await;
     }
 
     Ok(())
@@ -485,7 +523,7 @@ fn get_sidecar_executable_name() -> &'static str {
     }
 }
 
-fn get_legacy_sidecar_name() -> String {
+fn get_fallback_sidecar_name() -> String {
     #[cfg(target_os = "windows")]
     {
         "ocr-engine.exe".to_string()
@@ -522,20 +560,20 @@ fn resolve_sidecar_path(resource_dir: &Path) -> (PathBuf, Option<PathBuf>) {
         }
     }
 
-    // Backward-compatible fallback for legacy onefile/externalBin builds.
-    let legacy_name = get_legacy_sidecar_name();
-    let legacy_candidates = [
-        resource_dir.join("binaries").join(&legacy_name),
-        resource_dir.join(&legacy_name),
+    // Backward-compatible fallback for onefile/externalBin builds.
+    let fallback_name = get_fallback_sidecar_name();
+    let fallback_candidates = [
+        resource_dir.join("binaries").join(&fallback_name),
+        resource_dir.join(&fallback_name),
     ];
-    for sidecar in legacy_candidates {
+    for sidecar in fallback_candidates {
         if sidecar.exists() {
             return (sidecar, None);
         }
     }
 
     (
-        resource_dir.join("binaries").join(legacy_name),
+        resource_dir.join("binaries").join(fallback_name),
         Some(resource_dir.join("binaries").join(runtime_dir_name)),
     )
 }

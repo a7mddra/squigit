@@ -27,12 +27,14 @@ import { Dialog } from "@/components";
 import {
   type DialogContent,
   AUTO_OCR_DISABLED_MODEL_ID,
+  DEFAULT_OCR_MODEL_ID,
   getErrorDialog,
   OcrFrame,
   cancelOcrJob,
   saveOcrData,
   useGoogleLens,
   generateTranslateUrl,
+  resolveOcrModelId,
 } from "@/lib";
 
 interface OCRBox {
@@ -177,7 +179,7 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
     async (
       modelId?: string,
       requestId?: number,
-      options?: { manual?: boolean },
+      options?: { manual?: boolean; force?: boolean },
     ) => {
       if (!startupImage?.path) return;
 
@@ -189,7 +191,7 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
         return;
       }
 
-      if (ocrData[modelToUse]) {
+      if (ocrData[modelToUse] && !options?.force) {
         console.log(
           `[ImageArtifact] Data already exists for model: ${modelToUse}`,
         );
@@ -213,8 +215,13 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
       cancelledRef.current = false;
 
       try {
+        const casRelativePath =
+          startupImage.imageId && startupImage.imageId.length >= 2
+            ? `objects/${startupImage.imageId.slice(0, 2)}/${startupImage.imageId}.png`
+            : startupImage.path;
+
         const results = await invoke<OCRBox[]>("ocr_image", {
-          imageData: startupImage.path,
+          imageData: casRelativePath,
           isBase64: false,
           modelName: modelToUse,
         });
@@ -291,52 +298,60 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
   );
 
   const restartScanForModel = useCallback(
-    (modelId: string) => {
+    (modelId: string, force = false) => {
       scanRequestRef.current += 1;
       const newRequestId = scanRequestRef.current;
 
-      cancelOcrJob();
       setLoading(false);
       cancelledRef.current = false;
 
       if (!modelId) return;
 
-      setTimeout(() => {
+      void (async () => {
+        await cancelOcrJob();
         if (newRequestId === scanRequestRef.current) {
-          scan(modelId, newRequestId, { manual: true });
+          scan(modelId, newRequestId, { manual: true, force });
         }
-      }, 50);
+      })();
     },
     [scan, setLoading],
   );
 
   const handleUserOcrModelChange = useCallback(
     (model: string) => {
-      if (!model) {
-        onOcrModelChange("");
-        return;
+      const resolvedModel = resolveOcrModelId(
+        model,
+        currentOcrModel || DEFAULT_OCR_MODEL_ID,
+      );
+      if (!resolvedModel) return;
+
+      if (resolvedModel !== currentOcrModel) {
+        onOcrModelChange(resolvedModel);
       }
 
-      onOcrModelChange(model);
-      restartScanForModel(model);
+      const hasCachedData = Array.isArray(ocrData[resolvedModel]);
+      if (!hasCachedData) {
+        restartScanForModel(resolvedModel, false);
+      }
     },
-    [onOcrModelChange, restartScanForModel],
+    [currentOcrModel, onOcrModelChange, ocrData, restartScanForModel],
   );
 
-  const handleCancel = (e: React.MouseEvent) => {
+  const handleCancel = async (e: React.MouseEvent) => {
     e.stopPropagation();
     console.log("Cancelling OCR job...");
     cancelledRef.current = true;
 
     scanRequestRef.current += 1;
+    hasScannedRef.current = false;
     setLoading(false);
-    cancelOcrJob();
+    onOcrModelChange("");
+    await cancelOcrJob();
     if (chatId) {
       saveOcrData(chatId, AUTO_OCR_DISABLED_MODEL_ID, []).catch((err) =>
         console.error("Failed to persist OCR auto-run opt-out:", err),
       );
     }
-    onOcrModelChange("");
   };
 
   useEffect(() => {

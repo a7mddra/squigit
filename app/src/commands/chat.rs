@@ -20,7 +20,7 @@ fn get_active_storage() -> Result<ChatStorage, String> {
     ChatStorage::with_base_dir(chats_dir).map_err(|e| e.to_string())
 }
 
-fn resolve_attachment_path_internal(path: &str) -> Result<std::path::PathBuf, String> {
+pub(crate) fn resolve_attachment_path_internal(path: &str) -> Result<std::path::PathBuf, String> {
     use std::fs;
     use std::path::PathBuf;
 
@@ -126,7 +126,7 @@ pub fn get_image_path(hash: String) -> Result<String, String> {
     storage.get_image_path(&hash).map_err(|e| e.to_string())
 }
 
-/// Resolve an attachment path (absolute or legacy relative CAS path) to an absolute path.
+/// Resolve an attachment path (absolute or relative CAS path) to an absolute path.
 #[tauri::command]
 pub fn resolve_attachment_path(path: String) -> Result<String, String> {
     let resolved = resolve_attachment_path_internal(&path)?;
@@ -234,9 +234,13 @@ pub fn reveal_in_file_manager(path: String) -> Result<(), String> {
 
 /// Create a new chat with the given image hash.
 #[tauri::command]
-pub fn create_chat(title: String, image_hash: String) -> Result<ChatMetadata, String> {
+pub fn create_chat(
+    title: String,
+    image_hash: String,
+    ocr_lang: Option<String>,
+) -> Result<ChatMetadata, String> {
     let storage = get_active_storage()?;
-    let metadata = ChatMetadata::new(title, image_hash, None);
+    let metadata = ChatMetadata::new(title, image_hash, ocr_lang);
     let chat = ChatData::new(metadata.clone());
     storage.save_chat(&chat).map_err(|e| e.to_string())?;
     Ok(metadata)

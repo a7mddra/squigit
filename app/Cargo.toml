@@ -63,6 +63,7 @@ thiserror = "2.0.18"
 sys-global-shortcut = { path = "../crates/sys-global-shortcut" }
 regex = "1.12.3"
 zip = "0.6.6"
+rodio = { version = "0.20.1", features = ["mp3"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 dbus = "0.9.7"

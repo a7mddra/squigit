@@ -25,6 +25,7 @@ import {
   commands,
   getAppBusyDialog,
   github,
+  resolveOcrModelId,
 } from "@/lib";
 import {
   useSystemSync,
@@ -53,22 +54,46 @@ const isOnboardingId = (id: string) => id.startsWith("__system_");
 const getChatOcrModel = (
   frame: OcrFrame,
   metadataOcrLanguage?: string,
+  fallbackModel: string = "",
 ): string => {
   const hasModelData = (modelId?: string) =>
     !!modelId &&
     modelId !== AUTO_OCR_DISABLED_MODEL_ID &&
     Array.isArray(frame[modelId]);
 
-  if (hasModelData(metadataOcrLanguage)) {
-    return metadataOcrLanguage!;
+  const resolvedMetadataModel = resolveOcrModelId(metadataOcrLanguage, "");
+  if (resolvedMetadataModel && hasModelData(resolvedMetadataModel)) {
+    return resolvedMetadataModel;
+  }
+
+  const scannedModels = Object.entries(frame)
+    .filter(
+      ([modelId, regions]) =>
+        modelId !== AUTO_OCR_DISABLED_MODEL_ID && Array.isArray(regions),
+    )
+    .map(([modelId]) => resolveOcrModelId(modelId, ""))
+    .filter((modelId) => !!modelId);
+
+  if (scannedModels.length > 0) {
+    return scannedModels[scannedModels.length - 1];
   }
 
   const firstScannedModel = Object.entries(frame).find(
     ([modelId, regions]) =>
       modelId !== AUTO_OCR_DISABLED_MODEL_ID && Array.isArray(regions),
   );
+  if (firstScannedModel?.[0]) {
+    return resolveOcrModelId(firstScannedModel[0], fallbackModel);
+  }
 
-  return firstScannedModel?.[0] || "";
+  const firstKnownModel = Object.keys(frame).find(
+    (modelId) => modelId !== AUTO_OCR_DISABLED_MODEL_ID,
+  );
+  if (firstKnownModel) {
+    return resolveOcrModelId(firstKnownModel, fallbackModel);
+  }
+
+  return fallbackModel === "" ? "" : resolveOcrModelId(undefined, fallbackModel);
 };
 
 const withNavigationOcrGuard = (frame: OcrFrame): OcrFrame => ({
@@ -176,7 +201,7 @@ export const useApp = () => {
   const drafts = useAppDrafts();
   const attachments = useAttachments();
   const contextMenuState = useAppContextMenu();
-  const ocr = useAppOcr(chatHistory.activeSessionId, system.sessionOcrLanguage);
+  const ocr = useAppOcr(chatHistory.activeSessionId);
   const attachmentSourceMapRef = useRef<Map<string, string>>(
     readAttachmentSourceMap(),
   );
@@ -296,22 +321,23 @@ export const useApp = () => {
 
   useEffect(() => {
     const activeId = chatHistory.activeSessionId;
-    if (activeId && system.sessionOcrLanguage && !isOnboardingId(activeId)) {
-      const currentChat = chatHistory.chats.find((c: any) => c.id === activeId);
-      if (currentChat && currentChat.ocr_lang !== system.sessionOcrLanguage) {
-        updateChatMetadata({
-          ...currentChat,
-          ocr_lang: system.sessionOcrLanguage,
-          updated_at: new Date().toISOString(),
-        }).then(() => {
-          console.log(
-            "Automatically saved new OCR language to chat metadata:",
-            system.sessionOcrLanguage,
-          );
-        });
-      }
-    }
-  }, [system.sessionOcrLanguage, chatHistory.activeSessionId]);
+    if (!activeId || isOnboardingId(activeId)) return;
+
+    const currentChat = chatHistory.chats.find((c: any) => c.id === activeId);
+    if (!currentChat) return;
+
+    const targetOcrLang = system.sessionOcrLanguage || undefined;
+    const currentOcrLang = currentChat.ocr_lang || undefined;
+    if (currentOcrLang === targetOcrLang) return;
+
+    updateChatMetadata({
+      ...currentChat,
+      ocr_lang: targetOcrLang,
+      updated_at: new Date().toISOString(),
+    }).then(() => {
+      console.log("Automatically saved OCR language to chat metadata:", targetOcrLang);
+    });
+  }, [system.sessionOcrLanguage, chatHistory.activeSessionId, chatHistory.chats]);
 
   const [isNavigating, setIsNavigating] = useState(false);
   const [busyDialog, setBusyDialog] = useState<DialogContent | null>(null);
@@ -358,6 +384,8 @@ export const useApp = () => {
   const killActiveJobs = useCallback(() => {
     cancelOcrJob();
     ocr.setIsOcrScanning(false);
+    const safeOcrModel = getChatOcrModel(ocr.ocrData, undefined, "");
+    system.setSessionOcrLanguage(safeOcrModel);
 
     if (chat.isAnalyzing || chat.isGenerating || chat.isAiTyping) {
       chat.handleStopGeneration();
@@ -368,6 +396,7 @@ export const useApp = () => {
     chat.isAiTyping,
     chat.handleStopGeneration,
     ocr,
+    system,
   ]);
 
   const handleBusyDialogAction = useCallback(
@@ -555,7 +584,9 @@ export const useApp = () => {
     ocr.setSessionLensUrl(null);
 
     systemRef.current.setSessionOcrLanguage(
-      systemRef.current.ocrEnabled ? systemRef.current.startupOcrLanguage : "",
+      systemRef.current.ocrEnabled
+        ? resolveOcrModelId(systemRef.current.startupOcrLanguage)
+        : "",
     );
     ocr.setIsOcrScanning(false);
     cancelOcrJob();
@@ -567,7 +598,13 @@ export const useApp = () => {
     });
 
     try {
-      const newChat = await createChat("New Chat", imageData.imageId);
+      const newChat = await createChat(
+        "New Chat",
+        imageData.imageId,
+        systemRef.current.ocrEnabled
+          ? resolveOcrModelId(systemRef.current.startupOcrLanguage)
+          : null,
+      );
       if (!systemRef.current.ocrEnabled) {
         await saveOcrData(newChat.id, AUTO_OCR_DISABLED_MODEL_ID, []);
       }
@@ -613,8 +650,9 @@ export const useApp = () => {
         const chatOcrModel = getChatOcrModel(
           loadedOcrData,
           chatData.metadata.ocr_lang,
+          resolveOcrModelId(chatData.metadata.ocr_lang, ""),
         );
-        system.setSessionOcrLanguage(chatOcrModel);
+        system.setSessionOcrLanguage(system.ocrEnabled ? chatOcrModel : "");
 
         const messages = chatData.messages.map((m, idx) => ({
           id: idx.toString(),
@@ -857,7 +895,7 @@ export const useApp = () => {
           systemRef.current.setSessionChatTitle(null);
           systemRef.current.setSessionOcrLanguage(
             systemRef.current.ocrEnabled
-              ? systemRef.current.startupOcrLanguage
+              ? resolveOcrModelId(systemRef.current.startupOcrLanguage)
               : "",
           );
           ocr.setOcrData({});

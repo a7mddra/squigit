@@ -253,3 +253,27 @@
     stroke-dashoffset: 500;
   }
 }
+
+@keyframes ocrDownloaderSpinnerOrbit {
+  from {
+    transform: rotate(-90deg);
+  }
+  to {
+    transform: rotate(270deg);
+  }
+}
+
+@keyframes ocrDownloaderSpinnerPingPong {
+  0% {
+    stroke-dasharray: 10 100;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 30 100;
+    stroke-dashoffset: -8;
+  }
+  100% {
+    stroke-dasharray: 14 100;
+    stroke-dashoffset: -22;
+  }
+}

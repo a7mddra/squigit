@@ -4,12 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { OcrFrame, saveImgbbUrl, saveOcrData } from "@/lib";
 
 export const useAppOcr = (
   activeSessionId: string | null,
-  sessionOcrLanguage: string | null,
 ) => {
   const [sessionLensUrl, setSessionLensUrl] = useState<string | null>(null);
   const [ocrData, setOcrData] = useState<OcrFrame>({});
@@ -33,6 +32,13 @@ export const useAppOcr = (
         text: d.text,
         bbox: d.box,
       }));
+
+      if (activeSessionId && modelId) {
+        saveOcrData(activeSessionId, modelId, regions).catch((e) =>
+          console.error("Failed to save OCR", e),
+        );
+      }
+
       console.log(`[useApp] Updating OCR data for model: ${modelId}`);
       setOcrData((prev) => {
         const newState = {
@@ -45,22 +51,8 @@ export const useAppOcr = (
         return newState;
       });
     },
-    [],
+    [activeSessionId],
   );
-
-  useEffect(() => {
-    if (!activeSessionId || !sessionOcrLanguage) {
-      return;
-    }
-
-    const currentData = ocrData[sessionOcrLanguage];
-
-    if (Array.isArray(currentData)) {
-      saveOcrData(activeSessionId, sessionOcrLanguage, currentData).catch(
-        (e) => console.error("Failed to save OCR", e),
-      );
-    }
-  }, [ocrData, activeSessionId, sessionOcrLanguage]);
 
   return {
     sessionLensUrl,

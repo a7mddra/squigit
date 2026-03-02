@@ -28,6 +28,16 @@ from .models import BoundingBox, OCRResult
 
 MAX_DET_SIDE = 2048
 
+MODEL_NAME_ALIASES = {
+    # App-level IDs -> official PaddleOCR model names
+    "pp-ocr-v5-en": "en_PP-OCRv5_mobile_rec",
+    "pp-ocr-v5-latin": "latin_PP-OCRv5_mobile_rec",
+    "pp-ocr-v5-cyrillic": "cyrillic_PP-OCRv5_mobile_rec",
+    "pp-ocr-v5-korean": "korean_PP-OCRv5_mobile_rec",
+    "pp-ocr-v5-cjk": "PP-OCRv5_server_rec",
+    "pp-ocr-v5-devanagari": "devanagari_PP-OCRv5_mobile_rec",
+}
+
 
 class OCREngine:
     """
@@ -49,7 +59,8 @@ class OCREngine:
 
     @staticmethod
     def _model_name_from_dir(model_dir: str) -> str:
-        return os.path.basename(os.path.normpath(model_dir))
+        folder_name = os.path.basename(os.path.normpath(model_dir))
+        return MODEL_NAME_ALIASES.get(folder_name, folder_name)
 
     def _get_ocr(self) -> PaddleOCR:
         if self._ocr is None:
@@ -174,14 +185,14 @@ class OCREngine:
         return text, confidence
 
     @staticmethod
-    def _looks_like_legacy_line(item: Any) -> bool:
+    def _looks_like_old_style_line(item: Any) -> bool:
         return (
             isinstance(item, (list, tuple))
             and len(item) >= 2
             and OCREngine._normalize_quad(item[0]) is not None
         )
 
-    def _normalize_legacy_lines(
+    def _normalize_old_style_lines(
         self, lines: Iterable[Any]
     ) -> Iterable[Tuple[List[List[float]], str, float]]:
         for item in lines:
@@ -191,7 +202,7 @@ class OCREngine:
                     item,
                     item.get("confidence", item.get("score", 1.0)),
                 )
-            elif self._looks_like_legacy_line(item):
+            elif self._looks_like_old_style_line(item):
                 quad = self._normalize_quad(item[0])
                 text, confidence = self._parse_text_and_conf(item[1])
             else:
@@ -233,16 +244,16 @@ class OCREngine:
         if not isinstance(raw_result, (list, tuple)) or len(raw_result) == 0:
             return []
 
-        # Legacy style can be either `[line, ...]` or `[[line, ...], ...]`.
-        if self._looks_like_legacy_line(raw_result[0]):
-            return list(self._normalize_legacy_lines(raw_result))
+        # Older shape can be either `[line, ...]` or `[[line, ...], ...]`.
+        if self._looks_like_old_style_line(raw_result[0]):
+            return list(self._normalize_old_style_lines(raw_result))
 
         normalized: List[Tuple[List[List[float]], str, float]] = []
         for page in raw_result:
             if isinstance(page, dict):
                 normalized.extend(self._normalize_page_dict(page))
             elif isinstance(page, (list, tuple)):
-                normalized.extend(self._normalize_legacy_lines(page))
+                normalized.extend(self._normalize_old_style_lines(page))
         return normalized
 
     def _parse_results(self, raw_result: Any, scale: float = 1.0) -> List[OCRResult]:

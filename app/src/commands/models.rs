@@ -16,12 +16,12 @@ pub async fn download_ocr_model(
     state: tauri::State<'_, ModelManager>,
     window: tauri::Window,
     url: String,
-    filename: String,
+    model_id: String,
 ) -> Result<String, String> {
-    println!("Downloading OCR model: {} -> {}", url, filename);
+    println!("Downloading OCR model: {} -> {}", url, model_id);
 
     let path = state
-        .download_and_extract(&url, &filename, &window)
+        .download_and_extract(&url, &model_id, &window)
         .await
         .map_err(|e| e.to_string())?;
 

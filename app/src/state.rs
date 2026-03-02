@@ -4,13 +4,10 @@
 use ops_chat_storage::StoredImage;
 use parking_lot::Mutex;
 use std::sync::{atomic::AtomicBool, Arc};
-use tokio::process::ChildStdin;
 
 /// Handle to a running OCR job for cancellation support.
 pub struct OcrJobHandle {
-    /// Stdin pipe to the sidecar — used to send CANCEL signal.
-    pub stdin: ChildStdin,
-    /// Child process handle for fallback kill.
+    /// Child process handle for kill-based cancellation.
     pub child: tokio::process::Child,
 }
 

@@ -10,6 +10,8 @@ import {
   loadPreferences,
   savePreferences,
   commands,
+  DEFAULT_OCR_MODEL_ID,
+  resolveOcrModelId,
 } from "@/lib";
 import { useTheme } from "@/hooks";
 
@@ -38,14 +40,21 @@ export const useSystemPreferences = () => {
   const [captureType, setCaptureType] = useState<"rectangular" | "squiggle">(
     "rectangular",
   );
-  const [startupOcrLanguage, setStartupOcrLanguage] = useState<string>("");
-  const [sessionOcrLanguage, setSessionOcrLanguage] = useState<string>("");
+  const [startupOcrLanguage, setStartupOcrLanguage] =
+    useState<string>(DEFAULT_OCR_MODEL_ID);
+  const [sessionOcrLanguage, setSessionOcrLanguage] =
+    useState<string>(DEFAULT_OCR_MODEL_ID);
 
   useEffect(() => {
     console.log("[useSystemPreferences] ocrEnabled changed to:", ocrEnabled);
   }, [ocrEnabled]);
 
   const updatePreferences = async (updates: Partial<UserPreferences>) => {
+    const normalizedUpdatedOcrLanguage =
+      updates.ocrLanguage !== undefined
+        ? resolveOcrModelId(updates.ocrLanguage)
+        : undefined;
+
     if (updates.model !== undefined) {
       setStartupModel(updates.model);
       setEditingModel(updates.model);
@@ -60,12 +69,22 @@ export const useSystemPreferences = () => {
     }
     if (updates.ocrEnabled !== undefined) {
       setOcrEnabled(updates.ocrEnabled);
+      if (!updates.ocrEnabled) {
+        setSessionOcrLanguage("");
+      } else {
+        setSessionOcrLanguage(
+          normalizedUpdatedOcrLanguage ?? resolveOcrModelId(startupOcrLanguage),
+        );
+      }
     }
     if (updates.captureType !== undefined) {
       setCaptureType(updates.captureType);
     }
-    if (updates.ocrLanguage !== undefined) {
-      setStartupOcrLanguage(updates.ocrLanguage);
+    if (normalizedUpdatedOcrLanguage !== undefined) {
+      setStartupOcrLanguage(normalizedUpdatedOcrLanguage);
+      if (ocrEnabled && updates.ocrEnabled === undefined) {
+        setSessionOcrLanguage(normalizedUpdatedOcrLanguage);
+      }
     }
     if (updates.theme !== undefined) {
       setTheme(updates.theme);

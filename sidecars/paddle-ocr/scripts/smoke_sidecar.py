@@ -95,75 +95,9 @@ def smoke_cli(sidecar: Path, image_path: Path, env: dict[str, str]) -> None:
     _read_json_output(proc.stdout, proc.stderr, "cli")
 
 
-def smoke_ipc(sidecar: Path, image_path: Path, env: dict[str, str]) -> None:
-    payload = json.dumps({"type": "path", "data": str(image_path)}).encode("utf-8")
-    proc = subprocess.Popen(
-        [str(sidecar)],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-    )
-    assert proc.stdin and proc.stdout and proc.stderr
-    proc.stdin.write(f"{len(payload)}\n".encode("ascii"))
-    proc.stdin.write(payload)
-    proc.stdin.close()
-    proc.stdin = None
-    stdout_b, stderr_b = proc.communicate(timeout=240)
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"ipc: non-zero exit {proc.returncode}\\nstdout={stdout_b!r}\\nstderr={stderr_b!r}"
-        )
-    _read_json_output(
-        stdout_b.decode("utf-8", errors="replace"),
-        stderr_b.decode("utf-8", errors="replace"),
-        "ipc",
-    )
-
-
-def smoke_cancel(sidecar: Path, image_path: Path, env: dict[str, str]) -> None:
-    payload = json.dumps({"type": "path", "data": str(image_path)}).encode("utf-8")
-    proc = subprocess.Popen(
-        [str(sidecar)],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-    )
-    assert proc.stdin and proc.stdout and proc.stderr
-
-    proc.stdin.write(f"{len(payload)}\n".encode("ascii"))
-    proc.stdin.write(payload)
-    proc.stdin.flush()
-    proc.stdin.write(b"CANCEL\n")
-    proc.stdin.flush()
-    proc.stdin.close()
-    proc.stdin = None
-
-    try:
-        stdout_b, stderr_b = proc.communicate(timeout=20)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        stdout_b, stderr_b = proc.communicate(timeout=5)
-        raise RuntimeError(
-            f"cancel: timeout waiting for exit\\nstdout={stdout_b!r}\\nstderr={stderr_b!r}"
-        )
-
-    if proc.returncode != 2:
-        raise RuntimeError(
-            f"cancel: expected exit code 2, got {proc.returncode}\\n"
-            f"stdout={stdout_b!r}\\nstderr={stderr_b!r}"
-        )
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke test packaged OCR sidecar.")
     parser.add_argument("--sidecar", required=True, help="Path to ocr-engine executable")
-    parser.add_argument(
-        "--skip-cancel",
-        action="store_true",
-        help="Skip cancel-path smoke test",
-    )
     args = parser.parse_args()
 
     sidecar = Path(args.sidecar).resolve()
@@ -173,15 +107,9 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="ocr-smoke-") as tmpdir:
         tmp = Path(tmpdir)
         normal_image = tmp / "normal.ppm"
-        cancel_image = tmp / "cancel.ppm"
         env = _sidecar_env(sidecar)
         _write_ppm_image(normal_image, width=960, height=240, mode="normal")
-        _write_ppm_image(cancel_image, width=4200, height=4200, mode="cancel")
-
         smoke_cli(sidecar, normal_image, env)
-        smoke_ipc(sidecar, normal_image, env)
-        if not args.skip_cancel:
-            smoke_cancel(sidecar, cancel_image, env)
 
     print("OCR sidecar smoke passed.")
     return 0

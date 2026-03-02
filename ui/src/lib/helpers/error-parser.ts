@@ -21,13 +21,33 @@ export interface ParsedError {
   };
 }
 
+const normalizeErrorMessage = (error: any): string => {
+  if (typeof error === "string") return error;
+  if (error?.message && typeof error.message === "string") {
+    return error.message;
+  }
+  if (error?.statusText && typeof error.statusText === "string") {
+    return error.statusText;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "An unknown error occurred.";
+  }
+};
+
 export const parseGeminiError = (error: any): ParsedError => {
-  const errString = typeof error === "string" ? error : JSON.stringify(error);
-  const errObj = typeof error === "object" && error !== null ? error : {};
-  const message =
-    errObj.message ||
-    errObj.statusText ||
-    (typeof error === "string" ? error : "An unknown error occurred.");
+  const errString =
+    typeof error === "string"
+      ? error
+      : (() => {
+          try {
+            return JSON.stringify(error);
+          } catch {
+            return String(error);
+          }
+        })();
+  const message = normalizeErrorMessage(error);
 
   const searchStr = (errString + " " + message).toLowerCase();
 
@@ -126,6 +146,49 @@ export const parseGeminiError = (error: any): ParsedError => {
   return {
     title: "Error",
     message: message,
+    actionType: "DISMISS_ONLY",
+  };
+};
+
+export const parseAppError = (error: any): ParsedError => {
+  const message = normalizeErrorMessage(error);
+  const searchStr = message.toLowerCase();
+
+  if (
+    searchStr.includes("ocr sidecar") ||
+    searchStr.includes("paddleocr") ||
+    searchStr.includes("ocr processing failed") ||
+    searchStr.includes("failed to initialize paddleocr")
+  ) {
+    return {
+      title: "OCR Error",
+      message,
+      actionType: "RETRY_ONLY",
+    };
+  }
+
+  if (
+    searchStr.includes("failed to download") ||
+    (searchStr.includes("download") && searchStr.includes("model"))
+  ) {
+    return {
+      title: "Model Download Failed",
+      message,
+      actionType: "RETRY_ONLY",
+    };
+  }
+
+  if (searchStr.includes("cancelled")) {
+    return {
+      title: "Cancelled",
+      message,
+      actionType: "DISMISS_ONLY",
+    };
+  }
+
+  return {
+    title: "Error",
+    message,
     actionType: "DISMISS_ONLY",
   };
 };
