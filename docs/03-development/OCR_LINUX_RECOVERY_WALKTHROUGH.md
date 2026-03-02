@@ -98,6 +98,11 @@ Default detector was still `PP-OCRv5_server_det` (larger) while the sidecar targ
     - `PP-OCRv5_mobile_det_infer.tar`
   - Added `--clean-stale` option:
     - removes model directories not in allowlist before ensuring required models.
+  - Added resilient download fallback chain for CI/network variance:
+    - tries archive URL(s) first (BOS)
+    - if archive fetch fails (example: HTTP `403` on GitHub mac runner), falls back to direct Hugging Face model file download (`inference.json`, `inference.pdiparams`, `inference.yml`)
+    - includes `hf-mirror.com` as secondary HF endpoint
+  - Added explicit request user-agent to reduce host-side blocking of default `python-requests` identity.
 
 - `xtask/src/commands/build.rs`
   - Linux/macOS invocation now calls:

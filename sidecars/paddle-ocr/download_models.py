@@ -7,10 +7,17 @@ import argparse
 import shutil
 import tarfile
 from pathlib import Path
+from typing import Iterable
 
 import requests
 
-BASE_URL = "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0"
+ARCHIVE_BASE_URLS = (
+    "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0",
+)
+HF_BASE_URLS = (
+    "https://huggingface.co",
+    "https://hf-mirror.com",
+)
 SCRIPT_DIR = Path(__file__).parent.resolve()
 MODELS_DIR = SCRIPT_DIR / "models"
 
@@ -19,6 +26,22 @@ MODELS = [
     "en_PP-OCRv5_mobile_rec_infer.tar",
     "PP-LCNet_x1_0_textline_ori_infer.tar",
 ]
+
+HF_REPO_BY_MODEL = {
+    "PP-OCRv5_mobile_det": "PaddlePaddle/PP-OCRv5_mobile_det",
+    "en_PP-OCRv5_mobile_rec": "PaddlePaddle/en_PP-OCRv5_mobile_rec",
+    "PP-LCNet_x1_0_textline_ori": "PaddlePaddle/PP-LCNet_x1_0_textline_ori",
+}
+
+HF_REQUIRED_FILES = (
+    "inference.json",
+    "inference.pdiparams",
+    "inference.yml",
+)
+
+REQUEST_HEADERS = {
+    "User-Agent": "snapllm-ocr-model-bootstrap/1.0",
+}
 
 
 def _model_dir_name(archive_name: str) -> str:
@@ -46,6 +69,11 @@ def _is_model_ready(model_dir: Path) -> bool:
     ).exists()
 
 
+def _archive_urls(archive_name: str) -> Iterable[str]:
+    for base in ARCHIVE_BASE_URLS:
+        yield f"{base.rstrip('/')}/{archive_name}"
+
+
 def _normalize_model_dir(model_name: str) -> Path:
     canonical = MODELS_DIR / model_name
     inferred = MODELS_DIR / f"{model_name}_infer"
@@ -64,12 +92,55 @@ def _normalize_model_dir(model_name: str) -> Path:
 
 def download_file(url: str, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with requests.get(url, stream=True, timeout=60) as response:
+    with requests.get(
+        url,
+        stream=True,
+        timeout=(20, 180),
+        headers=REQUEST_HEADERS,
+        allow_redirects=True,
+    ) as response:
         response.raise_for_status()
         with output_path.open("wb") as file:
             for chunk in response.iter_content(chunk_size=1024 * 1024):
                 if chunk:
                     file.write(chunk)
+
+
+def _download_from_hf(model_name: str, model_dir: Path) -> None:
+    repo = HF_REPO_BY_MODEL.get(model_name)
+    if not repo:
+        raise RuntimeError(f"No Hugging Face repository mapping for {model_name}")
+
+    if model_dir.exists():
+        shutil.rmtree(model_dir)
+    model_dir.mkdir(parents=True, exist_ok=True)
+
+    errors = []
+    for base in HF_BASE_URLS:
+        failed = False
+        for file_name in HF_REQUIRED_FILES:
+            url = f"{base.rstrip('/')}/{repo}/resolve/main/{file_name}"
+            dst = model_dir / file_name
+            try:
+                print(f"Downloading {model_name}/{file_name} from {base}...")
+                download_file(url, dst)
+            except Exception as exc:
+                errors.append(f"{url}: {exc}")
+                failed = True
+                break
+
+        if not failed and _is_model_ready(model_dir):
+            return
+
+        for file_name in HF_REQUIRED_FILES:
+            try:
+                (model_dir / file_name).unlink()
+            except FileNotFoundError:
+                pass
+
+    raise RuntimeError(
+        "Hugging Face fallback download failed:\n  - " + "\n  - ".join(errors)
+    )
 
 
 def extract_archive(archive_path: Path, destination: Path) -> None:
@@ -94,22 +165,44 @@ def ensure_model(archive_name: str) -> None:
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     archive_path = MODELS_DIR / archive_name
-    url = f"{BASE_URL}/{archive_name}"
+    archive_errors = []
 
-    print(f"Downloading {archive_name}...")
-    download_file(url, archive_path)
+    for url in _archive_urls(archive_name):
+        try:
+            print(f"Downloading {archive_name} from {url}...")
+            download_file(url, archive_path)
 
-    print(f"Extracting {archive_name}...")
-    extract_archive(archive_path, MODELS_DIR)
+            print(f"Extracting {archive_name}...")
+            extract_archive(archive_path, MODELS_DIR)
 
-    if archive_path.exists():
-        archive_path.unlink()
+            if archive_path.exists():
+                archive_path.unlink()
 
+            model_dir = _normalize_model_dir(model_name)
+            if _is_model_ready(model_dir):
+                return
+            archive_errors.append(
+                f"{url}: extracted archive but model is incomplete ({model_name})"
+            )
+        except Exception as exc:
+            archive_errors.append(f"{url}: {exc}")
+        finally:
+            if archive_path.exists():
+                archive_path.unlink()
+
+    print(
+        f"Archive mirrors failed for {archive_name}; trying direct Hugging Face files..."
+    )
+    _download_from_hf(model_name, model_dir)
     model_dir = _normalize_model_dir(model_name)
-    if not _is_model_ready(model_dir):
-        raise RuntimeError(
-            f"Model extraction incomplete for {model_name}: missing inference files"
-        )
+    if _is_model_ready(model_dir):
+        return
+
+    archive_error_text = "\n  - ".join(archive_errors) if archive_errors else "unknown"
+    raise RuntimeError(
+        f"Model bootstrap failed for {model_name}.\n"
+        f"Archive attempts:\n  - {archive_error_text}"
+    )
 
 
 def prune_stale_model_dirs() -> None:
