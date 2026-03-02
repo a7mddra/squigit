@@ -147,6 +147,15 @@ pub fn ocr() -> Result<()> {
         &["-m", "pip", "install", "-r", "requirements-runtime.txt"],
         &sidecar,
     )?;
+    #[cfg(target_os = "macos")]
+    {
+        println!("\nApplying macOS NumPy compatibility pin...");
+        run_cmd(
+            py,
+            &["-m", "pip", "install", "--force-reinstall", "numpy==1.26.4"],
+            &sidecar,
+        )?;
+    }
 
     println!("\nApplying patches...");
     run_cmd(py, &["patches/paddle_core.py"], &sidecar)?;

@@ -154,7 +154,23 @@ CLI runtime now works again (same command style that previously failed):
 
 - `./oc* /path/to/image.png` returns OCR JSON list instead of `libmklml` init error.
 
-## 6. Windows guardrails (for Windows agent)
+## 6. macOS CI regression and fix (`numpy 2.4.2` symbol issue)
+
+Observed on GitHub mac runner during `dist` smoke:
+
+- NumPy import failed with:
+  - `Symbol not found: _cblas_caxpy$NEWLAPACK$ILP64`
+  - from `_multiarray_umath.cpython-312-darwin.so`
+
+This is a macOS wheel/Accelerate ABI mismatch on the hosted runner image for the selected NumPy wheel (`2.4.2`), not an OCR logic change.
+
+Fix applied in `xtask/src/commands/build.rs`:
+
+- macOS-only post-install pin:
+  - `pip install --force-reinstall numpy==1.26.4`
+- Scope is `#[cfg(target_os = "macos")]`, so Linux and Windows builds are unaffected.
+
+## 7. Windows guardrails (for Windows agent)
 
 Windows behavior was intentionally not changed in critical code paths:
 
@@ -165,7 +181,7 @@ Windows behavior was intentionally not changed in critical code paths:
 
 If Windows size regresses above `226 MB` or OCR fails, inspect only recent Windows-specific changes first. The Linux/macOS fixes were gated by OS to avoid that.
 
-## 7. Repro / validation commands
+## 8. Repro / validation commands
 
 Local Linux:
 
