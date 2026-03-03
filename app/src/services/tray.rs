@@ -69,16 +69,21 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let exit_i = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show_i, &capture_i, &sep, &exit_i])?;
 
-    let img = image::load_from_memory(include_bytes!("../../icons/32x32.png"))?;
+    let img = image::load_from_memory(include_bytes!("../../icons/64x64.png"))?;
     let rgba = img.into_rgba8();
     let (width, height) = rgba.dimensions();
     let rgba_bytes = rgba.into_vec();
     let icon = tauri::image::Image::new(&rgba_bytes, width, height);
 
-    let _tray = TrayIconBuilder::new()
+    let tray_builder = TrayIconBuilder::new()
         .icon(icon)
         .tooltip(crate::constants::APP_NAME)
-        .menu(&menu)
+        .menu(&menu);
+
+    #[cfg(target_os = "macos")]
+    let tray_builder = tray_builder.icon_as_template(true);
+
+    let _tray = tray_builder
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "capture" => capture_screen_with_source(app, "tray"),

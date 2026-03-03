@@ -41,45 +41,85 @@ pub fn calculate_dynamic_window(
         .primary_monitor()
         .map_err(|e| e.to_string())?
         .ok_or("No monitor found")?;
-
-    let size = monitor.size();
-    let pos = monitor.position();
-
-    let screen_w = size.width as f64;
-    let screen_h = size.height as f64;
-
-    let frac_w = base_w / 1366.0;
-    let frac_h = base_h / 768.0;
-
-    let win_w = (frac_w * screen_w).floor();
-    let win_h = (frac_h * screen_h).floor();
-
-    let x = pos.x as f64 + (screen_w - win_w) / 2.0;
-    let y = pos.y as f64 + (screen_h - win_h) / 2.0;
-
-    Ok((x, y, win_w, win_h))
+    Ok(center_in_monitor_work_area(&monitor, base_w, base_h))
 }
 
 pub fn center_on_cursor_monitor(app: &AppHandle, base_w: f64, base_h: f64) -> (f64, f64, f64, f64) {
     if let Ok(cursor) = app.cursor_position() {
         if let Ok(monitors) = app.available_monitors() {
             for monitor in monitors {
-                let pos = monitor.position();
-                let size = monitor.size();
-                let (mx, my) = (pos.x as f64, pos.y as f64);
-                let (mw, mh) = (size.width as f64, size.height as f64);
-
-                if cursor.x >= mx && cursor.x < mx + mw && cursor.y >= my && cursor.y < my + mh {
-                    let win_w = ((base_w / 1366.0) * mw).floor();
-                    let win_h = ((base_h / 768.0) * mh).floor();
-                    let x = mx + (mw - win_w) / 2.0;
-                    let y = my + (mh - win_h) / 2.0;
-                    return (x, y, win_w, win_h);
+                let (mx, my, mw, mh) = monitor_bounds(&monitor);
+                if point_in_rect(cursor.x, cursor.y, mx, my, mw, mh) {
+                    return center_in_monitor_work_area(&monitor, base_w, base_h);
                 }
             }
         }
     }
     calculate_dynamic_window(app, base_w, base_h).unwrap_or((100.0, 100.0, base_w, base_h))
+}
+
+fn point_in_rect(px: f64, py: f64, rx: f64, ry: f64, rw: f64, rh: f64) -> bool {
+    px >= rx && px < rx + rw && py >= ry && py < ry + rh
+}
+
+fn monitor_bounds(monitor: &tauri::Monitor) -> (f64, f64, f64, f64) {
+    let pos = monitor.position();
+    let size = monitor.size();
+    (
+        pos.x as f64,
+        pos.y as f64,
+        size.width as f64,
+        size.height as f64,
+    )
+}
+
+fn monitor_work_area(monitor: &tauri::Monitor) -> (f64, f64, f64, f64) {
+    let work = monitor.work_area();
+    let work_w = work.size.width as f64;
+    let work_h = work.size.height as f64;
+
+    if work_w > 0.0 && work_h > 0.0 {
+        (
+            work.position.x as f64,
+            work.position.y as f64,
+            work_w,
+            work_h,
+        )
+    } else {
+        monitor_bounds(monitor)
+    }
+}
+
+fn center_in_monitor_work_area(
+    monitor: &tauri::Monitor,
+    base_w: f64,
+    base_h: f64,
+) -> (f64, f64, f64, f64) {
+    let (area_x, area_y, area_w, area_h) = monitor_work_area(monitor);
+    let (win_w, win_h) = compute_aspect_locked_size(area_w, area_h, base_w, base_h);
+
+    let x = area_x + (area_w - win_w) / 2.0;
+    let y = area_y + (area_h - win_h) / 2.0;
+    (x.floor(), y.floor(), win_w, win_h)
+}
+
+fn compute_aspect_locked_size(area_w: f64, area_h: f64, base_w: f64, base_h: f64) -> (f64, f64) {
+    if area_w <= 1.0 || area_h <= 1.0 || base_w <= 1.0 || base_h <= 1.0 {
+        return (base_w.max(1.0).floor(), base_h.max(1.0).floor());
+    }
+
+    // Keep original relative sizing intent against a 1366x768 reference monitor.
+    let requested_w = (base_w / 1366.0) * area_w;
+    let requested_h = (base_h / 768.0) * area_h;
+
+    // Use the dominant requested axis, then clamp so the locked aspect ratio fits the work area.
+    let requested_scale = (requested_w / base_w).max(requested_h / base_h);
+    let max_fit_scale = (area_w / base_w).min(area_h / base_h);
+    let scale = requested_scale.min(max_fit_scale).max(0.0);
+
+    let win_w = (base_w * scale).floor().clamp(1.0, area_w.floor());
+    let win_h = (base_h * scale).floor().clamp(1.0, area_h.floor());
+    (win_w, win_h)
 }
 
 pub fn spawn_app_window(

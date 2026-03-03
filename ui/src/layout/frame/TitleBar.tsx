@@ -26,6 +26,7 @@ export const TitleBar: React.FC = () => {
   } | null>(null);
 
   const isUnix = platform === "macos" || platform === "linux";
+  const isWindows = platform === "windows";
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -46,7 +47,7 @@ export const TitleBar: React.FC = () => {
 
   return (
     <header
-      className={styles.header}
+      className={`${styles.header} ${isWindows ? styles.headerWindows : ""}`}
       data-tauri-drag-region
       onContextMenu={handleContextMenu}
       onMouseDown={(e) =>
@@ -92,7 +93,11 @@ export const TitleBar: React.FC = () => {
         )}
       </div>
 
-      <div className={styles.rightSection}>
+      <div
+        className={`${styles.rightSection} ${
+          isWindows ? styles.rightSectionWindows : ""
+        }`}
+      >
         {!app.isLoadingState && (
           <>
             <SettingsPanel
@@ -144,7 +149,7 @@ export const TitleBar: React.FC = () => {
             )}
           </>
         )}
-        {platform === "windows" && <WindowControls />}
+        {isWindows && <WindowControls />}
       </div>
 
       {contextMenu && (

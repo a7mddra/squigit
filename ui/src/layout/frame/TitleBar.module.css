@@ -20,6 +20,11 @@
   position: relative;
 }
 
+.headerWindows {
+  padding-top: 0;
+  padding-right: 0;
+}
+
 .leftSection {
   display: flex;
   align-items: center;
@@ -36,6 +41,10 @@
   gap: 0.1rem;
   flex-shrink: 0;
   pointer-events: none;
+}
+
+.rightSectionWindows {
+  align-self: stretch;
 }
 
 .chatTitle {

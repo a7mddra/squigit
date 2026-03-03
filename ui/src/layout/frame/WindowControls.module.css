@@ -7,14 +7,17 @@
 
 .windowsControls {
   display: flex;
-  align-items: center;
-  margin-left: 0.5rem;
+  align-items: stretch;
+  align-self: stretch;
+  height: 100%;
+  margin-left: 0.35rem;
   pointer-events: none;
 }
 
 .windowsButton {
   width: 46px;
-  height: 32px;
+  height: 100%;
+  min-height: 32px;
   border: none;
   background-color: transparent;
   cursor: pointer;

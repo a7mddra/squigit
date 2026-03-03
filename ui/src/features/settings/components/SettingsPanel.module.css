@@ -6,17 +6,17 @@
 
 .settingsPanel {
   pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 
 .triggerIcon {
-  transform: translateZ(0);
-  transition: transform 0.15s linear;
-  transform-origin: center;
-  will-change: transform;
+  transition: transform 0.16s ease;
+  transform-origin: center center;
+  transform-box: fill-box;
   shape-rendering: geometricPrecision;
   display: block;
 }
 
 .iconActive {
-  transform: translateZ(0) rotate(27.5deg);
+  transform: rotate(30deg);
 }
