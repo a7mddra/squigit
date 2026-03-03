@@ -47,10 +47,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     let safeY = y + CURSOR_OFFSET;
 
     if (x + menuRect.width + EDGE_PADDING > viewportWidth) {
-      safeX = Math.max(
-        EDGE_PADDING,
-        viewportWidth - menuRect.width - EDGE_PADDING,
-      );
+      safeX = x - menuRect.width - CURSOR_OFFSET;
     }
 
     if (safeX < EDGE_PADDING) {
@@ -58,10 +55,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     }
 
     if (y + menuRect.height + EDGE_PADDING > viewportHeight) {
-      safeY = Math.max(
-        EDGE_PADDING,
-        viewportHeight - menuRect.height - EDGE_PADDING,
-      );
+      safeY = y - menuRect.height - CURSOR_OFFSET;
     }
 
     if (safeY < EDGE_PADDING) {
@@ -74,14 +68,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      // If menu is mounted and click is outside
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         onClose();
       }
     };
 
-    // Use mousedown to capture the event before click handlers might fire/bubble
-    // and potentially trigger other UI changes.
     document.addEventListener("mousedown", handleClickOutside);
 
     return () => {
