@@ -318,7 +318,9 @@ pub async fn ocr_image(
 
     #[cfg(windows)]
     {
-        cmd.creation_flags(0x00004000);
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x00004000;
+        cmd.creation_flags(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS);
     }
 
     #[cfg(unix)]
