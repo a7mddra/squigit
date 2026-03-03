@@ -10,6 +10,22 @@ use crate::services::security;
 use crate::state::AppState;
 use crate::utils::get_app_config_dir;
 
+const MISSING_CREDENTIALS_PREFIX: &str =
+    "Google authentication is not configured in this build.";
+
+fn log_auth_error(error: &str) {
+    if error.starts_with(MISSING_CREDENTIALS_PREFIX) {
+        // Missing credentials are already logged in services/auth.rs with
+        // contributor setup instructions.
+        return;
+    }
+
+    eprintln!(
+        "[auth] start_google_auth failed: {}",
+        error.replace('\n', "\n[auth] ")
+    );
+}
+
 #[tauri::command]
 pub async fn start_google_auth(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     if state.auth_running.load(Ordering::SeqCst) {
@@ -37,7 +53,11 @@ pub async fn start_google_auth(app: AppHandle, state: State<'_, AppState>) -> Re
 
     auth_lock.store(false, Ordering::SeqCst);
 
-    result.map_err(|e| e.to_string())?
+    let result = result.map_err(|e| e.to_string())?;
+    if let Err(ref e) = result {
+        log_auth_error(e);
+    }
+    result
 }
 
 #[tauri::command]

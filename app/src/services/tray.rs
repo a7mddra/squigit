@@ -54,7 +54,6 @@ pub fn capture_screen_with_source(app: &AppHandle, source: &str) {
 // ──────────────────────────────────────────────────────────────
 #[cfg(not(target_os = "linux"))]
 pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    use image::GenericImageView;
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
@@ -70,7 +69,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let exit_i = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show_i, &capture_i, &sep, &exit_i])?;
 
-    let img = image::load_from_memory(include_bytes!("../../icons/tray-icon.png"))?;
+    let img = image::load_from_memory(include_bytes!("../../icons/32x32.png"))?;
     let rgba = img.into_rgba8();
     let (width, height) = rgba.dimensions();
     let rgba_bytes = rgba.into_vec();
@@ -80,7 +79,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .icon(icon)
         .tooltip(crate::constants::APP_NAME)
         .menu(&menu)
-        .menu_on_left_click(false)
+        .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "capture" => capture_screen_with_source(app, "tray"),
             "show_ui" => show_window(app),
@@ -114,7 +113,7 @@ mod sni {
 
     fn load_icon_argb() -> (i32, i32, Vec<u8>) {
         let img = image::load_from_memory_with_format(
-            include_bytes!("../../icons/tray-icon.png"),
+            include_bytes!("../../icons/32x32.png"),
             image::ImageFormat::Png,
         )
         .expect("embedded tray icon must be valid PNG");

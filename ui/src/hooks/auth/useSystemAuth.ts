@@ -6,6 +6,8 @@
 
 import { commands } from "@/lib";
 
+let hasLoggedMissingAuthConfig = false;
+
 export const useSystemAuth = (
   setSwitchingProfileId: (id: string | null) => void,
 ) => {
@@ -38,7 +40,20 @@ export const useSystemAuth = (
           setSwitchingProfileId(null);
         }
       } else {
-        console.error("Failed to start auth:", e);
+        const missingConfig = errorMsg.includes(
+          "Google authentication is not configured in this build.",
+        );
+        if (missingConfig) {
+          if (!hasLoggedMissingAuthConfig) {
+            hasLoggedMissingAuthConfig = true;
+            console.warn(
+              "[auth] Google auth is not configured in this build. See VS Code terminal for setup steps.",
+            );
+          }
+        } else {
+          console.error("Failed to start auth:", e);
+        }
+
         if (errorMsg.includes("Auth Timeout")) {
           console.warn("Auth timed out, cancelling backend process...");
           try {

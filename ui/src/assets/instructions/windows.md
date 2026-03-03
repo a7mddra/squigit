@@ -12,7 +12,7 @@ As an open-source project without a commercial EV certificate, Microsoft Defende
 
 ## 2. Operational Workflow
 
-- **Global Hotkey:** Press `Win ⊞` + `Shift ⇧` + `A`.
+- **Global Hotkey:** Press `Win` + `Shift` + `A`.
 - **Process:** Trigger the hotkey to freeze the screen, draw a region, and immediately launch the AI analysis window.
 - **Display Support:** The engine utilizes native Qt6 rendering to ensure pixel-perfect accuracy on High-DPI (4K) and multi-monitor configurations.
 

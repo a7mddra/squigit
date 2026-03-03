@@ -191,6 +191,7 @@ export const useApp = () => {
 
   const handleImageReadyRef = useRef<any>(null);
   const handleSelectChatRef = useRef<any>(null);
+  const hasShownCaptureTerminalHintRef = useRef(false);
 
   const performLogout = async () => {
     await system.handleLogout();
@@ -932,6 +933,12 @@ export const useApp = () => {
           dialogs.setShowCaptureDeniedDialog(true);
         } else {
           console.error("[capture-failed]", reason);
+          if (!hasShownCaptureTerminalHintRef.current) {
+            hasShownCaptureTerminalHintRef.current = true;
+            console.warn(
+              "[capture-failed] See VS Code terminal for detailed backend capture logs.",
+            );
+          }
         }
       },
     );

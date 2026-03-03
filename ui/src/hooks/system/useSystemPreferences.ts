@@ -45,10 +45,6 @@ export const useSystemPreferences = () => {
   const [sessionOcrLanguage, setSessionOcrLanguage] =
     useState<string>(DEFAULT_OCR_MODEL_ID);
 
-  useEffect(() => {
-    console.log("[useSystemPreferences] ocrEnabled changed to:", ocrEnabled);
-  }, [ocrEnabled]);
-
   const updatePreferences = async (updates: Partial<UserPreferences>) => {
     const normalizedUpdatedOcrLanguage =
       updates.ocrLanguage !== undefined

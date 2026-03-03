@@ -1,6 +1,7 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::process::Command;
 
 #[cfg(target_os = "linux")]

@@ -48,7 +48,6 @@
     "targets": "all",
     "externalBin": ["binaries/whisper-stt"],
     "resources": [
-      "../sidecars/whisper-stt/models/*",
       "binaries/qt-capture-*/**/*",
       "binaries/paddle-ocr-*/**/*"
     ],

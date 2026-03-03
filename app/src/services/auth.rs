@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc,
+    Arc, Once,
 };
 use tauri::{AppHandle, Emitter};
 use tiny_http::{Header, Response, Server};
@@ -14,7 +14,8 @@ use url::Url;
 
 use ops_profile_store::{Profile, ProfileStore};
 
-const SECRETS_JSON: &str = include_str!("../data/credentials.json");
+const EMBEDDED_SECRETS_JSON: &str =
+    include_str!(env!("SNAPLLM_GOOGLE_CREDENTIALS_EMBEDDED_FILE"));
 
 const HTML_TEMPLATE: &str = include_str!("../data/success.html");
 
@@ -22,6 +23,7 @@ const REDIRECT_PORT: u16 = 3000;
 const REDIRECT_URI: &str = "http://localhost:3000";
 const USER_INFO_URL: &str =
     "https://people.googleapis.com/v1/people/me?personFields=names,emailAddresses,photos";
+static AUTH_MISSING_CREDENTIALS_LOG_ONCE: Once = Once::new();
 
 #[derive(Deserialize, Debug)]
 struct GoogleCredentials {
@@ -73,18 +75,44 @@ struct SavedProfile {
     original_picture: Option<String>,
 }
 
+fn missing_credentials_message() -> String {
+    format!(
+        "Google authentication is not configured in this build. \
+        The app can run normally, but sign-in is disabled.\n\n\
+        To enable Google auth, provide credentials using one of:\n\
+        - copy app/src/data/credentials.example.json to app/src/data/credentials.json (gitignored)\n\
+        - SNAPLLM_GOOGLE_CREDENTIALS_PATH=<absolute path to credentials.json>\n\
+        - SNAPLLM_GOOGLE_CREDENTIALS_JSON=<raw credentials json>\n\n\
+        Then rebuild the app and try again from {}.",
+        crate::constants::APP_NAME
+    )
+}
+
+fn load_google_oauth_config() -> Result<OAuthConfig, String> {
+    let raw = EMBEDDED_SECRETS_JSON.trim();
+    if raw.is_empty() {
+        let message = missing_credentials_message();
+        AUTH_MISSING_CREDENTIALS_LOG_ONCE.call_once(|| {
+            eprintln!("[auth] {}", message.replace('\n', "\n[auth] "));
+        });
+        return Err(message);
+    }
+
+    let wrapper: GoogleCredentials = serde_json::from_str(raw)
+        .map_err(|e| format!("Failed to parse Google OAuth credentials: {}", e))?;
+
+    wrapper
+        .installed
+        .or(wrapper.web)
+        .ok_or_else(|| "Invalid credentials.json: missing 'installed' or 'web' object".to_string())
+}
+
 pub fn start_google_auth_flow(
     app: AppHandle,
     _config_dir: PathBuf,
     auth_cancelled: Arc<AtomicBool>,
 ) -> Result<(), String> {
-    let wrapper: GoogleCredentials = serde_json::from_str(SECRETS_JSON)
-        .map_err(|e| format!("Failed to parse credentials.json: {}", e))?;
-
-    let secrets = wrapper
-        .installed
-        .or(wrapper.web)
-        .ok_or("Invalid credentials.json: missing 'installed' or 'web' object")?;
+    let secrets = load_google_oauth_config()?;
 
     let server = Server::http(format!("127.0.0.1:{}", REDIRECT_PORT)).map_err(|e| {
         format!(
