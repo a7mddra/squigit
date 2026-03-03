@@ -66,6 +66,9 @@ fn load_google_credentials_json() -> Option<String> {
     }
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").ok()?);
-    let default_path = manifest_dir.join("src").join("data").join("credentials.json");
+    let default_path = manifest_dir
+        .join("src")
+        .join("data")
+        .join("credentials.json");
     fs::read_to_string(default_path).ok()
 }

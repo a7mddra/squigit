@@ -225,12 +225,6 @@ export const Welcome: React.FC<WelcomeProps> = ({
           </div>
         </div>
       </div>
-
-      {isDragging && (
-        <div className={styles.dropOverlay}>
-          <span>Drop your image here</span>
-        </div>
-      )}
     </OnboardingLayout>
   );
 };

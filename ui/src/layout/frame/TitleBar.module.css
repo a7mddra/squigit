@@ -23,6 +23,7 @@
 .headerWindows {
   padding-top: 0;
   padding-right: 0;
+  -webkit-app-region: no-drag;
 }
 
 .leftSection {

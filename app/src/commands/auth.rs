@@ -10,8 +10,7 @@ use crate::services::security;
 use crate::state::AppState;
 use crate::utils::get_app_config_dir;
 
-const MISSING_CREDENTIALS_PREFIX: &str =
-    "Google authentication is not configured in this build.";
+const MISSING_CREDENTIALS_PREFIX: &str = "Google authentication is not configured in this build.";
 
 fn log_auth_error(error: &str) {
     if error.starts_with(MISSING_CREDENTIALS_PREFIX) {

@@ -55,7 +55,8 @@ pub fn run() {
 
     Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            let wants_background = args.iter().any(|a| a == "--background" || a == "-b");
+            let wants_background =
+                crate::utils::args_request_background(args.iter().map(String::as_str));
             if !wants_background {
                 services::tray::show_window(app);
             }
@@ -171,8 +172,9 @@ pub fn run() {
             let model_manager = app.state::<services::models::ModelManager>();
             model_manager.start_monitor();
 
-            let args: Vec<String> = std::env::args().collect();
-            let has_cli_image = args.iter().skip(1).find(|arg| !arg.starts_with("-"));
+            let start_in_background = crate::utils::launched_in_background();
+            let launch_args: Vec<String> = std::env::args().skip(1).collect();
+            let has_cli_image = launch_args.iter().find(|arg| !arg.starts_with('-'));
 
             if let Some(path) = has_cli_image.clone() {
                 println!("CLI Image argument detected: {}", path);
@@ -240,6 +242,8 @@ pub fn run() {
                 }
             }
 
+            services::tray::setup_tray(&handle).expect("Failed to setup tray icon");
+
             services::window::spawn_app_window(
                 &handle,
                 "main",
@@ -247,11 +251,9 @@ pub fn run() {
                 base_w,
                 base_h,
                 "",
-                false,
+                !start_in_background,
             )
             .expect("Failed to spawn main window");
-
-            services::tray::setup_tray(&handle).expect("Failed to setup tray icon");
 
             let shortcut_handle = handle.clone();
             let _shortcut = sys_global_shortcut::ShortcutHandle::register(
@@ -269,16 +271,6 @@ pub fn run() {
             match &_shortcut {
                 Ok(_) => log::info!("Global shortcut registered successfully"),
                 Err(e) => log::warn!("Global shortcut registration failed (non-fatal): {}", e),
-            }
-
-            if let Some(window) = handle.get_webview_window("main") {
-                let win = window.clone();
-                window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        let _ = win.hide();
-                        api.prevent_close();
-                    }
-                });
             }
 
             Ok(())

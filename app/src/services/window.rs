@@ -149,8 +149,12 @@ pub fn spawn_app_window(
         .map_err(|e| e.to_string())?;
 
     let window_clone = window.clone();
-    window.on_window_event(move |event| {
-        if let WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+    window.on_window_event(move |event| match event {
+        WindowEvent::CloseRequested { api, .. } => {
+            let _ = window_clone.hide();
+            api.prevent_close();
+        }
+        WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) => {
             if let Some(first_path) = paths.first() {
                 let path_str = first_path.to_string_lossy().to_string();
                 let state = window_clone.state::<crate::state::AppState>();
@@ -173,6 +177,7 @@ pub fn spawn_app_window(
                 }
             }
         }
+        _ => {}
     });
 
     Ok(())

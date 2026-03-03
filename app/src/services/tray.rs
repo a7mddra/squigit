@@ -5,6 +5,16 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 pub fn show_window(app: &AppHandle) {
+    if app.get_webview_window("main").is_none() {
+        let (base_w, base_h) = (1030.0, 690.0);
+        if let Err(e) =
+            super::window::spawn_app_window(app, "main", "index.html", base_w, base_h, "", true)
+        {
+            log::error!("Failed to spawn main window while showing UI: {}", e);
+            return;
+        }
+    }
+
     if let Some(window) = app.get_webview_window("main") {
         if !window.is_visible().unwrap_or(true) || window.is_minimized().unwrap_or(false) {
             let (x, y, _, _) = super::window::center_on_cursor_monitor(app, 1030.0, 690.0);
@@ -98,7 +108,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 ..
             } = event
             {
-                toggle_window(tray.app_handle());
+                show_window(tray.app_handle());
             }
         })
         .build(app)?;
@@ -310,7 +320,7 @@ mod sni {
         }
 
         fn activate(&self, _x: i32, _y: i32) -> zbus::fdo::Result<()> {
-            super::toggle_window(&self.app_handle);
+            super::show_window(&self.app_handle);
             Ok(())
         }
 

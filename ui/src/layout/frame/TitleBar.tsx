@@ -6,6 +6,7 @@
 
 import React, { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAppContext } from "@/providers/AppProvider";
 import { usePlatform } from "@/hooks";
 import { SettingsPanel, SettingsOverlay } from "@/features";
@@ -27,6 +28,10 @@ export const TitleBar: React.FC = () => {
 
   const isUnix = platform === "macos" || platform === "linux";
   const isWindows = platform === "windows";
+  const currentWindow = getCurrentWindow();
+  const dragRegionProps = isWindows
+    ? {}
+    : ({ "data-tauri-drag-region": true } as const);
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -45,16 +50,49 @@ export const TitleBar: React.FC = () => {
     }
   };
 
+  const handleMouseDown = (e: React.MouseEvent<HTMLElement>) => {
+    if (
+      contextMenu &&
+      !(e.target as Element).closest("[data-is-context-menu]")
+    ) {
+      setContextMenu(null);
+    }
+
+    if (!isWindows || e.button !== 0 || contextMenu) return;
+
+    const target = e.target as Element | null;
+    if (!target) return;
+
+    const isInteractive = target.closest(
+      [
+        "button",
+        "a",
+        "input",
+        "textarea",
+        "select",
+        "option",
+        "label",
+        "[role='button']",
+        "[contenteditable='true']",
+        "[data-no-window-drag]",
+        "[data-is-context-menu]",
+      ].join(","),
+    );
+
+    if (isInteractive) return;
+
+    e.preventDefault();
+    currentWindow.startDragging().catch((error) => {
+      console.error("Failed to start window drag:", error);
+    });
+  };
+
   return (
     <header
       className={`${styles.header} ${isWindows ? styles.headerWindows : ""}`}
-      data-tauri-drag-region
+      {...dragRegionProps}
       onContextMenu={handleContextMenu}
-      onMouseDown={(e) =>
-        contextMenu &&
-        !(e.target as Element).closest("[data-is-context-menu]") &&
-        setContextMenu(null)
-      }
+      onMouseDown={handleMouseDown}
     >
       <h1 className={styles.chatTitle}>{app.chatTitle}</h1>
 

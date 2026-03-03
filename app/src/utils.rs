@@ -4,6 +4,19 @@
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
+pub fn args_request_background<I, S>(args: I) -> bool
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    args.into_iter()
+        .any(|arg| matches!(arg.as_ref(), "--background" | "-b"))
+}
+
+pub fn launched_in_background() -> bool {
+    args_request_background(std::env::args().skip(1))
+}
+
 pub fn get_app_config_dir(app: &AppHandle) -> PathBuf {
     app.path()
         .app_config_dir()

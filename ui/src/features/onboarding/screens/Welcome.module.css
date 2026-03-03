@@ -115,18 +115,3 @@
 .fileInput {
   display: none;
 }
-
-.dropOverlay {
-  position: absolute;
-  inset: 0;
-  background: var(--c-raw-132);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  color: var(--c-raw-060);
-  border: 2px dashed var(--c-raw-092);
-  margin: 16px;
-  border-radius: 12px;
-  pointer-events: none;
-}

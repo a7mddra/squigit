@@ -5,7 +5,6 @@
  */
 
 import React from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { getDialogs } from "@/lib";
 import { Dialog } from "@/components";
 import { Welcome, Agreement, UpdateNotes, Chat, MediaOverlay } from "@/features";
@@ -29,12 +28,6 @@ const AppRouterContent: React.FC = () => {
       disabled: action.actionKey === "confirm" ? !isAgreed : action.disabled,
     })),
   };
-
-  React.useEffect(() => {
-    if (!app.isLoadingState) {
-      invoke("show_window");
-    }
-  }, [app.isLoadingState]);
 
   const renderMainContent = () => {
     const activeId = app.chatHistory.activeSessionId;
