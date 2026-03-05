@@ -7,7 +7,13 @@
 import React from "react";
 import { getDialogs } from "@/lib";
 import { Dialog } from "@/components";
-import { Welcome, Agreement, UpdateNotes, Chat, MediaOverlay } from "@/features";
+import {
+  Welcome,
+  Agreement,
+  UpdateNotes,
+  Chat,
+  MediaOverlay,
+} from "@/features";
 import { AppProvider, useAppContext } from "@/providers/AppProvider";
 import { AppContextMenu } from "@/layout";
 import { MainScreen, SplashScreen } from "@/screens";
@@ -77,7 +83,7 @@ const AppRouterContent: React.FC = () => {
           } else {
             msg = "Please configure your Gemini API key to continue.";
           }
-          app.chat.appendErrorMessage(msg);
+          app.chat.appendErrorMessage(msg, app.chatHistory.activeSessionId);
           app.setShowGeminiAuthDialog(false);
         }}
       />

@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { Message } from "@/features";
+import { appendChatMessage } from "@/lib";
 
 export const useChatState = (enabled: boolean) => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -29,7 +30,6 @@ export const useChatState = (enabled: boolean) => {
 
   const appendErrorMessage = (
     errorMsg: string,
-    onMessage?: (message: Message, chatId: string) => void,
     targetChatId?: string | null,
   ) => {
     const errorBubble: Message = {
@@ -42,8 +42,10 @@ export const useChatState = (enabled: boolean) => {
 
     setMessages((prev) => [...prev, errorBubble]);
 
-    if (onMessage && targetChatId) {
-      onMessage(errorBubble, targetChatId);
+    if (targetChatId) {
+      appendChatMessage(targetChatId, "assistant", errorMsg).catch(
+        console.error,
+      );
     }
 
     setIsLoading(false);

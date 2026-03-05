@@ -10,13 +10,15 @@
 }
 
 .triggerIcon {
-  transition: transform 0.16s ease;
+  transition: transform 0.12s linear;
   transform-origin: center center;
   transform-box: fill-box;
   shape-rendering: geometricPrecision;
   display: block;
+  backface-visibility: hidden;
+  will-change: transform;
 }
 
 .iconActive {
-  transform: rotate(30deg);
+  transform: rotate(30deg) translateZ(0);
 }

@@ -93,7 +93,9 @@ const getChatOcrModel = (
     return resolveOcrModelId(firstKnownModel, fallbackModel);
   }
 
-  return fallbackModel === "" ? "" : resolveOcrModelId(undefined, fallbackModel);
+  return fallbackModel === ""
+    ? ""
+    : resolveOcrModelId(undefined, fallbackModel);
 };
 
 const withNavigationOcrGuard = (frame: OcrFrame): OcrFrame => ({
@@ -119,8 +121,7 @@ const UNSUPPORTED_PREVIEW_EXTENSIONS = new Set([
   "key",
 ]);
 
-const ATTACHMENT_SOURCE_MAP_STORAGE_KEY =
-  "snapllm:attachment-source-map:v1";
+const ATTACHMENT_SOURCE_MAP_STORAGE_KEY = "snapllm:attachment-source-map:v1";
 const ATTACHMENT_SOURCE_MAP_MAX_ENTRIES = 2048;
 
 function readAttachmentSourceMap(): Map<string, string> {
@@ -279,6 +280,12 @@ export const useApp = () => {
     [chatHistory.activeSessionId],
   );
 
+  const chatTitle = isImageMissing
+    ? system.appName
+    : isGeneratingTitle
+      ? "New Chat"
+      : system.sessionChatTitle || "New Chat";
+
   const chat = useChat({
     apiKey: system.apiKey,
     currentModel: system.sessionModel,
@@ -289,6 +296,7 @@ export const useApp = () => {
     onMessage: handleMessageAdded,
     onOverwriteMessages: handleOverwriteMessages,
     chatId: chatHistory.activeSessionId,
+    chatTitle,
     onMissingApiKey: () => {
       dialogs.setShowGeminiAuthDialog(true);
     },
@@ -297,12 +305,6 @@ export const useApp = () => {
     },
     generateTitle: generateTitleForText,
   });
-
-  const chatTitle = isImageMissing
-    ? system.appName
-    : isGeneratingTitle
-      ? "New Chat"
-      : system.sessionChatTitle || "New Chat";
 
   useEffect(() => {
     const activeId = chatHistory.activeSessionId;
@@ -336,16 +338,21 @@ export const useApp = () => {
       ocr_lang: targetOcrLang,
       updated_at: new Date().toISOString(),
     }).then(() => {
-      console.log("Automatically saved OCR language to chat metadata:", targetOcrLang);
+      console.log(
+        "Automatically saved OCR language to chat metadata:",
+        targetOcrLang,
+      );
     });
-  }, [system.sessionOcrLanguage, chatHistory.activeSessionId, chatHistory.chats]);
+  }, [
+    system.sessionOcrLanguage,
+    chatHistory.activeSessionId,
+    chatHistory.chats,
+  ]);
 
   const [isNavigating, setIsNavigating] = useState(false);
   const [busyDialog, setBusyDialog] = useState<DialogContent | null>(null);
   const pendingBusyActionRef = useRef<GuardedAction | null>(null);
-  const runWithBusyGuardRef = useRef<(action: GuardedAction) => void>(
-    () => {},
-  );
+  const runWithBusyGuardRef = useRef<(action: GuardedAction) => void>(() => {});
 
   const runAction = useCallback((action: GuardedAction) => {
     Promise.resolve(action()).catch((error) => {
@@ -451,7 +458,10 @@ export const useApp = () => {
     if (!fileName) return null;
 
     for (const [casPath, sourcePath] of attachmentSourceMapRef.current) {
-      if (casPath.endsWith(`/${fileName}`) || casPath.endsWith(`\\${fileName}`)) {
+      if (
+        casPath.endsWith(`/${fileName}`) ||
+        casPath.endsWith(`\\${fileName}`)
+      ) {
         return sourcePath;
       }
     }
@@ -484,7 +494,9 @@ export const useApp = () => {
     async (attachment: Attachment) => {
       const extension = attachment.extension.toLowerCase();
       const sourcePath =
-        attachment.sourcePath || getAttachmentSourcePath(attachment.path) || undefined;
+        attachment.sourcePath ||
+        getAttachmentSourcePath(attachment.path) ||
+        undefined;
 
       let resolvedPath = attachment.path;
       try {

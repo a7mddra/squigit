@@ -18,6 +18,7 @@ export const useChat = ({
   onMessage,
   onOverwriteMessages,
   chatId,
+  chatTitle,
   onMissingApiKey,
   onTitleGenerated,
   generateTitle,
@@ -36,6 +37,7 @@ export const useChat = ({
   onMessage?: (message: Message, chatId: string) => void;
   onOverwriteMessages?: (messages: Message[]) => void;
   chatId: string | null;
+  chatTitle: string;
   onMissingApiKey?: () => void;
   onTitleGenerated?: (title: string) => void;
   generateTitle?: (text: string) => Promise<string>;
@@ -47,6 +49,7 @@ export const useChat = ({
     currentModel,
     setCurrentModel,
     chatId,
+    chatTitle,
     startupImage,
     onMissingApiKey,
     onMessage,

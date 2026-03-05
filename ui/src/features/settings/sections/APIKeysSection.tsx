@@ -90,15 +90,17 @@ const ProviderRow = ({
     }
 
     const id = ++saveIdRef.current;
-    onSave(trimmed).then((success) => {
-      if (saveIdRef.current !== id) return;
-      if (!success) {
-        setIsValid(false);
-        alert(
-          "Failed to save API key. Please ensure you are logged in to a profile.",
-        );
-      }
-    });
+    setTimeout(() => {
+      onSave(trimmed).then((success) => {
+        if (saveIdRef.current !== id) return;
+        if (!success) {
+          setIsValid(false);
+          alert(
+            "Failed to save API key. Please ensure you are logged in to a profile.",
+          );
+        }
+      });
+    }, 0);
   };
   const {
     ref,

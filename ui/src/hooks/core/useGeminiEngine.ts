@@ -22,6 +22,7 @@ export const useGeminiEngine = (config: {
   currentModel: string;
   setCurrentModel: (model: string) => void;
   chatId: string | null;
+  chatTitle: string;
   startupImage: { path: string; mimeType: string; imageId: string } | null;
   onMissingApiKey?: () => void;
   onMessage?: (message: Message, chatId: string) => void;
@@ -224,11 +225,7 @@ export const useGeminiEngine = (config: {
         errorMsg = "Service temporarily unavailable.";
       else if (apiError.message) errorMsg = apiError.message;
 
-      appendErrorMessage(
-        errorMsg,
-        config.onMessage,
-        sessionChatIdRef.current || config.chatId,
-      );
+      appendErrorMessage(errorMsg, sessionChatIdRef.current || config.chatId);
     } finally {
       if (abortControllerRef.current?.signal === signal) {
         abortControllerRef.current = null;
@@ -244,7 +241,6 @@ export const useGeminiEngine = (config: {
       }
       appendErrorMessage(
         "Cannot start session. Missing required data.",
-        config.onMessage,
         config.chatId,
       );
       return;
@@ -302,7 +298,7 @@ export const useGeminiEngine = (config: {
         errorMsg = "Service temporarily unavailable.";
       else if (apiError.message) errorMsg = apiError.message;
 
-      appendErrorMessage(errorMsg, config.onMessage, targetChatId);
+      appendErrorMessage(errorMsg, targetChatId);
     }
   };
 
@@ -334,7 +330,6 @@ export const useGeminiEngine = (config: {
       appendErrorMessage(
         "An error occurred while sending the message. " +
           (apiError.message || ""),
-        config.onMessage,
         targetChatId,
       );
     } finally {
@@ -411,7 +406,6 @@ export const useGeminiEngine = (config: {
       appendErrorMessage(
         "An error occurred while sending the message. " +
           (apiError.message || ""),
-        config.onMessage,
         targetChatId,
       );
     } finally {
@@ -463,6 +457,7 @@ export const useGeminiEngine = (config: {
           if (
             msgIndex === 0 &&
             !hasTriggeredTitle &&
+            (!config.chatTitle || config.chatTitle === "New Chat") &&
             (streamingText + token).length > 50
           ) {
             console.log(
