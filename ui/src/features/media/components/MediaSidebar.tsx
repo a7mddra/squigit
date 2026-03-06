@@ -5,20 +5,29 @@
  */
 
 import React from "react";
-import { FolderOpen, Copy } from "lucide-react";
+import { FolderOpen, Copy, MessageSquare } from "lucide-react";
 import { WidgetOverlayIconButton } from "@/components";
 
 interface MediaSidebarProps {
   onReveal: () => void;
   onCopyPath: () => void;
+  onRevealInChat?: () => void;
 }
 
 export const MediaSidebar: React.FC<MediaSidebarProps> = ({
   onReveal,
   onCopyPath,
+  onRevealInChat,
 }) => {
   return (
     <>
+      {onRevealInChat && (
+        <WidgetOverlayIconButton
+          icon={<MessageSquare size={22} />}
+          label="Reveal in chat"
+          onClick={onRevealInChat}
+        />
+      )}
       <WidgetOverlayIconButton
         icon={<FolderOpen size={22} />}
         label="Reveal in folder"

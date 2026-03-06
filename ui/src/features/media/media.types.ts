@@ -13,4 +13,6 @@ export interface MediaViewerItem {
   name: string;
   extension: string;
   textContent?: string;
+  isGallery?: boolean;
+  galleryChatId?: string;
 }

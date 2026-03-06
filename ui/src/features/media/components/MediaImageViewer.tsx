@@ -12,6 +12,7 @@ import styles from "./MediaImageViewer.module.css";
 interface MediaImageViewerProps {
   filePath: string;
   name: string;
+  isGallery?: boolean;
 }
 
 const MIN_ZOOM = 0.25;
@@ -21,6 +22,7 @@ const ZOOM_STEP = 0.2;
 export const MediaImageViewer: React.FC<MediaImageViewerProps> = ({
   filePath,
   name,
+  isGallery = false,
 }) => {
   const src = useMemo(() => convertFileSrc(filePath), [filePath]);
 
@@ -108,7 +110,10 @@ export const MediaImageViewer: React.FC<MediaImageViewerProps> = ({
   };
 
   return (
-    <div className={styles.imageViewerRoot}>
+    <div
+      className={styles.imageViewerRoot}
+      data-gallery={isGallery ? "true" : "false"}
+    >
       <div className={styles.imageTools}>
         <button
           className={styles.toolButton}

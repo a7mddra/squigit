@@ -50,6 +50,7 @@ import { useAppOcr } from "./useAppOcr";
 import { useAppPanel } from "./useAppPanel";
 
 const isOnboardingId = (id: string) => id.startsWith("__system_");
+const SYSTEM_GALLERY_ID = "__system_gallery";
 
 const getChatOcrModel = (
   frame: OcrFrame,
@@ -108,6 +109,10 @@ type SearchRevealTarget = {
   chatId: string;
   messageIndex: number;
   requestedAt: number;
+};
+type MediaViewerOpenOptions = {
+  isGallery?: boolean;
+  chatId?: string;
 };
 
 const UNSUPPORTED_PREVIEW_EXTENSIONS = new Set([
@@ -537,7 +542,7 @@ export const useApp = () => {
   }, []);
 
   const openMediaViewer = useCallback(
-    async (attachment: Attachment) => {
+    async (attachment: Attachment, options?: MediaViewerOpenOptions) => {
       const extension = attachment.extension.toLowerCase();
       const sourcePath =
         attachment.sourcePath ||
@@ -575,6 +580,8 @@ export const useApp = () => {
             sourcePath,
             name: attachment.name,
             extension,
+            isGallery: options?.isGallery === true,
+            galleryChatId: options?.chatId,
           },
         });
         return;
@@ -693,6 +700,8 @@ export const useApp = () => {
           system.setSessionChatTitle(`Welcome to ${system.appName}!`);
         } else if (id.startsWith("__system_update")) {
           system.setSessionChatTitle("Update Available");
+        } else if (id === SYSTEM_GALLERY_ID) {
+          system.setSessionChatTitle("Gallery");
         }
         chatHistory.setActiveSessionId(id);
         setTimeout(() => setIsNavigating(false), 300);

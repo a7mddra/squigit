@@ -1,0 +1,45 @@
+/**
+ * @license
+ * Copyright 2026 a7mddra
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--c-raw-038);
+  border-radius: 10px;
+  background: var(--c-raw-010);
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.card:hover {
+  border-color: var(--c-raw-073);
+  transform: translateY(-1px);
+}
+
+.preview {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  background: var(--c-raw-038);
+}
+
+.meta {
+  padding: 8px 10px;
+}
+
+.title {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--c-raw-106);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

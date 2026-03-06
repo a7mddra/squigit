@@ -23,12 +23,14 @@ interface MediaOverlayProps {
   isOpen: boolean;
   onClose: () => void;
   item: MediaViewerItem | null;
+  onRevealInChat?: (chatId: string) => void;
 }
 
 export const MediaOverlay: React.FC<MediaOverlayProps> = ({
   isOpen,
   onClose,
   item,
+  onRevealInChat,
 }) => {
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -81,11 +83,23 @@ export const MediaOverlay: React.FC<MediaOverlayProps> = ({
     }
   };
 
+  const handleRevealInChat = () => {
+    const chatId = item?.galleryChatId;
+    if (!chatId || !onRevealInChat) return;
+    onRevealInChat(chatId);
+  };
+
   const renderViewer = () => {
     if (!item) return <div className={styles.emptyText}>No file selected.</div>;
 
     if (item.kind === "image") {
-      return <MediaImageViewer filePath={item.path} name={item.name} />;
+      return (
+        <MediaImageViewer
+          filePath={item.path}
+          name={item.name}
+          isGallery={item.isGallery === true}
+        />
+      );
     }
 
     if (item.kind === "pdf") {
@@ -108,7 +122,15 @@ export const MediaOverlay: React.FC<MediaOverlayProps> = ({
         onContextMenu={handleContextMenu}
         sectionContentClassName={styles.sectionContent}
         sidebarBottom={
-          <MediaSidebar onReveal={handleReveal} onCopyPath={handleCopyPath} />
+          <MediaSidebar
+            onReveal={handleReveal}
+            onCopyPath={handleCopyPath}
+            onRevealInChat={
+              item?.isGallery && item.galleryChatId
+                ? handleRevealInChat
+                : undefined
+            }
+          />
         }
       >
         <div className={styles.viewerRoot}>

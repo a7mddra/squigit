@@ -1,0 +1,47 @@
+/**
+ * @license
+ * Copyright 2026 a7mddra
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+.screen {
+  height: 100%;
+  overflow-y: auto;
+  padding: 14px 16px 18px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--c-raw-050);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--c-raw-073);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.state {
+  height: calc(100% - 44px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--c-raw-073);
+  font-size: 0.88rem;
+}

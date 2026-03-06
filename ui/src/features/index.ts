@@ -63,3 +63,4 @@ export * from "./media/MediaOverlay";
 export * from "./media/media.types";
 
 export * from "./search/SearchOverlay";
+export * from "./gallery/galleryScreen";

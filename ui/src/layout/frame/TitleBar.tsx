@@ -7,7 +7,7 @@
 import React, { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { FilePenLine, Pin } from "lucide-react";
+import { Pin } from "lucide-react";
 import { useAppContext } from "@/providers/AppProvider";
 import { usePlatform } from "@/hooks";
 import { SettingsPanel, SettingsOverlay } from "@/features";
@@ -128,15 +128,6 @@ export const TitleBar: React.FC = () => {
                 />
                 <line x1="9" y1="3" x2="9" y2="21" />
               </svg>
-            </button>
-
-            <button
-              onClick={app.handleNewSession}
-              className={styles.iconButton}
-              title="New chat"
-              aria-label="New chat"
-            >
-              <FilePenLine size={18} />
             </button>
           </div>
         )}

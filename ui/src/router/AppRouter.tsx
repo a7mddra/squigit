@@ -12,6 +12,7 @@ import {
   Agreement,
   UpdateNotes,
   Chat,
+  GalleryScreen,
   MediaOverlay,
   SearchOverlay,
 } from "@/features";
@@ -45,6 +46,9 @@ const AppRouterContent: React.FC = () => {
       }
       if (activeId.startsWith("__system_update")) {
         return <UpdateNotes />;
+      }
+      if (activeId === "__system_gallery") {
+        return <GalleryScreen />;
       }
     }
 
@@ -123,6 +127,10 @@ const AppRouterContent: React.FC = () => {
         isOpen={app.mediaViewer.isOpen}
         onClose={app.closeMediaViewer}
         item={app.mediaViewer.item}
+        onRevealInChat={(chatId) => {
+          app.closeMediaViewer();
+          app.handleSelectChat(chatId);
+        }}
       />
 
       <SearchOverlay
