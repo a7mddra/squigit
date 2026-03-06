@@ -7,7 +7,7 @@
 import React, { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { FilePenLine } from "lucide-react";
+import { FilePenLine, Pin } from "lucide-react";
 import { useAppContext } from "@/providers/AppProvider";
 import { usePlatform } from "@/hooks";
 import { SettingsPanel, SettingsOverlay } from "@/features";
@@ -198,6 +198,22 @@ export const TitleBar: React.FC = () => {
             )}
           </>
         )}
+
+        {isUnix && (
+          <button
+            onClick={handleToggleAlwaysOnTop}
+            className={`${styles.iconButton} ${isAlwaysOnTop ? styles.active : ""}`}
+            title={isAlwaysOnTop ? "Unpin window" : "Pin window on top"}
+            aria-label={isAlwaysOnTop ? "Unpin window" : "Pin window on top"}
+          >
+            <Pin
+              size={14}
+              style={{ transform: "rotate(45deg)" }}
+              fill={isAlwaysOnTop ? "currentColor" : "none"}
+            />
+          </button>
+        )}
+
         {isWindows && <WindowControls />}
       </div>
 
