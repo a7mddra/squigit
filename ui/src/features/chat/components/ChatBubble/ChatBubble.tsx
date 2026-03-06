@@ -650,6 +650,8 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
             <div
               dir="auto"
               data-component="chat-bubble"
+              data-message-index={message.id}
+              data-message-role={isUser ? "user" : "assistant"}
               className={`${styles.bubble} ${
                 isUser ? styles.userBubble : styles.botBubble
               } ${isEditing ? styles.editing : ""} ${

@@ -48,6 +48,10 @@ export const Chat: React.FC = () => {
     wasAtBottomRef,
   });
 
+  const revealTarget = app.searchOverlay.pendingReveal;
+  const isRevealPendingForActiveChat =
+    revealTarget?.chatId === app.chatHistory.activeSessionId;
+
   const { isSpinnerVisible } = useChatScroll({
     messages: app.chat.messages,
     chatId: app.chatHistory.activeSessionId,
@@ -55,6 +59,7 @@ export const Chat: React.FC = () => {
     inputHeight,
     scrollContainerRef,
     wasAtBottomRef,
+    suspendAutoScroll: isRevealPendingForActiveChat,
   });
 
   // Capture listen
@@ -154,6 +159,73 @@ export const Chat: React.FC = () => {
   useEffect(() => {
     setInputValue("");
   }, [app.chatHistory.activeSessionId]);
+
+  useEffect(() => {
+    const target = revealTarget;
+    if (!target) return;
+    if (app.chatHistory.activeSessionId !== target.chatId) return;
+
+    let hideHighlightTimer: number | null = null;
+
+    const revealBubble = (): boolean => {
+      const container = scrollContainerRef.current;
+      if (!container) return false;
+
+      const selector = `[data-component="chat-bubble"][data-message-index="${target.messageIndex}"]`;
+      const bubble = container.querySelector<HTMLElement>(selector);
+      if (!bubble) return false;
+
+      const containerRect = container.getBoundingClientRect();
+      const bubbleRect = bubble.getBoundingClientRect();
+      const bubbleTopInContainer = bubbleRect.top - containerRect.top;
+      const targetScrollTop =
+        container.scrollTop + bubbleTopInContainer - container.clientHeight * 0.35;
+      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+      const clampedTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
+      container.scrollTo({ top: clampedTop, behavior: "smooth" });
+      bubble.classList.add(styles.revealFlash);
+
+      if (hideHighlightTimer !== null) {
+        window.clearTimeout(hideHighlightTimer);
+      }
+      hideHighlightTimer = window.setTimeout(() => {
+        bubble.classList.remove(styles.revealFlash);
+      }, 1400);
+
+      app.clearSearchReveal();
+      return true;
+    };
+
+    if (revealBubble()) {
+      return () => {
+        if (hideHighlightTimer !== null) {
+          window.clearTimeout(hideHighlightTimer);
+        }
+      };
+    }
+
+    let attempts = 0;
+    const pollTimer = window.setInterval(() => {
+      attempts += 1;
+      if (revealBubble() || attempts >= 30) {
+        window.clearInterval(pollTimer);
+        if (attempts >= 30) {
+          app.clearSearchReveal();
+        }
+      }
+    }, 60);
+
+    return () => {
+      window.clearInterval(pollTimer);
+      if (hideHighlightTimer !== null) {
+        window.clearTimeout(hideHighlightTimer);
+      }
+    };
+  }, [
+    app.chatHistory.activeSessionId,
+    app.clearSearchReveal,
+    revealTarget,
+  ]);
 
   return (
     <div className={styles.chatContainer}>

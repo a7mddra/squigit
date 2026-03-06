@@ -21,7 +21,7 @@ use commands::chat::{
     append_chat_message, create_chat, delete_chat, get_image_path, get_imgbb_url, get_ocr_data,
     get_ocr_frame, init_ocr_frame, list_chats, load_chat, overwrite_chat_messages,
     read_attachment_text, resolve_attachment_path, reveal_in_file_manager, save_imgbb_url,
-    save_ocr_data, store_file_from_path, store_image_bytes, store_image_from_path,
+    save_ocr_data, search_chats, store_file_from_path, store_image_bytes, store_image_from_path,
     update_chat_metadata,
 };
 use commands::clipboard::{
@@ -134,6 +134,7 @@ pub fn run() {
             create_chat,
             load_chat,
             list_chats,
+            search_chats,
             delete_chat,
             update_chat_metadata,
             append_chat_message,

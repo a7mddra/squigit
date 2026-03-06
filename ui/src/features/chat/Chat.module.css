@@ -139,3 +139,24 @@
   justify-content: center;
   padding-top: 0.75rem;
 }
+
+.revealFlash {
+  animation: revealFlashPulse 1.2s ease-out;
+  box-shadow:
+    0 0 0 1px var(--c-raw-037),
+    0 0 0 5px color-mix(in srgb, var(--c-raw-037) 18%, transparent);
+  border-radius: 0.9rem;
+}
+
+@keyframes revealFlashPulse {
+  0% {
+    box-shadow:
+      0 0 0 1px var(--c-raw-037),
+      0 0 0 0 color-mix(in srgb, var(--c-raw-037) 40%, transparent);
+  }
+  100% {
+    box-shadow:
+      0 0 0 1px var(--c-raw-037),
+      0 0 0 8px transparent;
+  }
+}

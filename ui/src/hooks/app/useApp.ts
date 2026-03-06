@@ -104,6 +104,11 @@ const withNavigationOcrGuard = (frame: OcrFrame): OcrFrame => ({
 });
 
 type GuardedAction = () => void | Promise<void>;
+type SearchRevealTarget = {
+  chatId: string;
+  messageIndex: number;
+  requestedAt: number;
+};
 
 const UNSUPPORTED_PREVIEW_EXTENSIONS = new Set([
   "doc",
@@ -503,6 +508,8 @@ export const useApp = () => {
     item: null,
   });
   const [isSearchOverlayOpen, setIsSearchOverlayOpen] = useState(false);
+  const [pendingSearchReveal, setPendingSearchReveal] =
+    useState<SearchRevealTarget | null>(null);
 
   const openSearchOverlay = useCallback(() => {
     setIsSearchOverlayOpen(true);
@@ -510,6 +517,10 @@ export const useApp = () => {
 
   const closeSearchOverlay = useCallback(() => {
     setIsSearchOverlayOpen(false);
+  }, []);
+
+  const clearSearchReveal = useCallback(() => {
+    setPendingSearchReveal(null);
   }, []);
 
   const closeMediaViewer = useCallback(() => {
@@ -667,6 +678,7 @@ export const useApp = () => {
   const performSelectChat = useCallback(
     async (id: string) => {
       setIsNavigating(true);
+      setPendingSearchReveal(null);
       closeMediaViewer();
 
       // Hard-kill OCR auto-runs during navigation. OCR can only start
@@ -745,6 +757,7 @@ export const useApp = () => {
 
   const performNewSession = useCallback(() => {
     setIsNavigating(true);
+    setPendingSearchReveal(null);
     closeMediaViewer();
     system.resetSession();
     chatHistory.setActiveSessionId(null);
@@ -759,6 +772,21 @@ export const useApp = () => {
       runWithBusyGuard(() => performSelectChat(id));
     },
     [performSelectChat, runWithBusyGuard],
+  );
+
+  const revealSearchMatch = useCallback(
+    (payload: { chatId: string; messageIndex: number }) => {
+      runWithBusyGuard(async () => {
+        closeSearchOverlay();
+        await performSelectChat(payload.chatId);
+        setPendingSearchReveal({
+          chatId: payload.chatId,
+          messageIndex: payload.messageIndex,
+          requestedAt: Date.now(),
+        });
+      });
+    },
+    [closeSearchOverlay, performSelectChat, runWithBusyGuard],
   );
 
   const handleNewSession = useCallback(() => {
@@ -1049,7 +1077,7 @@ export const useApp = () => {
     agreedToTerms,
     busyDialog,
     mediaViewer,
-    searchOverlay: { isOpen: isSearchOverlayOpen },
+    searchOverlay: { isOpen: isSearchOverlayOpen, pendingReveal: pendingSearchReveal },
 
     toggleSidePanel: panel.toggleSidePanel,
     isNavigating,
@@ -1083,6 +1111,8 @@ export const useApp = () => {
     closeMediaViewer,
     openSearchOverlay,
     closeSearchOverlay,
+    revealSearchMatch,
+    clearSearchReveal,
     getAttachmentSourcePath,
     containerRef,
     isOcrScanning: ocr.isOcrScanning,

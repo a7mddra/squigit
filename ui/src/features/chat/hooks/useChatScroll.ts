@@ -14,6 +14,7 @@ export function useChatScroll({
   inputHeight,
   scrollContainerRef,
   wasAtBottomRef,
+  suspendAutoScroll = false,
 }: {
   messages: Message[];
   chatId: string | null;
@@ -21,6 +22,7 @@ export function useChatScroll({
   inputHeight: number;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   wasAtBottomRef: React.MutableRefObject<boolean>;
+  suspendAutoScroll?: boolean;
 }) {
   const [showSpinner, setShowSpinner] = useState(false);
   const navigationStartTimeRef = useRef<number>(0);
@@ -49,6 +51,8 @@ export function useChatScroll({
     const el = scrollContainerRef.current;
     if (!el || isSpinnerVisible) return;
 
+    let rafId: number | null = null;
+    const timeoutIds: number[] = [];
     const chatChanged = prevChatIdRef.current !== chatId;
     const messageCountChanged = messages.length !== prevMessageCountRef.current;
 
@@ -56,28 +60,50 @@ export function useChatScroll({
       el.scrollTo({ top: el.scrollHeight, behavior: "instant" });
     };
 
-    if (chatChanged) {
-      scrollToBottom();
-      requestAnimationFrame(scrollToBottom);
-      setTimeout(scrollToBottom, 50);
-      setTimeout(scrollToBottom, 150);
-      prevChatIdRef.current = chatId;
-    } else if (messageCountChanged) {
-      if (prevMessageCountRef.current === 0 && messages.length > 0) {
-        const isStreamCompletion =
-          messages.length === 1 && messages[0]?.role === "model";
-        if (!isStreamCompletion) {
-          scrollToBottom();
-        }
-      } else {
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage?.role === "user") {
-          el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    if (!suspendAutoScroll) {
+      if (chatChanged) {
+        scrollToBottom();
+        rafId = requestAnimationFrame(scrollToBottom);
+        timeoutIds.push(window.setTimeout(scrollToBottom, 50));
+        timeoutIds.push(window.setTimeout(scrollToBottom, 150));
+        prevChatIdRef.current = chatId;
+      } else if (messageCountChanged) {
+        if (prevMessageCountRef.current === 0 && messages.length > 0) {
+          const isStreamCompletion =
+            messages.length === 1 && messages[0]?.role === "model";
+          if (!isStreamCompletion) {
+            scrollToBottom();
+          }
+        } else {
+          const lastMessage = messages[messages.length - 1];
+          if (lastMessage?.role === "user") {
+            el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+          }
         }
       }
     }
+
+    if (suspendAutoScroll) {
+      prevChatIdRef.current = chatId;
+    }
+
     prevMessageCountRef.current = messages.length;
-  }, [messages, chatId, isSpinnerVisible, scrollContainerRef]);
+
+    return () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      for (const timeoutId of timeoutIds) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [
+    chatId,
+    isSpinnerVisible,
+    messages,
+    scrollContainerRef,
+    suspendAutoScroll,
+  ]);
 
   useLayoutEffect(() => {
     const scrollEl = scrollContainerRef.current;

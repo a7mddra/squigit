@@ -53,6 +53,19 @@ export interface ChatData {
   imgbb_url: string | null;
 }
 
+/** Ranked chat search hit returned by the local search engine. */
+export interface ChatSearchResult {
+  chat_id: string;
+  chat_title: string;
+  chat_created_at: string;
+  chat_updated_at: string;
+  message_index: number;
+  message_role: "user" | "assistant";
+  message_timestamp: string;
+  snippet: string;
+  score: number;
+}
+
 /** Result from storing an image (matches Rust StoredImage). */
 export interface StoredImage {
   hash: string;
@@ -105,6 +118,14 @@ export async function loadChat(chatId: string): Promise<ChatData> {
 /** List all chats (metadata only). */
 export async function listChats(): Promise<ChatMetadata[]> {
   return invoke("list_chats");
+}
+
+/** Search local chats with ranking, fuzzy matching, and regex filtering. */
+export async function searchChats(
+  query: string,
+  limit = 60,
+): Promise<ChatSearchResult[]> {
+  return invoke("search_chats", { query, limit });
 }
 
 /** Delete a chat by ID. */

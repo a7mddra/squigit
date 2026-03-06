@@ -1,0 +1,76 @@
+/**
+ * @license
+ * Copyright 2026 a7mddra
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+.row {
+  width: 100%;
+  border: none;
+  background: transparent;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 16px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.rowCompact {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.row:hover,
+.row:focus-visible {
+  background: var(--c-raw-067);
+  outline: none;
+}
+
+.rowIcon {
+  color: var(--c-raw-106);
+  display: grid;
+  place-items: center;
+  padding-top: 2px;
+}
+
+.rowText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rowTitle {
+  font-size: 0.92rem;
+  color: var(--c-raw-050);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowSnippet {
+  font-size: 0.83rem;
+  color: var(--c-raw-106);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowDate {
+  font-size: 0.75rem;
+  color: var(--c-raw-073);
+  white-space: nowrap;
+  text-transform: lowercase;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  padding-top: 2px;
+}
+
+.row:hover .rowDate,
+.row:focus-visible .rowDate {
+  opacity: 1;
+}

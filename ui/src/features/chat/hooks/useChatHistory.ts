@@ -6,8 +6,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
+  type ChatSearchResult,
   ChatMetadata,
   listChats,
+  searchChats as searchChatsApi,
   deleteChat,
   updateChatMetadata as updateChatMeta,
 } from "@/lib";
@@ -162,6 +164,19 @@ export const useChatHistory = (activeProfileId: string | null = null) => {
     [chats],
   );
 
+  const searchChats = useCallback(
+    async (query: string, limit = 60): Promise<ChatSearchResult[]> => {
+      if (!activeProfileId) return [];
+      try {
+        return await searchChatsApi(query, limit);
+      } catch (e) {
+        console.error("Failed to search chats:", e);
+        return [];
+      }
+    },
+    [activeProfileId],
+  );
+
   return {
     chats,
     activeSessionId,
@@ -174,5 +189,6 @@ export const useChatHistory = (activeProfileId: string | null = null) => {
     handleTogglePinChat,
     handleToggleStarChat,
     touchChat,
+    searchChats,
   };
 };

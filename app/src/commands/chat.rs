@@ -3,6 +3,7 @@
 
 //! Chat storage Tauri commands.
 
+use crate::services::search::{search_local_chats, ChatSearchResult};
 use ops_chat_storage::{
     ChatData, ChatMessage, ChatMetadata, ChatStorage, OcrFrame, OcrRegion, StoredImage,
 };
@@ -258,6 +259,14 @@ pub fn load_chat(chat_id: String) -> Result<ChatData, String> {
 pub fn list_chats() -> Result<Vec<ChatMetadata>, String> {
     let storage = get_active_storage()?;
     storage.list_chats().map_err(|e| e.to_string())
+}
+
+/// Search chats and return ranked message hits.
+#[tauri::command]
+pub fn search_chats(query: String, limit: Option<usize>) -> Result<Vec<ChatSearchResult>, String> {
+    let storage = get_active_storage()?;
+    let max_results = limit.unwrap_or(60).clamp(1, 200);
+    search_local_chats(&storage, &query, max_results)
 }
 
 /// Delete a chat by ID.

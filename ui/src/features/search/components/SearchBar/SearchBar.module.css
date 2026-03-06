@@ -1,0 +1,49 @@
+/**
+ * @license
+ * Copyright 2026 a7mddra
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+.searchBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--c-raw-041);
+  background: var(--c-raw-012);
+}
+
+.input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--c-raw-050);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--c-raw-073);
+}
+
+.clearButton {
+  border: none;
+  background: transparent;
+  color: var(--c-raw-106);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.clearButton:hover {
+  color: var(--c-raw-050);
+  background: var(--c-raw-010);
+}
