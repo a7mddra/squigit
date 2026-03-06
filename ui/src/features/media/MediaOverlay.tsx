@@ -14,7 +14,7 @@ import { MediaSidebar } from "./components/MediaSidebar";
 import { MediaImageViewer } from "./components/MediaImageViewer";
 import { MediaPdfViewer } from "./components/MediaPdfViewer";
 import { MediaTextViewer } from "./components/MediaTextViewer";
-import type { MediaViewerItem } from "./types";
+import type { MediaViewerItem } from "./media.types";
 import styles from "./MediaOverlay.module.css";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
