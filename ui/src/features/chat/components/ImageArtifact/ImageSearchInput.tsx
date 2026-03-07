@@ -138,7 +138,7 @@ export const ImageSearchInput: React.FC<ImageSearchInputProps> = ({
               </svg>
             </button>
 
-            <div className="h-4 w-[1px] bg-white/10 mx-1" />
+            <div className={styles.searchDivider} />
             <OCRModelSwitcher
               currentOcrModel={currentOcrModel}
               onOcrModelChange={onOcrModelChange}

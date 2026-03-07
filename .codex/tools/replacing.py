@@ -7,7 +7,6 @@ Examples:
     --map .codex/replacements/token-rename-v1.json \
     --include "ui/src/**/*.css" \
     --include "ui/src/**/*.tsx" \
-    --include "ui/tailwind.config.cjs" \
     --identifier-boundary
 
   python3 .codex/tools/replacing.py \

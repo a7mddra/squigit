@@ -12,13 +12,12 @@ This project is **CSS Modules first**.
    - app-wide element behavior
    - third-party style overrides
 3. Use `src/styles/variables.css` as the single source of theme tokens.
-4. Tailwind is retained as infrastructure and optional utility support, not as the default styling authoring model.
-5. Avoid adding new utility-class-heavy JSX where module classes are clearer.
+4. Avoid adding ad-hoc utility-class strings in JSX where module classes are clearer.
 
 ## Theme Tokens
 
 - Use CSS custom properties (for example `var(--c-raw-012)`) in modules.
-- Keep token names synchronized with `tailwind.config.cjs` mappings.
+- Keep token names synchronized with `src/styles/variables.css`.
 
 ## Imports
 

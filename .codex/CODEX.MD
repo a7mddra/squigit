@@ -30,10 +30,8 @@ python3 .codex/tools/color_tokenizer.py --write
 - `.codex/reports/color-tokenization.patch`
 - On `--test`: preview files only
   - `ui/src/styles/variables.generated.css`
-  - `ui/tailwind.generated.cjs`
-- On `--apply` / `--write`: updates source files in-place, appends new `--c-raw-xxx`
-  tokens to both `:root` and `body.light-mode/html.light` in `ui/src/styles/variables.css`,
-  and appends new raw token mappings to `ui/tailwind.config.cjs`.
+- On `--apply` / `--write`: updates source files in-place and appends new `--c-raw-xxx`
+  tokens to both `:root` and `body.light-mode/html.light` in `ui/src/styles/variables.css`.
 
 ## Replacing Tool
 
@@ -49,7 +47,6 @@ python3 .codex/tools/replacing.py \
   --include "ui/src/**/*.css" \
   --include "ui/src/**/*.ts" \
   --include "ui/src/**/*.tsx" \
-  --include "ui/tailwind.config.cjs" \
   --exclude "**/*.generated.css" \
   --identifier-boundary
 
@@ -59,7 +56,6 @@ python3 .codex/tools/replacing.py \
   --include "ui/src/**/*.css" \
   --include "ui/src/**/*.ts" \
   --include "ui/src/**/*.tsx" \
-  --include "ui/tailwind.config.cjs" \
   --exclude "**/*.generated.css" \
   --identifier-boundary \
   --apply

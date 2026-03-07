@@ -5,7 +5,7 @@ Color tokenizer for CSS Modules + TSX style literals.
 Modes:
 - --report: scan + map + reports only
 - --test:   generate .generated preview files (no source writes)
-- --apply:  apply source edits + append tokens to variables.css + tailwind.config.cjs
+- --apply:  apply source edits + append tokens to variables.css
 - --write:  alias of --apply (kept for compatibility)
 """
 
@@ -28,9 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 UI_ROOT = REPO_ROOT / "ui"
 SRC_ROOT = UI_ROOT / "src"
 VARIABLES_CSS = SRC_ROOT / "styles" / "variables.css"
-TAILWIND_CONFIG = UI_ROOT / "tailwind.config.cjs"
 GENERATED_VARIABLES_CSS = SRC_ROOT / "styles" / "variables.generated.css"
-GENERATED_TAILWIND_CONFIG = UI_ROOT / "tailwind.generated.cjs"
 REPORT_DIR = REPO_ROOT / ".codex" / "reports"
 REPORT_JSON = REPORT_DIR / "color-map.json"
 REPORT_MD = REPORT_DIR / "color-report.md"
@@ -95,7 +93,7 @@ def parse_args() -> argparse.Namespace:
     mode.add_argument(
         "--apply",
         action="store_true",
-        help="Apply source edits and append new tokens into variables.css + tailwind config.",
+        help="Apply source edits and append new tokens into variables.css.",
     )
     mode.add_argument(
         "--write",
@@ -631,51 +629,6 @@ def append_tokens_to_variables_css(text: str, generated_tokens: Dict[str, str]) 
     return out
 
 
-def append_tokens_to_tailwind_config(text: str, generated_tokens: Dict[str, str]) -> str:
-    if not generated_tokens:
-        return text
-
-    colors_key = re.search(r"\bcolors\s*:\s*\{", text)
-    if not colors_key:
-        raise ValueError("tailwind config does not contain a colors object")
-
-    colors_open = text.find("{", colors_key.end() - 1)
-    colors_close = find_matching_brace(text, colors_open)
-    if colors_open < 0 or colors_close < 0:
-        raise ValueError("unable to parse colors object in tailwind config")
-
-    colors_body = text[colors_open + 1 : colors_close]
-    raw_key = re.search(r"\braw\s*:\s*\{", colors_body)
-    entries = [(token.split("--c-raw-")[1], token) for token in sorted(generated_tokens.keys())]
-
-    if raw_key:
-        raw_open = colors_open + 1 + colors_body.find("{", raw_key.end() - 1)
-        raw_close = find_matching_brace(text, raw_open)
-        if raw_close < 0:
-            raise ValueError("unable to parse raw object in tailwind config")
-        raw_body = text[raw_open + 1 : raw_close]
-        existing_keys = {
-            m.group(1)
-            for m in re.finditer(r"[\"']?([0-9]{3})[\"']?\s*:\s*[\"']var\(--c-raw-[0-9]{3}\)[\"']", raw_body)
-        }
-        missing = [(k, t) for k, t in entries if k not in existing_keys]
-        if not missing:
-            return text
-        insertion = "\n" + "\n".join(
-            f'          "{key}": "var({token})",' for key, token in missing
-        ) + "\n"
-        return text[:raw_close] + insertion + text[raw_close:]
-
-    raw_block_lines = [
-        "",
-        "        raw: {",
-        *[f'          "{key}": "var({token})",' for key, token in entries],
-        "        },",
-    ]
-    insertion = "\n".join(raw_block_lines) + "\n"
-    return text[:colors_close] + insertion + text[colors_close:]
-
-
 def build_generated_header(comment: str) -> str:
     return "\n".join(
         [
@@ -834,9 +787,6 @@ def main() -> int:
     if not VARIABLES_CSS.exists():
         print(f"error: missing variables.css at {VARIABLES_CSS}", file=sys.stderr)
         return 1
-    if not TAILWIND_CONFIG.exists():
-        print(f"error: missing tailwind config at {TAILWIND_CONFIG}", file=sys.stderr)
-        return 1
 
     targets = discover_target_files(SRC_ROOT)
     file_texts: Dict[str, str] = {}
@@ -860,17 +810,11 @@ def main() -> int:
     changed_files = rewrite_contents(file_texts, file_occurrences, color_to_token)
 
     variables_rel = VARIABLES_CSS.relative_to(REPO_ROOT).as_posix()
-    tailwind_rel = TAILWIND_CONFIG.relative_to(REPO_ROOT).as_posix()
     if generated_tokens:
         variables_before = VARIABLES_CSS.read_text(encoding="utf-8")
         variables_after = append_tokens_to_variables_css(variables_before, generated_tokens)
         if variables_before != variables_after:
             changed_files[variables_rel] = (variables_before, variables_after)
-
-        tailwind_before = TAILWIND_CONFIG.read_text(encoding="utf-8")
-        tailwind_after = append_tokens_to_tailwind_config(tailwind_before, generated_tokens)
-        if tailwind_before != tailwind_after:
-            changed_files[tailwind_rel] = (tailwind_before, tailwind_after)
 
     report_payload = build_json_report(
         mode=mode,
@@ -904,14 +848,6 @@ def main() -> int:
             + variables_after,
         )
 
-        tailwind_before = TAILWIND_CONFIG.read_text(encoding="utf-8")
-        tailwind_after = append_tokens_to_tailwind_config(tailwind_before, generated_tokens)
-        write_text(
-            GENERATED_TAILWIND_CONFIG,
-            build_generated_header("Preview of tailwind.config.cjs after raw token append (test mode).")
-            + tailwind_after,
-        )
-
     if mode in {"apply", "write"}:
         for rel_path in sorted(changed_files.keys()):
             _, after = changed_files[rel_path]
@@ -930,12 +866,9 @@ def main() -> int:
         print(
             f"generated_variables={GENERATED_VARIABLES_CSS.relative_to(REPO_ROOT).as_posix()}"
         )
-        print(
-            f"generated_tailwind={GENERATED_TAILWIND_CONFIG.relative_to(REPO_ROOT).as_posix()}"
-        )
         print("source_writes=0 (test mode)")
     if mode in {"apply", "write"}:
-        print("append_targets=ui/src/styles/variables.css,ui/tailwind.config.cjs")
+        print("append_targets=ui/src/styles/variables.css")
         print(f"source_writes={len(changed_files)}")
 
     return 0
