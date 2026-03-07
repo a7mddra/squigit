@@ -22,17 +22,6 @@
   flex-shrink: 0;
 }
 
-.avatarImage {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.avatarInitials {
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--c-raw-036);
-}
 
 .accountList {
   display: flex;
@@ -71,17 +60,6 @@
   flex-shrink: 0;
 }
 
-.itemAvatarImage {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.itemAvatarInitials {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--c-raw-036);
-}
 
 .accountInfo {
   flex: 1;
@@ -160,9 +138,6 @@
   transition: opacity 0.2s;
 }
 
-.imageHidden {
-  opacity: 0;
-}
 
 .fallback {
   width: 100%;
@@ -170,7 +145,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--c-raw-000);
+  color: var(--c-raw-002);
   font-weight: 600;
   text-transform: uppercase;
   user-select: none;

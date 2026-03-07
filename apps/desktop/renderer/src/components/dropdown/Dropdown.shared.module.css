@@ -65,8 +65,7 @@
   transform: rotate(180deg);
 }
 
-.chevronReturn,
-.return {
+.chevronReturn  {
   transform: rotate(0deg);
 }
 

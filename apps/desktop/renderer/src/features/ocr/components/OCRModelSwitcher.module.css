@@ -56,9 +56,6 @@
   composes: itemActive;
 }
 
-.extraButton {
-  cursor: default;
-}
 
 .dropdown {
   composes: dropdown from "@/components/dropdown/Dropdown.shared.module.css";

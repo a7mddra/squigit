@@ -49,14 +49,5 @@
   backface-visibility: hidden;
 }
 
-.fadeIn {
-  opacity: 1;
-}
 
-.fadeOut {
-  opacity: 0;
-}
 
-.dots {
-  opacity: 0.7;
-}

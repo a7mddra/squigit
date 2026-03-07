@@ -170,11 +170,6 @@
   line-height: 1.2;
 }
 
-.versionLabel {
-  font-weight: 600;
-  color: var(--c-raw-050);
-  font-size: 0.75rem;
-}
 
 .sizeLabel {
   color: var(--c-raw-050);

@@ -60,3 +60,28 @@ python3 .codex/tools/replacing.py \
   --identifier-boundary \
   --apply
 ```
+
+## CSS Module Cleanup Tool
+
+- Script: `.codex/tools/clean_unused_css_modules.py`
+- Purpose: remove unused simple top-level CSS module class blocks based on TSX `styles.*` usage
+
+### Commands
+
+```bash
+# Dry-run (default)
+python3 .codex/tools/clean_unused_css_modules.py apps/desktop/renderer
+
+# Apply edits in-place
+python3 .codex/tools/clean_unused_css_modules.py apps/desktop/renderer --write
+```
+
+### Scope and Safety
+
+- Scans usage only from `*.tsx`:
+  - `styles.foo`
+  - `styles["foo"]`
+  - `styles['foo']`
+- Scans `*.module.css` files and removes only top-level simple selectors:
+  - `.foo { ... }`
+- Intentionally skips complex selectors (e.g. pseudo-classes, descendant selectors, selector lists).

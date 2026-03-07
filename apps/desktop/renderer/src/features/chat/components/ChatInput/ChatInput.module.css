@@ -180,9 +180,6 @@
   margin-right: -5px;
 }
 
-.modelDropdown {
-  padding-left: 0;
-}
 
 .modelDropdown:hover {
   background-color: transparent;
@@ -205,9 +202,6 @@
   color: var(--c-raw-002);
 }
 
-.toggleActive {
-  color: var(--c-raw-000);
-}
 
 .submitButton {
   display: flex;

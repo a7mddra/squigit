@@ -37,14 +37,6 @@
   white-space: nowrap;
 }
 
-.viewerMeta {
-  font-size: 0.75rem;
-  color: var(--c-raw-004);
-  background: var(--c-raw-047);
-  border: 1px solid var(--c-raw-038);
-  border-radius: 999px;
-  padding: 2px 8px;
-}
 
 .viewerBody {
   flex: 1;

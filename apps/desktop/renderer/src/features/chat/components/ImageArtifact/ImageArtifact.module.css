@@ -138,15 +138,6 @@
   animation: "rotate" 1s linear infinite;
 }
 
-.placeholder {
-  width: 95%;
-  max-width: 40rem;
-  min-height: 57px;
-  height: 57px;
-  margin: 10px auto 1rem auto;
-  margin-top: 10px;
-  flex-shrink: 0;
-}
 
 .floatingContainer {
   background-color: var(--c-raw-012);
@@ -292,26 +283,7 @@
   align-items: center;
 }
 
-.barActions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
 
-.barBtn {
-  padding: 6px;
-  border-radius: 6px;
-  background: transparent;
-  border: none;
-  color: var(--c-raw-004);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    background-color 0.2s,
-    color 0.2s;
-}
 
 .barBtn:hover:not(:disabled) {
   background-color: var(--c-raw-010);
@@ -323,17 +295,6 @@
   cursor: not-allowed;
 }
 
-.toggleIcon {
-  color: var(--c-raw-000);
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  user-select: none;
-}
 
 .toggleIcon:hover {
   color: var(--c-raw-003);
@@ -430,21 +391,4 @@
 
 .floatingContainer.expanded .bigImage {
   max-height: none;
-}
-
-.ocrError {
-  position: absolute;
-  bottom: 1rem;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: var(--c-raw-137);
-  color: var(--c-raw-036);
-  padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  z-index: 100;
-}
-
-.spinning {
-  animation: "rotate" 1s linear infinite;
 }

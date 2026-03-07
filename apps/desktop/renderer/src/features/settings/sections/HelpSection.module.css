@@ -110,18 +110,7 @@
   letter-spacing: 0.05em;
 }
 
-.linksGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
-}
 
-.actionTitle {
-  color: var(--c-raw-000);
-  font-size: 0.85rem;
-  font-weight: 500;
-  align-self: center;
-}
 
 .legalNote {
   padding: 0 4px;
