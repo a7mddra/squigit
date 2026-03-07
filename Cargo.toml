@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "app",
+    "apps/desktop",
     "xtask",
     "crates/*",
     "sidecars/qt-capture",

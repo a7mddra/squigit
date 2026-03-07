@@ -42,11 +42,11 @@ pub fn venv_python() -> PathBuf {
 }
 
 pub fn ui_dir() -> PathBuf {
-    project_root().join("ui")
+    project_root().join("apps").join("desktop").join("ui")
 }
 
 pub fn tauri_dir() -> PathBuf {
-    project_root().join("app")
+    project_root().join("apps").join("desktop")
 }
 
 pub fn run_cmd(cmd: &str, args: &[&str], cwd: &Path) -> Result<()> {

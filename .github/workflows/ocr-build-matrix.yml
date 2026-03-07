@@ -34,7 +34,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           python sidecars/paddle-ocr/scripts/measure_runtime_size.py \
-            --input app/binaries/ocr-engine-${{ matrix.target }} \
+            --input apps/desktop/binaries/ocr-engine-${{ matrix.target }} \
             --output target/ocr-size/baseline-${{ matrix.target }}.json \
             --label baseline-onefile
 
@@ -43,7 +43,7 @@ jobs:
         shell: pwsh
         run: |
           python sidecars/paddle-ocr/scripts/measure_runtime_size.py `
-            --input app/binaries/ocr-engine-${{ matrix.target }}.exe `
+            --input apps/desktop/binaries/ocr-engine-${{ matrix.target }}.exe `
             --output target/ocr-size/baseline-${{ matrix.target }}.json `
             --label baseline-onefile
 
@@ -74,27 +74,27 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           python sidecars/paddle-ocr/scripts/smoke_sidecar.py \
-            --sidecar app/binaries/paddle-ocr-${{ matrix.target }}/ocr-engine
+            --sidecar apps/desktop/binaries/paddle-ocr-${{ matrix.target }}/ocr-engine
 
       - name: Smoke test sidecar (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           python sidecars/paddle-ocr/scripts/smoke_sidecar.py `
-            --sidecar app/binaries/paddle-ocr-${{ matrix.target }}/ocr-engine.exe
+            --sidecar apps/desktop/binaries/paddle-ocr-${{ matrix.target }}/ocr-engine.exe
 
       - name: Offline smoke (Linux network namespace)
         if: runner.os == 'Linux'
         run: |
           sudo unshare -n python sidecars/paddle-ocr/scripts/smoke_sidecar.py \
-            --sidecar app/binaries/paddle-ocr-${{ matrix.target }}/ocr-engine \
+            --sidecar apps/desktop/binaries/paddle-ocr-${{ matrix.target }}/ocr-engine \
             --skip-cancel
 
       - name: Measure candidate size (Unix)
         if: runner.os != 'Windows'
         run: |
           python sidecars/paddle-ocr/scripts/measure_runtime_size.py \
-            --input app/binaries/paddle-ocr-${{ matrix.target }} \
+            --input apps/desktop/binaries/paddle-ocr-${{ matrix.target }} \
             --output target/ocr-size/candidate-${{ matrix.target }}.json \
             --label candidate-onedir
 
@@ -103,7 +103,7 @@ jobs:
         shell: pwsh
         run: |
           python sidecars/paddle-ocr/scripts/measure_runtime_size.py `
-            --input app/binaries/paddle-ocr-${{ matrix.target }} `
+            --input apps/desktop/binaries/paddle-ocr-${{ matrix.target }} `
             --output target/ocr-size/candidate-${{ matrix.target }}.json `
             --label candidate-onedir
 

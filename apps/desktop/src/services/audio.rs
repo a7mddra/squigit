@@ -9,7 +9,7 @@ use std::{
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
 
 const DIALOG_WARNING_SOUND: &[u8] =
-    include_bytes!("../../../ui/src/assets/sounds/dialog-warning.mp3");
+    include_bytes!("../../ui/src/assets/sounds/dialog-warning.mp3");
 
 #[derive(Debug, Clone, Copy)]
 pub enum UiSoundEffect {

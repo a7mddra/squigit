@@ -30,13 +30,13 @@ sidecars/whisper-stt/models/
 # -----------------------------------------------------------------------------
 # Tauri / Application Binaries
 # -----------------------------------------------------------------------------
-app/binaries/
+apps/desktop/binaries/
 _internal/
 
 # -----------------------------------------------------------------------------
 # Secrets & Credentials
 # -----------------------------------------------------------------------------
-app/src/data/credentials.json
+apps/desktop/src/data/credentials.json
 *.key
 *.key.pub
 .env

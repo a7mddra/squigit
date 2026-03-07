@@ -79,7 +79,7 @@ fn missing_credentials_message() -> String {
         "Google authentication is not configured in this build. \
         The app can run normally, but sign-in is disabled.\n\n\
         To enable Google auth, provide credentials using one of:\n\
-        - copy app/src/data/credentials.example.json to app/src/data/credentials.json (gitignored)\n\
+        - copy apps/desktop/src/data/credentials.example.json to apps/desktop/src/data/credentials.json (gitignored)\n\
         - SNAPLLM_GOOGLE_CREDENTIALS_PATH=<absolute path to credentials.json>\n\
         - SNAPLLM_GOOGLE_CREDENTIALS_JSON=<raw credentials json>\n\n\
         Then rebuild the app and try again from {}.",

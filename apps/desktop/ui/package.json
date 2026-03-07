@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "tauri": "cd ../app && tauri"
+    "tauri": "cd .. && tauri"
   },
   "dependencies": {
     "@google/genai": "^1.29.1",

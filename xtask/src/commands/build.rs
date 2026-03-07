@@ -252,7 +252,7 @@ print("OCR dependency verification passed.")"###,
     pkg::ocr()?;
 
     let host_triple = get_host_target_triple()?;
-    let app_binaries = project_root().join("app").join("binaries");
+    let app_binaries = project_root().join("apps").join("desktop").join("binaries");
 
     #[cfg(not(target_os = "windows"))]
     {

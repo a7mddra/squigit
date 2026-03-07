@@ -58,14 +58,14 @@ fn resolve_sidecar_path(app: &AppHandle) -> Result<PathBuf, String> {
             return Ok(build_path);
         }
 
-        // Option B: app/binaries/whisper-stt (if copied without triple)
-        let bin_path = root.join("app/binaries").join(binary_name);
+        // Option B: apps/desktop/binaries/whisper-stt (if copied without triple)
+        let bin_path = root.join("apps/desktop/binaries").join(binary_name);
         if bin_path.exists() {
             return Ok(bin_path);
         }
 
-        // Option C: check for any file starting with binary_name in app/binaries (for triple)
-        if let Ok(entries) = std::fs::read_dir(root.join("app/binaries")) {
+        // Option C: check for any file starting with binary_name in apps/desktop/binaries (for triple)
+        if let Ok(entries) = std::fs::read_dir(root.join("apps/desktop/binaries")) {
             for entry in entries.flatten() {
                 if let Ok(name) = entry.file_name().into_string() {
                     if name.starts_with(binary_name) {

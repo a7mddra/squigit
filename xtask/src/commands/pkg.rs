@@ -69,7 +69,7 @@ pub fn capture() -> Result<()> {
     let target_dir = project_root().join("target").join("release");
     let qt_internal_src = qt_native_dir().join("_internal");
 
-    let app_binaries = project_root().join("app").join("binaries");
+    let app_binaries = project_root().join("apps").join("desktop").join("binaries");
     fs::create_dir_all(&app_binaries)?;
 
     let host_triple = get_host_target_triple()?;
@@ -124,7 +124,7 @@ pub fn ocr() -> Result<()> {
 
     let sidecar = ocr_sidecar_dir();
     let dist_dir = sidecar.join("dist");
-    let app_binaries = project_root().join("app").join("binaries");
+    let app_binaries = project_root().join("apps").join("desktop").join("binaries");
 
     fs::create_dir_all(&app_binaries)?;
 
@@ -207,7 +207,7 @@ pub fn whisper() -> Result<()> {
 
     let sidecar = whisper_sidecar_dir();
     let build_dir = sidecar.join("build");
-    let app_binaries = project_root().join("app").join("binaries");
+    let app_binaries = project_root().join("apps").join("desktop").join("binaries");
 
     fs::create_dir_all(&app_binaries)?;
 
