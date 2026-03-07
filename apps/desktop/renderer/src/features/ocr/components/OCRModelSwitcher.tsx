@@ -82,12 +82,11 @@ export const OCRModelSwitcher: React.FC<OCRModelSwitcherProps> = ({
     installedModels.find((model) => model.id === DEFAULT_OCR_MODEL_ID)?.id ||
     installedModels[0]?.id ||
     "";
-  const effectiveModel =
-    !currentOcrModel
-      ? ""
-      : isCurrentModelValid
-        ? currentOcrModel
-        : fallbackModel;
+  const effectiveModel = !currentOcrModel
+    ? ""
+    : isCurrentModelValid
+      ? currentOcrModel
+      : fallbackModel;
 
   const dropdownContent = (
     <div

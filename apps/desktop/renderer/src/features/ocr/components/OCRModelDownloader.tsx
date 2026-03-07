@@ -31,10 +31,10 @@ const CircularProgress: React.FC<{ progress: number }> = ({ progress }) => (
   </div>
 );
 
-const CircularSpinner: React.FC<{ paused?: boolean; progressHint?: number }> = ({
-  paused = false,
-  progressHint = 0,
-}) => {
+const CircularSpinner: React.FC<{
+  paused?: boolean;
+  progressHint?: number;
+}> = ({ paused = false, progressHint = 0 }) => {
   const dashHead = Math.max(12, Math.min(36, Math.round(progressHint * 0.35)));
   return (
     <div
@@ -93,7 +93,9 @@ export const OCRModelDownloader: React.FC = () => {
     await cancelDownload(id);
   };
 
-  const downloadableModels = models.filter((m) => m.id !== DEFAULT_OCR_MODEL_ID);
+  const downloadableModels = models.filter(
+    (m) => m.id !== DEFAULT_OCR_MODEL_ID,
+  );
 
   return (
     <div className={styles.downloadSection}>

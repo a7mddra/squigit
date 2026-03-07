@@ -99,7 +99,10 @@ function renderTextWithInlineMath(content: string, keyPrefix: string) {
         );
       } catch {
         nodes.push(
-          <code key={`${keyPrefix}-c-${keyIndex++}`} className={styles.inlineCode}>
+          <code
+            key={`${keyPrefix}-c-${keyIndex++}`}
+            className={styles.inlineCode}
+          >
             {`$${latex}$`}
           </code>,
         );
@@ -719,7 +722,9 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
                   </div>
                 )
               ) : (
-                <div className={`${styles.markdownContent} ${styles.userMarkdownContent}`}>
+                <div
+                  className={`${styles.markdownContent} ${styles.userMarkdownContent}`}
+                >
                   <ReactMarkdown
                     remarkPlugins={[
                       remarkGfm,
@@ -729,7 +734,9 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
                     rehypePlugins={[rehypeKatex]}
                     components={markdownComponents}
                   >
-                    {preprocessMarkdown(displayText, { doubleNewlines: isUser })}
+                    {preprocessMarkdown(displayText, {
+                      doubleNewlines: isUser,
+                    })}
                   </ReactMarkdown>
                 </div>
               )}

@@ -146,7 +146,13 @@ export const Chat: React.FC = () => {
     app.chat.handleSend(finalInput, app.inputModel);
     setInputValue("");
     app.clearAttachments();
-  }, [app.attachments, app.chat, app.clearAttachments, app.inputModel, inputValue]);
+  }, [
+    app.attachments,
+    app.chat,
+    app.clearAttachments,
+    app.inputModel,
+    inputValue,
+  ]);
 
   const handleCaptureToInput = async () => {
     try {
@@ -179,8 +185,13 @@ export const Chat: React.FC = () => {
       const bubbleRect = bubble.getBoundingClientRect();
       const bubbleTopInContainer = bubbleRect.top - containerRect.top;
       const targetScrollTop =
-        container.scrollTop + bubbleTopInContainer - container.clientHeight * 0.35;
-      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+        container.scrollTop +
+        bubbleTopInContainer -
+        container.clientHeight * 0.35;
+      const maxScrollTop = Math.max(
+        0,
+        container.scrollHeight - container.clientHeight,
+      );
       const clampedTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
       container.scrollTo({ top: clampedTop, behavior: "smooth" });
       bubble.classList.add(styles.revealFlash);
@@ -221,11 +232,7 @@ export const Chat: React.FC = () => {
         window.clearTimeout(hideHighlightTimer);
       }
     };
-  }, [
-    app.chatHistory.activeSessionId,
-    app.clearSearchReveal,
-    revealTarget,
-  ]);
+  }, [app.chatHistory.activeSessionId, app.clearSearchReveal, revealTarget]);
 
   return (
     <div className={styles.chatContainer}>

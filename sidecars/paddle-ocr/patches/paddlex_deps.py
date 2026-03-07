@@ -20,13 +20,7 @@ PY_VERSION = f"python{sys.version_info.major}.{sys.version_info.minor}"
 
 if sys.platform == "win32":
     target = (
-        SCRIPT_DIR
-        / "venv"
-        / "Lib"
-        / "site-packages"
-        / "paddlex"
-        / "utils"
-        / "deps.py"
+        SCRIPT_DIR / "venv" / "Lib" / "site-packages" / "paddlex" / "utils" / "deps.py"
     )
 else:
     target = (
@@ -92,7 +86,9 @@ if opencv_marker not in content:
     version = get_dep_version(dep)
 """
     if old_block not in content:
-        print("[ERROR] Could not find OpenCV dependency branch; PaddleX layout changed.")
+        print(
+            "[ERROR] Could not find OpenCV dependency branch; PaddleX layout changed."
+        )
         raise SystemExit(1)
     content = content.replace(old_block, new_block)
     changed = True

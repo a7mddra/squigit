@@ -38,7 +38,9 @@ export const ChatRow: React.FC<ChatRowProps> = ({
         {snippet ? <div className={styles.rowSnippet}>{snippet}</div> : null}
       </div>
 
-      {!compact ? <div className={styles.rowDate}>{dateLabel || ""}</div> : null}
+      {!compact ? (
+        <div className={styles.rowDate}>{dateLabel || ""}</div>
+      ) : null}
     </button>
   );
 };

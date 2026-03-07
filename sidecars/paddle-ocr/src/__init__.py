@@ -12,10 +12,10 @@ text and bounding boxes from images.
 
 @example
     from src import OCREngine
-    
+
     engine = OCREngine()
     results = engine.process("image.png")
-    
+
     for result in results:
         print(f"{result.text} at {result.box.center}")
 """
@@ -26,7 +26,7 @@ from .models import OCRResult, BoundingBox, NumpyEncoder
 
 __all__ = [
     "OCREngine",
-    "EngineConfig", 
+    "EngineConfig",
     "OCRResult",
     "BoundingBox",
     "NumpyEncoder",

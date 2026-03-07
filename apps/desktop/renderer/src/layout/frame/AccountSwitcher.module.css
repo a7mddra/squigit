@@ -22,7 +22,6 @@
   flex-shrink: 0;
 }
 
-
 .accountList {
   display: flex;
   flex-direction: column;
@@ -59,7 +58,6 @@
   justify-content: center;
   flex-shrink: 0;
 }
-
 
 .accountInfo {
   flex: 1;
@@ -137,7 +135,6 @@
   opacity: 1;
   transition: opacity 0.2s;
 }
-
 
 .fallback {
   width: 100%;

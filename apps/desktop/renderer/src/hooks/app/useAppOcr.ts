@@ -7,9 +7,7 @@
 import { useState, useCallback } from "react";
 import { OcrFrame, saveImgbbUrl, saveOcrData } from "@/lib";
 
-export const useAppOcr = (
-  activeSessionId: string | null,
-) => {
+export const useAppOcr = (activeSessionId: string | null) => {
   const [sessionLensUrl, setSessionLensUrl] = useState<string | null>(null);
   const [ocrData, setOcrData] = useState<OcrFrame>({});
   const [isOcrScanning, setIsOcrScanning] = useState(false);

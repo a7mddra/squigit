@@ -36,7 +36,9 @@ const formatGroupHeader = (isoDate: string): string => {
   if (Number.isNaN(parsed.getTime())) return "Unknown";
 
   const now = new Date();
-  const diffDays = Math.round((startOfDay(now) - startOfDay(parsed)) / 86_400_000);
+  const diffDays = Math.round(
+    (startOfDay(now) - startOfDay(parsed)) / 86_400_000,
+  );
 
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "Yesterday";
@@ -53,7 +55,9 @@ export const formatSearchRowDate = (isoDate: string): string => {
   if (Number.isNaN(parsed.getTime())) return "";
 
   const now = new Date();
-  const diffDays = Math.round((startOfDay(now) - startOfDay(parsed)) / 86_400_000);
+  const diffDays = Math.round(
+    (startOfDay(now) - startOfDay(parsed)) / 86_400_000,
+  );
 
   if (diffDays === 0) return "today";
   if (diffDays === 1) return "yesterday";

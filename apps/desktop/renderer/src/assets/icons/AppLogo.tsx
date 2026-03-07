@@ -1,4 +1,4 @@
-export const AppLogo = ({ size, color }: { size: number, color: string }) => (
+export const AppLogo = ({ size, color }: { size: number; color: string }) => (
   <svg
     width={size}
     height={size}

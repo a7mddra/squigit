@@ -41,7 +41,10 @@ const selectLatestByHash = (chats: ChatMetadata[]): GalleryCandidate[] => {
     };
 
     const existing = byHash.get(hash);
-    if (!existing || toTimestamp(candidate.updatedAt) > toTimestamp(existing.updatedAt)) {
+    if (
+      !existing ||
+      toTimestamp(candidate.updatedAt) > toTimestamp(existing.updatedAt)
+    ) {
       byHash.set(hash, candidate);
     }
   }
@@ -64,10 +67,7 @@ export const GalleryScreen: React.FC = () => {
   useEffect(() => {
     if (app.chatHistory.activeSessionId !== SYSTEM_GALLERY_ID) return;
     void app.chatHistory.refreshChats();
-  }, [
-    app.chatHistory.activeSessionId,
-    app.chatHistory.refreshChats,
-  ]);
+  }, [app.chatHistory.activeSessionId, app.chatHistory.refreshChats]);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,7 +87,9 @@ export const GalleryScreen: React.FC = () => {
       );
 
       if (cancelled) return;
-      setItems(resolved.filter((entry): entry is GalleryImage => entry !== null));
+      setItems(
+        resolved.filter((entry): entry is GalleryImage => entry !== null),
+      );
       setIsLoading(false);
     };
 

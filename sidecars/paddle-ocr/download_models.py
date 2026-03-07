@@ -64,9 +64,7 @@ def _has_model_graph(model_dir: Path) -> bool:
 
 
 def _is_model_ready(model_dir: Path) -> bool:
-    return _has_model_graph(model_dir) and (
-        model_dir / "inference.pdiparams"
-    ).exists()
+    return _has_model_graph(model_dir) and (model_dir / "inference.pdiparams").exists()
 
 
 def _archive_urls(archive_name: str) -> Iterable[str]:
@@ -220,7 +218,9 @@ def prune_stale_model_dirs() -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Prepare bundled OCR model directories.")
+    parser = argparse.ArgumentParser(
+        description="Prepare bundled OCR model directories."
+    )
     parser.add_argument(
         "--clean-stale",
         action="store_true",

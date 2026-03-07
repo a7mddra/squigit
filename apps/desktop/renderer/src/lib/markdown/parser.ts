@@ -454,8 +454,7 @@ function extractText(node: any): string {
     return "\n---\n";
   }
   if (node.children) {
-    const joiner =
-      node.type === "list" || node.type === "listItem" ? "\n" : "";
+    const joiner = node.type === "list" || node.type === "listItem" ? "\n" : "";
     return node.children.map(extractText).join(joiner);
   }
   return "";

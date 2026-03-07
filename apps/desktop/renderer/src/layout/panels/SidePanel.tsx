@@ -83,193 +83,192 @@ interface ChatItemProps {
   onEnableSelectionMode: () => void;
 }
 
-const ChatItem: React.FC<ChatItemProps> = React.memo(({
-  chat,
-  isActive,
-  isBusy,
-  isSelectionMode,
-  isSelected,
-  menuState,
-  onSelectChat,
-  onToggleSelectionChat,
-  onDeleteChat,
-  onRenameChat,
-  onTogglePinChat,
-  onOpenContextMenu,
-  onCloseContextMenu,
-  onEnableSelectionMode,
-}) => {
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [renameValue, setRenameValue] = useState(chat.title);
-  const inputRef = useRef<HTMLInputElement>(null);
+const ChatItem: React.FC<ChatItemProps> = React.memo(
+  ({
+    chat,
+    isActive,
+    isBusy,
+    isSelectionMode,
+    isSelected,
+    menuState,
+    onSelectChat,
+    onToggleSelectionChat,
+    onDeleteChat,
+    onRenameChat,
+    onTogglePinChat,
+    onOpenContextMenu,
+    onCloseContextMenu,
+    onEnableSelectionMode,
+  }) => {
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [renameValue, setRenameValue] = useState(chat.title);
+    const inputRef = useRef<HTMLInputElement>(null);
 
-  const showMenu = !!menuState;
+    const showMenu = !!menuState;
 
-  useEffect(() => {
-    if (isRenaming && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isRenaming]);
+    useEffect(() => {
+      if (isRenaming && inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.select();
+      }
+    }, [isRenaming]);
 
-  useEffect(() => {
-    if (!isRenaming) {
-      setRenameValue(chat.title);
-    }
-  }, [chat.title, isRenaming]);
+    useEffect(() => {
+      if (!isRenaming) {
+        setRenameValue(chat.title);
+      }
+    }, [chat.title, isRenaming]);
 
-  const handleMenuClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    if (showMenu) {
-      onCloseContextMenu();
-      return;
-    }
-    onOpenContextMenu(chat.id, e.clientX, e.clientY);
-  };
+    const handleMenuClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (showMenu) {
+        onCloseContextMenu();
+        return;
+      }
+      onOpenContextMenu(chat.id, e.clientX, e.clientY);
+    };
 
-  const handleRenameSubmit = () => {
-    if (renameValue.trim() && renameValue !== chat.title) {
-      onRenameChat(chat.id, renameValue.trim());
-    }
-    setIsRenaming(false);
-  };
-
-  const handleRenameKeyDown = useKeyDown({
-    Enter: handleRenameSubmit,
-    Escape: () => {
-      setRenameValue(chat.title);
+    const handleRenameSubmit = () => {
+      if (renameValue.trim() && renameValue !== chat.title) {
+        onRenameChat(chat.id, renameValue.trim());
+      }
       setIsRenaming(false);
-    },
-  });
+    };
 
-  const lastActivityAt = chat.updated_at || chat.created_at;
-  const lastActivityLabel = formatThreadAge(lastActivityAt);
-  const lastActivityTitle = useMemo(
-    () => new Date(lastActivityAt).toLocaleString(),
-    [lastActivityAt],
-  );
+    const handleRenameKeyDown = useKeyDown({
+      Enter: handleRenameSubmit,
+      Escape: () => {
+        setRenameValue(chat.title);
+        setIsRenaming(false);
+      },
+    });
 
-  return (
-    <>
-      <div
-        className={`${styles.chatRow} ${chat.is_pinned ? styles.pinnedRow : ""} ${isActive ? styles.active : ""} ${showMenu ? styles.menuOpen : ""}`}
-        onClick={
-          isSelectionMode
-            ? () => onToggleSelectionChat(chat.id)
-            : () => onSelectChat(chat.id)
-        }
-        onContextMenu={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          onOpenContextMenu(chat.id, e.clientX, e.clientY);
-        }}
-      >
-        {isSelectionMode && (
-          <Checkbox
-            checked={isSelected}
-            onChange={() => onToggleSelectionChat(chat.id)}
-          />
-        )}
+    const lastActivityAt = chat.updated_at || chat.created_at;
+    const lastActivityLabel = formatThreadAge(lastActivityAt);
+    const lastActivityTitle = useMemo(
+      () => new Date(lastActivityAt).toLocaleString(),
+      [lastActivityAt],
+    );
 
-        {!isSelectionMode && (
-          <div className={styles.chatLeading}>
-            {isBusy ? (
-              <span className={styles.rowSpinner} aria-hidden="true">
-                <span className={styles.rowSpinnerInner}>
-                  <LoadingSpinner />
+    return (
+      <>
+        <div
+          className={`${styles.chatRow} ${chat.is_pinned ? styles.pinnedRow : ""} ${isActive ? styles.active : ""} ${showMenu ? styles.menuOpen : ""}`}
+          onClick={
+            isSelectionMode
+              ? () => onToggleSelectionChat(chat.id)
+              : () => onSelectChat(chat.id)
+          }
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onOpenContextMenu(chat.id, e.clientX, e.clientY);
+          }}
+        >
+          {isSelectionMode && (
+            <Checkbox
+              checked={isSelected}
+              onChange={() => onToggleSelectionChat(chat.id)}
+            />
+          )}
+
+          {!isSelectionMode && (
+            <div className={styles.chatLeading}>
+              {isBusy ? (
+                <span className={styles.rowSpinner} aria-hidden="true">
+                  <span className={styles.rowSpinnerInner}>
+                    <LoadingSpinner />
+                  </span>
                 </span>
-              </span>
-            ) : (
-              <>
-                <FolderOpen size={19} className={styles.chatBubbleIcon} />
-                <button
-                  className={`${styles.pinLeftBtn} ${chat.is_pinned ? styles.pinActive : ""}`}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onTogglePinChat(chat.id);
-                  }}
-                  title={chat.is_pinned ? "Unpin" : "Pin"}
-                >
-                  <Pin size={17} style={{ transform: "rotate(45deg)" }} />
-                </button>
-              </>
-            )}
-          </div>
-        )}
+              ) : (
+                <>
+                  <FolderOpen size={19} className={styles.chatBubbleIcon} />
+                  <button
+                    className={`${styles.pinLeftBtn} ${chat.is_pinned ? styles.pinActive : ""}`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onTogglePinChat(chat.id);
+                    }}
+                    title={chat.is_pinned ? "Unpin" : "Pin"}
+                  >
+                    <Pin size={17} style={{ transform: "rotate(45deg)" }} />
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
-        {isRenaming ? (
-          <input
-            ref={inputRef}
-            className={styles.chatTitleInput}
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onBlur={handleRenameSubmit}
-            onKeyDown={handleRenameKeyDown}
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : (
-          <span
-            className={styles.chatTitle}
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              setIsRenaming(true);
-            }}
-          >
-            {chat.title}
-          </span>
-        )}
-
-        {!isSelectionMode && (
-          <div className={styles.chatActions}>
-            {chat.is_pinned && (
-              <span
-                className={styles.chatDate}
-                title={lastActivityTitle}
-              >
-                {lastActivityLabel}
-              </span>
-            )}
-
-            <button
-              className={`${styles.menuBtn} ${chat.is_pinned ? styles.pinnedMenuBtn : ""}`}
-              onMouseDown={(e) => {
+          {isRenaming ? (
+            <input
+              ref={inputRef}
+              className={styles.chatTitleInput}
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={handleRenameSubmit}
+              onKeyDown={handleRenameKeyDown}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span
+              className={styles.chatTitle}
+              onDoubleClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
+                setIsRenaming(true);
               }}
-              onClick={handleMenuClick}
             >
-              <MoreHorizontal size={14} />
-            </button>
-          </div>
-        )}
-      </div>
+              {chat.title}
+            </span>
+          )}
 
-      {showMenu && menuState && (
-        <PanelContextMenu
-          x={menuState.x}
-          y={menuState.y}
-          onClose={onCloseContextMenu}
-          onRename={() => {
-            setIsRenaming(true);
-          }}
-          onToggleSelection={() => {
-            onEnableSelectionMode();
-            if (!isSelected) {
-              onToggleSelectionChat(chat.id);
-            }
-          }}
-          onDelete={() => {
-            onDeleteChat(chat.id);
-          }}
-          isSelected={isSelected}
-        />
-      )}
-    </>
-  );
-});
+          {!isSelectionMode && (
+            <div className={styles.chatActions}>
+              {chat.is_pinned && (
+                <span className={styles.chatDate} title={lastActivityTitle}>
+                  {lastActivityLabel}
+                </span>
+              )}
+
+              <button
+                className={`${styles.menuBtn} ${chat.is_pinned ? styles.pinnedMenuBtn : ""}`}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                }}
+                onClick={handleMenuClick}
+              >
+                <MoreHorizontal size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {showMenu && menuState && (
+          <PanelContextMenu
+            x={menuState.x}
+            y={menuState.y}
+            onClose={onCloseContextMenu}
+            onRename={() => {
+              setIsRenaming(true);
+            }}
+            onToggleSelection={() => {
+              onEnableSelectionMode();
+              if (!isSelected) {
+                onToggleSelectionChat(chat.id);
+              }
+            }}
+            onDelete={() => {
+              onDeleteChat(chat.id);
+            }}
+            isSelected={isSelected}
+          />
+        )}
+      </>
+    );
+  },
+);
 
 export const SidePanel: React.FC = () => {
   const app = useAppContext();
@@ -345,35 +344,26 @@ export const SidePanel: React.FC = () => {
     setActiveContextMenu((prev) => (prev === null ? prev : null));
   }, []);
 
-  const handleTogglePin = useCallback(
-    async (chatId: string) => {
-      if (pinToggleLockRef.current.has(chatId)) return;
+  const handleTogglePin = useCallback(async (chatId: string) => {
+    if (pinToggleLockRef.current.has(chatId)) return;
 
-      pinToggleLockRef.current.add(chatId);
-      try {
-        await togglePinRef.current(chatId);
-      } finally {
-        setTimeout(() => {
-          pinToggleLockRef.current.delete(chatId);
-        }, 220);
-      }
-    },
-    [],
-  );
+    pinToggleLockRef.current.add(chatId);
+    try {
+      await togglePinRef.current(chatId);
+    } finally {
+      setTimeout(() => {
+        pinToggleLockRef.current.delete(chatId);
+      }, 220);
+    }
+  }, []);
 
-  const handleSelectChat = useCallback(
-    (chatId: string) => {
-      selectChatRef.current(chatId);
-    },
-    [],
-  );
+  const handleSelectChat = useCallback((chatId: string) => {
+    selectChatRef.current(chatId);
+  }, []);
 
-  const handleRenameChat = useCallback(
-    (chatId: string, newTitle: string) => {
-      renameChatRef.current(chatId, newTitle);
-    },
-    [],
-  );
+  const handleRenameChat = useCallback((chatId: string, newTitle: string) => {
+    renameChatRef.current(chatId, newTitle);
+  }, []);
 
   const handleEnableSelectionMode = useCallback(() => {
     setIsSelectionMode(true);

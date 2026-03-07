@@ -4,14 +4,8 @@
     "mode": "apply",
     "scope": {
       "root": "ui/src",
-      "extensions": [
-        ".module.css",
-        ".tsx"
-      ],
-      "excluded": [
-        "ui/src/styles/animations.css",
-        "ui/src/styles/globals.css"
-      ]
+      "extensions": [".module.css", ".tsx"],
+      "excluded": ["ui/src/styles/animations.css", "ui/src/styles/globals.css"]
     },
     "files_scanned": 108,
     "matches": 306,

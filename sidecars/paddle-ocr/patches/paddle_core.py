@@ -17,15 +17,7 @@ SCRIPT_DIR = pathlib.Path(__file__).parent.parent.absolute()
 PY_VERSION = f"python{sys.version_info.major}.{sys.version_info.minor}"
 
 if sys.platform == "win32":
-    path = (
-        SCRIPT_DIR
-        / "venv"
-        / "Lib"
-        / "site-packages"
-        / "paddle"
-        / "base"
-        / "core.py"
-    )
+    path = SCRIPT_DIR / "venv" / "Lib" / "site-packages" / "paddle" / "base" / "core.py"
 else:
     path = (
         SCRIPT_DIR

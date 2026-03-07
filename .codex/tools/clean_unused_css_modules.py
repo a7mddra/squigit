@@ -207,7 +207,9 @@ def _consume_trailing_whitespace_and_one_newline(text: str, i: int) -> int:
     return i
 
 
-def clean_css_file(path: Path, used_classes: set[str], dry_run: bool) -> tuple[int, str]:
+def clean_css_file(
+    path: Path, used_classes: set[str], dry_run: bool
+) -> tuple[int, str]:
     try:
         original = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:

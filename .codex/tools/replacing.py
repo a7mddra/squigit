@@ -38,8 +38,12 @@ class Rule:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Batch replacement tool (VS Code style, scriptable).")
-    parser.add_argument("--root", default=".", help="Base directory for include/exclude globs.")
+    parser = argparse.ArgumentParser(
+        description="Batch replacement tool (VS Code style, scriptable)."
+    )
+    parser.add_argument(
+        "--root", default=".", help="Base directory for include/exclude globs."
+    )
     parser.add_argument(
         "--include",
         action="append",
@@ -52,18 +56,26 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help='Glob to exclude. Repeatable. Example: --exclude "**/*.generated.css"',
     )
-    parser.add_argument("--map", dest="map_path", help="JSON file with replacement rules.")
+    parser.add_argument(
+        "--map", dest="map_path", help="JSON file with replacement rules."
+    )
     parser.add_argument("--find", help="Single find expression.")
     parser.add_argument("--replace", help="Single replacement value.")
     parser.add_argument("--regex", action="store_true", help="Treat --find as regex.")
-    parser.add_argument("--ignore-case", action="store_true", help="Case-insensitive matching.")
+    parser.add_argument(
+        "--ignore-case", action="store_true", help="Case-insensitive matching."
+    )
     parser.add_argument(
         "--identifier-boundary",
         action="store_true",
         help="For literal rules, match exact identifier token (no [A-Za-z0-9-] neighbors).",
     )
-    parser.add_argument("--apply", action="store_true", help="Write edits. Without this, dry-run only.")
-    parser.add_argument("--verbose", action="store_true", help="Print per-file change counts.")
+    parser.add_argument(
+        "--apply", action="store_true", help="Write edits. Without this, dry-run only."
+    )
+    parser.add_argument(
+        "--verbose", action="store_true", help="Print per-file change counts."
+    )
     return parser.parse_args()
 
 
@@ -106,7 +118,9 @@ def load_rules(args: argparse.Namespace) -> List[Rule]:
         )
 
     if not rules:
-        raise ValueError("no replacement rules provided (use --map or --find/--replace)")
+        raise ValueError(
+            "no replacement rules provided (use --map or --find/--replace)"
+        )
 
     return rules
 
@@ -128,7 +142,9 @@ def compile_rule(rule: Rule, identifier_boundary: bool) -> re.Pattern[str]:
     return re.compile(pattern, flags=flags)
 
 
-def discover_files(root: Path, includes: Sequence[str], excludes: Sequence[str]) -> List[Path]:
+def discover_files(
+    root: Path, includes: Sequence[str], excludes: Sequence[str]
+) -> List[Path]:
     include_globs = list(includes) if includes else ["**/*"]
     matched: set[Path] = set()
 
@@ -147,11 +163,15 @@ def discover_files(root: Path, includes: Sequence[str], excludes: Sequence[str])
     return result
 
 
-def apply_rules_to_text(text: str, rules: Sequence[Rule], identifier_boundary: bool) -> tuple[str, int]:
+def apply_rules_to_text(
+    text: str, rules: Sequence[Rule], identifier_boundary: bool
+) -> tuple[str, int]:
     total_replacements = 0
     out = text
     for rule in rules:
-        pattern = compile_rule(rule, identifier_boundary=identifier_boundary and not rule.regex)
+        pattern = compile_rule(
+            rule, identifier_boundary=identifier_boundary and not rule.regex
+        )
         out, count = pattern.subn(rule.replace, out)
         total_replacements += count
     return out, total_replacements

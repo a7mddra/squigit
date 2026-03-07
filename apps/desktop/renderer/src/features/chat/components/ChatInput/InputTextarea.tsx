@@ -46,7 +46,9 @@ interface InputTextareaProps {
   disabled: boolean;
   isCodeBlockActive: boolean;
   placeholder: string;
-  editorRef: React.MutableRefObject<HTMLTextAreaElement | HTMLInputElement | null>;
+  editorRef: React.MutableRefObject<
+    HTMLTextAreaElement | HTMLInputElement | null
+  >;
   shadowRef: React.MutableRefObject<HTMLTextAreaElement | null>;
   textareaRef: React.MutableRefObject<HTMLTextAreaElement | null>;
   onContextMenu: (e: React.MouseEvent<HTMLTextAreaElement>) => void;

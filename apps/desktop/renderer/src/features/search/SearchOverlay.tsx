@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { WidgetOverlay } from "@/components";
 import type { ChatSearchResult } from "@/lib";
 import { useAppContext } from "@/providers/AppProvider";
@@ -77,7 +83,10 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
     const currentRequestId = ++requestIdRef.current;
     const timer = window.setTimeout(async () => {
       setIsLoading(true);
-      const hits = await app.chatHistory.searchChats(normalizedQuery, SEARCH_LIMIT);
+      const hits = await app.chatHistory.searchChats(
+        normalizedQuery,
+        SEARCH_LIMIT,
+      );
       if (currentRequestId !== requestIdRef.current) return;
       setResults(hits);
       setIsLoading(false);

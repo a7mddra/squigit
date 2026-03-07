@@ -12,7 +12,10 @@ export function useClipboard() {
     try {
       return await navigator.clipboard.readText();
     } catch (webErr) {
-      console.warn("Web Clipboard API failed, attempting Tauri fallback...", webErr);
+      console.warn(
+        "Web Clipboard API failed, attempting Tauri fallback...",
+        webErr,
+      );
       try {
         return await invoke<string>("read_clipboard_text");
       } catch (tauriErr) {

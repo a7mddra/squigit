@@ -209,12 +209,20 @@ def process_path(image_path: str, args: argparse.Namespace) -> int:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Squigit PaddleOCR sidecar (CLI mode).")
+    parser = argparse.ArgumentParser(
+        description="Squigit PaddleOCR sidecar (CLI mode)."
+    )
     parser.add_argument("image_path", help="Path to image file.")
     parser.add_argument("--lang", default="en", help="Language hint (default: en).")
-    parser.add_argument("--det-model-dir", default=None, help="Detection model directory.")
-    parser.add_argument("--rec-model-dir", default=None, help="Recognition model directory.")
-    parser.add_argument("--cls-model-dir", default=None, help="Textline orientation model directory.")
+    parser.add_argument(
+        "--det-model-dir", default=None, help="Detection model directory."
+    )
+    parser.add_argument(
+        "--rec-model-dir", default=None, help="Recognition model directory."
+    )
+    parser.add_argument(
+        "--cls-model-dir", default=None, help="Textline orientation model directory."
+    )
     parser.add_argument(
         "--use-angle-cls",
         dest="use_angle_cls",

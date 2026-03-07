@@ -21,7 +21,9 @@ def main() -> int:
         description="Compare OCR compressed payload size against baseline gate."
     )
     parser.add_argument("--baseline", required=True, help="Baseline JSON payload path")
-    parser.add_argument("--candidate", required=True, help="Candidate JSON payload path")
+    parser.add_argument(
+        "--candidate", required=True, help="Candidate JSON payload path"
+    )
     parser.add_argument(
         "--max-ratio",
         type=float,

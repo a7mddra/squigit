@@ -9,10 +9,6 @@
 #ifndef CAPTUREMODE_H
 #define CAPTUREMODE_H
 
-enum class CaptureMode
-{
-    Freeshape,
-    Rectangle
-};
+enum class CaptureMode { Freeshape, Rectangle };
 
 #endif // CAPTUREMODE_H

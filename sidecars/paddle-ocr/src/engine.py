@@ -164,7 +164,9 @@ class OCREngine:
         return quad
 
     @staticmethod
-    def _parse_text_and_conf(rec_entry: Any, score_entry: Any = None) -> Tuple[str, float]:
+    def _parse_text_and_conf(
+        rec_entry: Any, score_entry: Any = None
+    ) -> Tuple[str, float]:
         text = ""
         confidence = OCREngine._as_float(score_entry, 1.0)
 
@@ -266,10 +268,7 @@ class OCREngine:
 
         for box_coords, text, confidence in normalized_lines:
             if inv_scale != 1.0:
-                box_coords = [
-                    [c[0] * inv_scale, c[1] * inv_scale]
-                    for c in box_coords
-                ]
+                box_coords = [[c[0] * inv_scale, c[1] * inv_scale] for c in box_coords]
 
             box = BoundingBox(
                 top_left=box_coords[0],

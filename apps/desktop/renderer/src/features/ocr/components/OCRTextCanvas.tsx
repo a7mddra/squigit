@@ -37,10 +37,22 @@ export const OCRTextCanvas: React.FC<OCRTextCanvasProps> = ({
     >
       <defs>
         <mask id="textCutoutMask">
-          <rect x="0" y="0" width={size.w} height={size.h} fill="var(--c-raw-036)" />
+          <rect
+            x="0"
+            y="0"
+            width={size.w}
+            height={size.h}
+            fill="var(--c-raw-036)"
+          />
           {data.map((item, i) => {
             const points = item.box.map((p) => `${p[0]},${p[1]}`).join(" ");
-            return <polygon key={`mask-${i}`} points={points} fill="var(--c-raw-042)" />;
+            return (
+              <polygon
+                key={`mask-${i}`}
+                points={points}
+                fill="var(--c-raw-042)"
+              />
+            );
           })}
         </mask>
       </defs>

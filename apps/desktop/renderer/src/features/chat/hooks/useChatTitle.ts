@@ -15,15 +15,11 @@ interface UseChatTitleProps {
   apiKey: string;
 }
 
-export const useChatTitle = ({
-  apiKey,
-}: UseChatTitleProps) => {
+export const useChatTitle = ({ apiKey }: UseChatTitleProps) => {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const generateTitleForText = useCallback(
-    async (
-      text: string,
-    ): Promise<string> => {
+    async (text: string): Promise<string> => {
       if (!apiKey || !text) return "New Chat";
 
       setIsGenerating(true);
@@ -35,7 +31,9 @@ export const useChatTitle = ({
           promptContext: text,
         });
 
-        console.log(`[ChatTitleTracker] Selected Model: ${TITLE_MODEL_PRIMARY}`);
+        console.log(
+          `[ChatTitleTracker] Selected Model: ${TITLE_MODEL_PRIMARY}`,
+        );
         console.log(
           `[ChatTitleTracker] Generated Chat Title: "${title || "New Chat"}"`,
         );
@@ -61,7 +59,10 @@ export const useChatTitle = ({
           );
           return fallbackTitle || "New Chat";
         } catch (flashError) {
-          console.error("Failed to generate text title with fallback model:", flashError);
+          console.error(
+            "Failed to generate text title with fallback model:",
+            flashError,
+          );
           return "New Chat";
         }
       } finally {

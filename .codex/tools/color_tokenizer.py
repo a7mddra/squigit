@@ -49,9 +49,7 @@ COLOR_PATTERN = rf"(?:{HEX_PATTERN}|{FUNC_PATTERN}|{NAME_PATTERN})"
 
 COLOR_LITERAL_RE = re.compile(COLOR_PATTERN, re.IGNORECASE)
 PURE_COLOR_RE = re.compile(rf"^\s*{COLOR_PATTERN}\s*$", re.IGNORECASE)
-CSS_DECL_RE = re.compile(
-    r"(?P<prop>(?:--)?[a-zA-Z0-9-]+)\s*:\s*(?P<value>[^;{{}}]+);"
-)
+CSS_DECL_RE = re.compile(r"(?P<prop>(?:--)?[a-zA-Z0-9-]+)\s*:\s*(?P<value>[^;{{}}]+);")
 VAR_DECL_RE = re.compile(r"(?P<prop>--[a-zA-Z0-9-]+)\s*:\s*(?P<value>[^;{{}}]+);")
 
 JSX_ATTR_RE = re.compile(
@@ -82,7 +80,9 @@ class Occurrence:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Tokenize hardcoded colors in CSS modules + TSX.")
+    parser = argparse.ArgumentParser(
+        description="Tokenize hardcoded colors in CSS modules + TSX."
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--report", action="store_true", help="Generate reports only.")
     mode.add_argument(
@@ -316,7 +316,9 @@ def build_existing_token_index(variables_css_path: Path) -> Dict[str, str]:
     return index
 
 
-def iter_quoted_string_value_spans(text: str, start: int, end: int) -> Iterable[Tuple[int, int]]:
+def iter_quoted_string_value_spans(
+    text: str, start: int, end: int
+) -> Iterable[Tuple[int, int]]:
     i = start
     in_line_comment = False
     in_block_comment = False
@@ -608,7 +610,9 @@ def append_tokens_to_variables_css(text: str, generated_tokens: Dict[str, str]) 
     if not generated_tokens:
         return text
 
-    ordered_pairs = [(token, generated_tokens[token]) for token in sorted(generated_tokens.keys())]
+    ordered_pairs = [
+        (token, generated_tokens[token]) for token in sorted(generated_tokens.keys())
+    ]
 
     def append_block(current_text: str, selector_regex: str) -> str:
         span = find_selector_block_span(current_text, selector_regex)
@@ -617,10 +621,14 @@ def append_tokens_to_variables_css(text: str, generated_tokens: Dict[str, str]) 
         open_brace, close_brace = span
         block_body = current_text[open_brace + 1 : close_brace]
         existing = {m.group("prop").strip() for m in VAR_DECL_RE.finditer(block_body)}
-        to_add = [(token, value) for token, value in ordered_pairs if token not in existing]
+        to_add = [
+            (token, value) for token, value in ordered_pairs if token not in existing
+        ]
         if not to_add:
             return current_text
-        insertion = "\n" + "\n".join(f"  {token}: {value};" for token, value in to_add) + "\n"
+        insertion = (
+            "\n" + "\n".join(f"  {token}: {value};" for token, value in to_add) + "\n"
+        )
         return current_text[:close_brace] + insertion + current_text[close_brace:]
 
     out = text
@@ -661,7 +669,9 @@ def build_json_report(
         )
 
     occurrence_rows = []
-    for occ in sorted(occurrences, key=lambda o: (o.rel_path, o.line, o.column, o.start)):
+    for occ in sorted(
+        occurrences, key=lambda o: (o.rel_path, o.line, o.column, o.start)
+    ):
         occurrence_rows.append(
             {
                 "file": occ.rel_path,
@@ -742,7 +752,9 @@ def build_markdown_report(
         ]
     )
 
-    for raw in sorted(raw_to_normalized.keys(), key=lambda r: (raw_to_normalized[r], r.lower(), r)):
+    for raw in sorted(
+        raw_to_normalized.keys(), key=lambda r: (raw_to_normalized[r], r.lower(), r)
+    ):
         normalized = raw_to_normalized[raw]
         token = color_to_token[normalized]
         lines.append(f"- `{raw}` -> `var({token})`")
@@ -757,7 +769,9 @@ def build_markdown_report(
         ]
     )
     for normalized in sorted(freq.keys(), key=lambda c: (-freq[c], c)):
-        sample = ", ".join(f"`{s}`" for s in sorted(raw_variants[normalized], key=str.lower))
+        sample = ", ".join(
+            f"`{s}`" for s in sorted(raw_variants[normalized], key=str.lower)
+        )
         lines.append(
             f"| `{normalized}` | {sample} | `var({color_to_token[normalized]})` | "
             f"{color_source[normalized]} |"
@@ -769,7 +783,9 @@ def build_markdown_report(
 
 def write_json(path: Path, payload: Dict[str, object]) -> None:
     ensure_parent(path)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
+    )
 
 
 def write_text(path: Path, text: str) -> None:
@@ -812,7 +828,9 @@ def main() -> int:
     variables_rel = VARIABLES_CSS.relative_to(REPO_ROOT).as_posix()
     if generated_tokens:
         variables_before = VARIABLES_CSS.read_text(encoding="utf-8")
-        variables_after = append_tokens_to_variables_css(variables_before, generated_tokens)
+        variables_after = append_tokens_to_variables_css(
+            variables_before, generated_tokens
+        )
         if variables_before != variables_after:
             changed_files[variables_rel] = (variables_before, variables_after)
 
@@ -841,10 +859,14 @@ def main() -> int:
 
     if mode == "test":
         variables_before = VARIABLES_CSS.read_text(encoding="utf-8")
-        variables_after = append_tokens_to_variables_css(variables_before, generated_tokens)
+        variables_after = append_tokens_to_variables_css(
+            variables_before, generated_tokens
+        )
         write_text(
             GENERATED_VARIABLES_CSS,
-            build_generated_header("Preview of variables.css after token append (test mode).")
+            build_generated_header(
+                "Preview of variables.css after token append (test mode)."
+            )
             + variables_after,
         )
 

@@ -21,14 +21,14 @@ from typing import Optional
 def _get_base_dir() -> Path:
     """
     Determine the base directory for model files.
-    
+
     When running as a frozen PyInstaller executable, uses the
     temporary extraction directory. Otherwise uses the script
     directory.
-    
+
     @return Path to the base directory.
     """
-    if getattr(sys, 'frozen', False):
+    if getattr(sys, "frozen", False):
         if hasattr(sys, "_MEIPASS"):
             return Path(sys._MEIPASS)
         # OneDir fallback: keep resources relative to the executable directory.
@@ -41,39 +41,39 @@ def _get_base_dir() -> Path:
 class EngineConfig:
     """
     Configuration settings for the OCR engine.
-    
+
     Controls model paths, language settings, and processing options.
-    
+
     @example
         config = EngineConfig(lang='en', use_angle_cls=True)
         engine = OCREngine(config)
     """
-    
-    lang: str = 'en'
-    
+
+    lang: str = "en"
+
     use_angle_cls: bool = True
-    
+
     base_dir: Optional[Path] = None
 
     # Custom model paths (optional overrides)
     det_model_path: Optional[str] = None
     rec_model_path: Optional[str] = None
     cls_model_path: Optional[str] = None
-    
+
     def __post_init__(self):
         """Initialize computed paths after dataclass init."""
         if self.base_dir is None:
             self.base_dir = _get_base_dir()
-    
+
     @property
     def model_dir(self) -> Path:
         """
         Get the models directory path.
-        
+
         @return Path to the models directory.
         """
         return self.base_dir / "models"
-    
+
     @property
     def det_model_dir(self) -> str:
         """
@@ -83,7 +83,7 @@ class EngineConfig:
         if self.det_model_path:
             return self.det_model_path
         return str(self.model_dir / "PP-OCRv5_mobile_det")
-    
+
     @property
     def rec_model_dir(self) -> str:
         """
@@ -93,7 +93,7 @@ class EngineConfig:
         if self.rec_model_path:
             return self.rec_model_path
         return str(self.model_dir / "en_PP-OCRv5_mobile_rec")
-    
+
     @property
     def cls_model_dir(self) -> str:
         """

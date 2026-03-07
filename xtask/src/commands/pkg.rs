@@ -4,12 +4,12 @@
 use anyhow::Result;
 use std::fs;
 use std::path::Path;
+#[cfg(not(windows))]
+use xtask::copy_dir_all_preserve_symlinks;
 use xtask::{
     copy_dir_all, get_host_target_triple, ocr_sidecar_dir, project_root, qt_native_dir,
     whisper_sidecar_dir,
 };
-#[cfg(not(windows))]
-use xtask::copy_dir_all_preserve_symlinks;
 
 fn copy_ocr_runtime_dir(src: &Path, dst: &Path) -> Result<()> {
     #[cfg(windows)]

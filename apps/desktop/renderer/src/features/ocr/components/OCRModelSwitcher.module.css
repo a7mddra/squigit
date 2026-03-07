@@ -56,7 +56,6 @@
   composes: itemActive;
 }
 
-
 .dropdown {
   composes: dropdown from "@/components/dropdown/Dropdown.shared.module.css";
 }

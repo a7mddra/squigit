@@ -138,7 +138,6 @@
   animation: "rotate" 1s linear infinite;
 }
 
-
 .floatingContainer {
   background-color: var(--c-raw-012);
   border: 1px solid var(--c-raw-010);
@@ -283,8 +282,6 @@
   align-items: center;
 }
 
-
-
 .barBtn:hover:not(:disabled) {
   background-color: var(--c-raw-010);
   color: var(--c-raw-000);
@@ -294,7 +291,6 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
-
 
 .toggleIcon:hover {
   color: var(--c-raw-003);

@@ -24,7 +24,9 @@ def _read_json_output(stdout: str, stderr: str, mode: str) -> list:
     if isinstance(payload, dict) and "error" in payload:
         raise RuntimeError(f"{mode}: sidecar returned error: {payload['error']}")
     if not isinstance(payload, list):
-        raise RuntimeError(f"{mode}: expected list payload, got {type(payload).__name__}")
+        raise RuntimeError(
+            f"{mode}: expected list payload, got {type(payload).__name__}"
+        )
     return payload
 
 
@@ -97,7 +99,9 @@ def smoke_cli(sidecar: Path, image_path: Path, env: dict[str, str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke test packaged OCR sidecar.")
-    parser.add_argument("--sidecar", required=True, help="Path to ocr-engine executable")
+    parser.add_argument(
+        "--sidecar", required=True, help="Path to ocr-engine executable"
+    )
     args = parser.parse_args()
 
     sidecar = Path(args.sidecar).resolve()

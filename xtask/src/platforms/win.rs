@@ -116,7 +116,8 @@ fn find_visual_studio_generator() -> Option<&'static str> {
 }
 
 fn has_visual_studio_msvc(version_range: &str) -> bool {
-    let vswhere = Path::new(r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe");
+    let vswhere =
+        Path::new(r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe");
     if !vswhere.exists() {
         return false;
     }
@@ -227,11 +228,7 @@ fn normalize_qt_prefix(path: PathBuf) -> PathBuf {
         && qt6_config.exists();
 
     if is_qt6_cmake_dir {
-        if let Some(prefix) = path
-            .parent()
-            .and_then(Path::parent)
-            .and_then(Path::parent)
-        {
+        if let Some(prefix) = path.parent().and_then(Path::parent).and_then(Path::parent) {
             return prefix.to_path_buf();
         }
     }

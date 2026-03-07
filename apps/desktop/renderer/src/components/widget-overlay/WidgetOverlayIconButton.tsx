@@ -35,7 +35,9 @@ const buildClassName = ({
     .filter(Boolean)
     .join(" ");
 
-export const WidgetOverlayIconButton: React.FC<WidgetOverlayIconButtonProps> = ({
+export const WidgetOverlayIconButton: React.FC<
+  WidgetOverlayIconButtonProps
+> = ({
   icon,
   label,
   isActive = false,
