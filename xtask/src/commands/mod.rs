@@ -5,3 +5,6 @@ pub mod build;
 pub mod clean;
 pub mod dev;
 pub mod pkg;
+pub mod report;
+pub mod setup;
+pub mod version;

@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
 if(APPLE)
-    project(CAPTURE LANGUAGES CXX OBJCXX)
+    project(CAPTURE VERSION 0.1.0 LANGUAGES CXX OBJCXX)
 else()
-    project(CAPTURE LANGUAGES CXX)
+    project(CAPTURE VERSION 0.1.0 LANGUAGES CXX)
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
