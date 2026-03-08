@@ -183,8 +183,9 @@ const ChatItem: React.FC<ChatItemProps> = React.memo(
                 </span>
               ) : (
                 <>
-                  <FolderOpen size={19} className={styles.chatBubbleIcon} />
+                  <FolderOpen size={22} className={styles.chatBubbleIcon} />
                   <button
+                    type="button"
                     className={`${styles.pinLeftBtn} ${chat.is_pinned ? styles.pinActive : ""}`}
                     onMouseDown={(e) => {
                       e.preventDefault();
@@ -232,6 +233,7 @@ const ChatItem: React.FC<ChatItemProps> = React.memo(
               )}
 
               <button
+                type="button"
                 className={`${styles.menuBtn} ${chat.is_pinned ? styles.pinnedMenuBtn : ""}`}
                 onMouseDown={(e) => {
                   e.stopPropagation();
@@ -426,14 +428,18 @@ export const SidePanel: React.FC = () => {
 
           <div className={styles.selectionRight}>
             <button
+              type="button"
               className={`${styles.iconBtn} ${styles.danger}`}
               onClick={() => selectedIds.length > 0 && setShowBulkDelete(true)}
-              style={{ color: "var(--c-raw-015)" }}
               disabled={selectedIds.length === 0}
             >
               <Trash2 size={16} />
             </button>
-            <button className={styles.iconBtn} onClick={toggleSelectionMode}>
+            <button
+              type="button"
+              className={styles.iconBtn}
+              onClick={toggleSelectionMode}
+            >
               <X size={18} />
             </button>
           </div>
@@ -600,16 +606,7 @@ export const SidePanel: React.FC = () => {
           ))}
 
           {threadChats.length === 0 && (
-            <div
-              style={{
-                padding: "20px 20px",
-                textAlign: "center",
-                color: "var(--c-raw-073)",
-                fontSize: "0.9rem",
-              }}
-            >
-              No threads yet.
-            </div>
+            <div className={styles.emptyState}>No threads yet.</div>
           )}
         </div>
       </div>

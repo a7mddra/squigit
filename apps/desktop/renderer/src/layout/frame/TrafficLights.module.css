@@ -14,10 +14,11 @@
 }
 
 .trafficButton {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
+  width: 12px;
+  height: 12px;
   border: none;
+  appearance: none;
+  -webkit-appearance: none;
   padding: 0;
   display: flex;
   align-items: center;
@@ -25,55 +26,13 @@
   cursor: pointer;
   -webkit-app-region: no-drag;
   position: relative;
-  overflow: hidden;
-  box-shadow: inset 0 0 0 1px var(--c-raw-051);
-  transition:
-    transform 0.1s ease,
-    filter 0.1s ease;
+  background: transparent;
   pointer-events: auto;
 }
 
-.trafficButton .icon {
-  width: 8px;
-  height: 8px;
-  opacity: 0;
-  color: var(--c-raw-131);
-  transition: opacity 0.1s ease;
-  stroke-width: 3px;
-}
-
-.trafficButton:hover .icon {
-  opacity: 1;
-}
-
-.trafficButton.close {
-  background-color: var(--c-raw-081);
-  border: 1px solid var(--c-raw-077);
-}
-
-.trafficButton.minimize {
-  background-color: var(--c-raw-082);
-  border: 1px solid var(--c-raw-120);
-}
-
-.trafficButton.maximize {
-  background-color: var(--c-raw-068);
-  border: 1px solid var(--c-raw-088);
-}
-
-.trafficButton:active {
-  transform: scale(0.95);
-  filter: brightness(0.85);
-}
-
-.trafficButton.close:hover {
-  background-color: var(--c-raw-081);
-}
-
-.trafficButton.minimize:hover {
-  background-color: var(--c-raw-082);
-}
-
-.trafficButton.maximize:hover {
-  background-color: var(--c-raw-068);
+.icon {
+  width: 12px;
+  height: 12px;
+  display: block;
+  pointer-events: none;
 }
