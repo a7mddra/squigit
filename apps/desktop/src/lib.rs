@@ -187,10 +187,18 @@ pub fn run() {
             {
                 let config_dir = crate::utils::get_app_config_dir(&handle);
                 let marker_file = config_dir.join(".shortcut_installed");
+                const SHORTCUT_MARKER_VERSION: &str = "2";
 
-                if !marker_file.exists() {
+                let installed_version = std::fs::read_to_string(&marker_file)
+                    .ok()
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default();
+
+                if installed_version != SHORTCUT_MARKER_VERSION {
                     log::info!(
-                        "First run on Linux detected: attempting to install global shortcut"
+                        "Linux shortcut install/migration required: target marker version {}, current '{}'",
+                        SHORTCUT_MARKER_VERSION,
+                        installed_version
                     );
                     if let Ok(exe) = std::env::current_exe() {
                         let bin = exe.to_string_lossy();
@@ -201,7 +209,9 @@ pub fn run() {
                         ) {
                             Ok(_) => {
                                 log::info!("Successfully installed Linux global shortcut");
-                                if let Err(e) = std::fs::write(&marker_file, "") {
+                                if let Err(e) =
+                                    std::fs::write(&marker_file, SHORTCUT_MARKER_VERSION)
+                                {
                                     log::error!("Failed to create shortcut marker file: {}", e);
                                 }
                             }

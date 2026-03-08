@@ -8,13 +8,13 @@ The installer registers `Super+Shift+A` with your desktop environment to trigger
 On Linux, this shortcut does _not_ launch a new binary. Instead, it fires a D-Bus message to the background application's shortcut listener:
 
 ```bash
-dbus-send --session --type=method_call --dest=com.squigit.app /com/squigit/app com.squigit.app.Capture
+/bin/sh -lc 'dbus-send --session --type=method_call --dest=com.squigit.app /com/squigit/app com.squigit.app.Capture >/dev/null 2>&1 || busctl --user call com.squigit.app /com/squigit/app com.squigit.app Capture >/dev/null 2>&1 || gdbus call --session --dest com.squigit.app --object-path /com/squigit/app --method com.squigit.app.Capture >/dev/null 2>&1'
 ```
 
 - **Manual Setup:** If the hotkey does not trigger:
   1. Navigate to **System Settings > Keyboard > Shortcuts**.
   2. Add a **Custom Shortcut**.
-  3. **Command:** Input the exact `dbus-send` command above.
+  3. **Command:** Input the exact command above (do not remove `/bin/sh -lc`).
   4. **Binding:** Set to `Super+Shift+A`.
 
 ## 2. Operational Flow & Portals
