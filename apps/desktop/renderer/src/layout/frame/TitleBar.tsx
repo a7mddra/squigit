@@ -7,7 +7,7 @@
 import React, { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Box, Package2, PackageIcon, Pin } from "lucide-react";
+import { Box, Pin } from "lucide-react";
 import { useAppContext } from "@/providers/AppProvider";
 import { usePlatform } from "@/hooks";
 import { SettingsPanel, SettingsOverlay } from "@/features";
