@@ -3,6 +3,8 @@
 
 use crate::console::Ansi;
 use anyhow::Result;
+#[cfg(target_os = "linux")]
+use std::env;
 #[cfg(target_os = "windows")]
 use std::path::Path;
 use std::path::PathBuf;
@@ -378,6 +380,27 @@ fn attempt_admin_install(component: Component, ansi: &Ansi) {
     {
         attempt_admin_install_windows(component, ansi);
     }
+}
+
+#[cfg(target_os = "linux")]
+fn run_maybe_sudo(cmd: &str, args: &[&str], ansi: &Ansi) {
+    if should_use_sudo() {
+        let mut sudo_args = vec![cmd];
+        sudo_args.extend(args.iter().copied());
+        run_command("sudo", &sudo_args, ansi);
+    } else {
+        run_command(cmd, args, ansi);
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn should_use_sudo() -> bool {
+    if cfg!(windows) {
+        return false;
+    }
+
+    let user = env::var("USER").unwrap_or_default();
+    user != "root" && which("sudo").is_ok()
 }
 
 #[cfg(target_os = "linux")]
