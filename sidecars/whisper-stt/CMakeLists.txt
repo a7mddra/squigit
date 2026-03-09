@@ -8,10 +8,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(MSVC)
     add_compile_options(/O2)
 else()
-    add_compile_options(-O3 -march=native)
+    add_compile_options(-O3)
 endif()
 
 include(FetchContent)
+
+# Build shared libs so runtime dependencies can be packaged under _internal/.
+set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared libraries" FORCE)
+set(
+    GGML_NATIVE
+    OFF
+    CACHE BOOL "Disable host-specific instructions for portable CPU binaries"
+    FORCE
+)
+set(GGML_OPENMP ON CACHE BOOL "Enable OpenMP for CPU performance" FORCE)
 
 # 1. whisper.cpp
 # Pinned to a specific version for stability as requested
@@ -46,6 +56,15 @@ if(NOT EXISTS "${MINIAUDIO_DIR}/miniaudio.h")
     file(DOWNLOAD ${MINIAUDIO_URL} ${MINIAUDIO_DIR}/miniaudio.h)
 endif()
 
+set(WHISPER_MODELS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/models")
+set(WHISPER_REQUIRED_MODEL "${WHISPER_MODELS_DIR}/ggml-tiny.en.bin")
+if(NOT EXISTS "${WHISPER_REQUIRED_MODEL}")
+    message(FATAL_ERROR
+        "Whisper model is missing: ${WHISPER_REQUIRED_MODEL}\n"
+        "Run: python sidecars/whisper-stt/download_models.py"
+    )
+endif()
+
 # Sources
 set(SOURCES
     src/main.cpp
@@ -66,6 +85,18 @@ target_include_directories(whisper-stt PRIVATE
 # Link libraries
 # Linking against the targets defined by FetchContent
 target_link_libraries(whisper-stt PRIVATE whisper nlohmann_json::nlohmann_json)
+
+if(APPLE)
+    set_target_properties(whisper-stt PROPERTIES
+        BUILD_RPATH "@loader_path/_internal"
+        INSTALL_RPATH "@loader_path/_internal"
+    )
+elseif(UNIX)
+    set_target_properties(whisper-stt PROPERTIES
+        BUILD_RPATH "\$ORIGIN/_internal"
+        INSTALL_RPATH "\$ORIGIN/_internal"
+    )
+endif()
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(whisper-stt PRIVATE pthread dl)

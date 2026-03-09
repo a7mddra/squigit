@@ -30,6 +30,9 @@ void AudioCapture::data_callback(ma_device *pDevice, void *pOutput,
   if (!self || !self->is_running)
     return;
 
+  if (pInput == nullptr || frameCount == 0)
+    return;
+
   // Assuming float32 input from config
   const float *input_floats = (const float *)pInput;
 

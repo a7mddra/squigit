@@ -5,7 +5,7 @@
 //!
 //! Exposes start_stt/stop_stt to frontend, streaming events via window.emit("stt_event")
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
@@ -26,84 +26,211 @@ impl Default for SpeechState {
 }
 
 /// Resolve the whisper-stt sidecar binary path
-fn resolve_sidecar_path(app: &AppHandle) -> Result<PathBuf, String> {
-    // In dev mode: look relative to project
-    // In production: look in resource dir
+fn resolve_sidecar_path(app: &AppHandle) -> Result<(PathBuf, Option<PathBuf>), String> {
     let resource_dir = app
         .path()
         .resource_dir()
         .map_err(|e| format!("Failed to get resource dir: {}", e))?;
 
-    let binary_name = if cfg!(windows) {
-        "whisper-stt.exe"
-    } else {
-        "whisper-stt"
-    };
+    let runtime_dir_name = get_runtime_dir_name();
+    let binary_name = get_sidecar_executable_name();
 
-    // Try resource dir first (production)
-    let prod_path = resource_dir.join("binaries").join(binary_name);
-    if prod_path.exists() {
-        return Ok(prod_path);
+    let runtime_candidates = [
+        resource_dir.join("binaries").join(&runtime_dir_name),
+        resource_dir.join(&runtime_dir_name),
+        resource_dir
+            .join("resources")
+            .join("binaries")
+            .join(&runtime_dir_name),
+    ];
+    for runtime_dir in runtime_candidates {
+        let sidecar = runtime_dir.join(binary_name);
+        if sidecar.exists() {
+            return Ok((sidecar, Some(runtime_dir)));
+        }
     }
 
-    // Fallback to dev path (looking for CMake build artifact)
-    // resource_dir is typically target/debug
-    // target/debug -> target -> root
-    let root_path = resource_dir.parent().and_then(|p| p.parent());
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(root) = exe_path
+            .parent()
+            .and_then(|p| p.parent())
+            .and_then(|p| p.parent())
+        {
+            let dev_candidates = [
+                root.join("apps")
+                    .join("desktop")
+                    .join("binaries")
+                    .join(&runtime_dir_name)
+                    .join(binary_name),
+                root.join("target")
+                    .join("debug")
+                    .join("binaries")
+                    .join(&runtime_dir_name)
+                    .join(binary_name),
+                root.join("sidecars")
+                    .join("whisper-stt")
+                    .join("build")
+                    .join("Release")
+                    .join(binary_name),
+                root.join("sidecars")
+                    .join("whisper-stt")
+                    .join("build")
+                    .join(binary_name),
+            ];
 
-    if let Some(root) = root_path {
-        // Option A: sidecars/whisper-stt/build/whisper-stt (CMake output)
-        let build_path = root.join("sidecars/whisper-stt/build").join(binary_name);
-        if build_path.exists() {
-            return Ok(build_path);
-        }
-
-        // Option B: apps/desktop/binaries/whisper-stt (if copied without triple)
-        let bin_path = root.join("apps/desktop/binaries").join(binary_name);
-        if bin_path.exists() {
-            return Ok(bin_path);
-        }
-
-        // Option C: check for any file starting with binary_name in apps/desktop/binaries (for triple)
-        if let Ok(entries) = std::fs::read_dir(root.join("apps/desktop/binaries")) {
-            for entry in entries.flatten() {
-                if let Ok(name) = entry.file_name().into_string() {
-                    if name.starts_with(binary_name) {
-                        return Ok(entry.path());
-                    }
+            for sidecar in dev_candidates {
+                if sidecar.exists() {
+                    let runtime_dir = infer_runtime_dir(&sidecar);
+                    return Ok((sidecar, runtime_dir));
                 }
             }
         }
     }
 
     Err(format!(
-        "Sidecar not found. Searched: {:?} and dev locations",
-        prod_path
+        "Whisper sidecar not found. Expected runtime layout at binaries/{}/{}",
+        runtime_dir_name, binary_name
     ))
 }
 
+fn infer_runtime_dir(binary_path: &Path) -> Option<PathBuf> {
+    let parent = binary_path.parent()?;
+    if parent.join("_internal").is_dir() {
+        Some(parent.to_path_buf())
+    } else {
+        None
+    }
+}
+
+fn get_target_triple() -> &'static str {
+    const FALLBACK_TARGET: &str = {
+        #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+        {
+            "x86_64-pc-windows-msvc"
+        }
+        #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+        {
+            "aarch64-pc-windows-msvc"
+        }
+        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        {
+            "x86_64-unknown-linux-gnu"
+        }
+        #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+        {
+            "aarch64-unknown-linux-gnu"
+        }
+        #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+        {
+            "x86_64-apple-darwin"
+        }
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        {
+            "aarch64-apple-darwin"
+        }
+        #[cfg(not(any(
+            all(target_os = "windows", target_arch = "x86_64"),
+            all(target_os = "windows", target_arch = "aarch64"),
+            all(target_os = "linux", target_arch = "x86_64"),
+            all(target_os = "linux", target_arch = "aarch64"),
+            all(target_os = "macos", target_arch = "x86_64"),
+            all(target_os = "macos", target_arch = "aarch64")
+        )))]
+        {
+            "unknown-target"
+        }
+    };
+
+    option_env!("TARGET").unwrap_or(FALLBACK_TARGET)
+}
+
+fn get_runtime_dir_name() -> String {
+    format!("whisper-stt-{}", get_target_triple())
+}
+
+fn get_sidecar_executable_name() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        "whisper-stt.exe"
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        "whisper-stt"
+    }
+}
+
 /// Resolve model path
-fn resolve_model_path(app: &AppHandle, model_name: &str) -> Result<PathBuf, String> {
+fn resolve_model_path(
+    app: &AppHandle,
+    runtime_dir: Option<&Path>,
+    model_name: &str,
+) -> Result<PathBuf, String> {
     let resource_dir = app
         .path()
         .resource_dir()
         .map_err(|e| format!("Failed to get resource dir: {}", e))?;
+    let mut searched = Vec::new();
 
-    // Try resource dir (production)
-    let prod_path = resource_dir.join("models").join(model_name);
-    if prod_path.exists() {
-        return Ok(prod_path);
-    }
-
-    // Try sidecar models dir (dev)
-    if let Some(root) = resource_dir.parent().and_then(|p| p.parent()) {
-        let dev_path = root.join("sidecars/whisper-stt/models").join(model_name);
-        if dev_path.exists() {
-            return Ok(dev_path);
+    if let Some(runtime) = runtime_dir {
+        let prod = runtime.join("_internal").join("models").join(model_name);
+        searched.push(prod.display().to_string());
+        if prod.exists() {
+            return Ok(prod);
         }
     }
 
-    Err(format!("Model not found: {}", model_name))
+    let runtime_dir_name = get_runtime_dir_name();
+    let prod_candidates = [
+        resource_dir
+            .join("binaries")
+            .join(&runtime_dir_name)
+            .join("_internal")
+            .join("models")
+            .join(model_name),
+        resource_dir
+            .join(&runtime_dir_name)
+            .join("_internal")
+            .join("models")
+            .join(model_name),
+        resource_dir
+            .join("resources")
+            .join("binaries")
+            .join(&runtime_dir_name)
+            .join("_internal")
+            .join("models")
+            .join(model_name),
+    ];
+
+    for candidate in prod_candidates {
+        searched.push(candidate.display().to_string());
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(root) = exe_path
+            .parent()
+            .and_then(|p| p.parent())
+            .and_then(|p| p.parent())
+        {
+            let dev_path = root
+                .join("sidecars")
+                .join("whisper-stt")
+                .join("models")
+                .join(model_name);
+            searched.push(dev_path.display().to_string());
+            if dev_path.exists() {
+                return Ok(dev_path);
+            }
+        }
+    }
+
+    Err(format!(
+        "Whisper model not found: {}. Searched:\n  - {}",
+        model_name,
+        searched.join("\n  - ")
+    ))
 }
 
 #[tauri::command]
@@ -120,9 +247,9 @@ pub async fn start_stt(
     }
 
     // Resolve paths
-    let binary_path = resolve_sidecar_path(&app)?;
-    let model_name = model.unwrap_or_else(|| "ggml-base.en.bin".to_string());
-    let model_path = resolve_model_path(&app, &model_name)?;
+    let (binary_path, runtime_dir) = resolve_sidecar_path(&app)?;
+    let model_name = model.unwrap_or_else(|| "ggml-tiny.en.bin".to_string());
+    let model_path = resolve_model_path(&app, runtime_dir.as_deref(), &model_name)?;
     let lang = language.unwrap_or_else(|| "en".to_string());
 
     log::info!(

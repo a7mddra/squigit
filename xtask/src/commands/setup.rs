@@ -560,8 +560,7 @@ fn guidance(component: Component) -> Vec<String> {
             );
             #[cfg(target_os = "windows")]
             tips.push(
-                "Required Qt modules for capture sidecar: qt5compat and qtshadertools."
-                    .to_string(),
+                "Required Qt modules for capture sidecar: qt5compat and qtshadertools.".to_string(),
             );
             #[cfg(target_os = "windows")]
             tips.push(
@@ -713,7 +712,10 @@ fn find_windows_qt_candidates() -> Vec<PathBuf> {
     }
 
     for qmake in ["qmake", "qmake6"] {
-        if let Ok(output) = Command::new(qmake).args(["-query", "QT_INSTALL_PREFIX"]).output() {
+        if let Ok(output) = Command::new(qmake)
+            .args(["-query", "QT_INSTALL_PREFIX"])
+            .output()
+        {
             if output.status.success() {
                 let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !path.is_empty() {

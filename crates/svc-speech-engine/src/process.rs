@@ -30,6 +30,13 @@ impl SidecarProcess {
         cmd.stdin(Stdio::piped());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::inherit()); // We want to see stderr logs in our console
+        if let Some(parent) = binary_path.parent() {
+            cmd.current_dir(parent);
+            let internal_dir = parent.join("_internal");
+            if internal_dir.is_dir() {
+                apply_runtime_lib_env(&mut cmd, &internal_dir);
+            }
+        }
 
         // Windows no-window flag
         #[cfg(windows)]
@@ -48,6 +55,34 @@ impl SidecarProcess {
 
     pub async fn kill(&mut self) -> std::io::Result<()> {
         self.child.kill().await
+    }
+}
+
+fn apply_runtime_lib_env(cmd: &mut Command, internal_dir: &std::path::Path) {
+    let key = runtime_lib_env_key();
+    let separator = if cfg!(windows) { ';' } else { ':' };
+    let mut joined = internal_dir.to_string_lossy().to_string();
+    if let Ok(existing) = std::env::var(key) {
+        if !existing.trim().is_empty() {
+            joined.push(separator);
+            joined.push_str(&existing);
+        }
+    }
+    cmd.env(key, joined);
+}
+
+fn runtime_lib_env_key() -> &'static str {
+    #[cfg(windows)]
+    {
+        "PATH"
+    }
+    #[cfg(target_os = "macos")]
+    {
+        "DYLD_LIBRARY_PATH"
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        "LD_LIBRARY_PATH"
     }
 }
 

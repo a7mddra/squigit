@@ -118,7 +118,7 @@ int main() {
       std::string command = j["command"];
 
       if (command == "start") {
-        std::string model = j.value("model", "models/ggml-base.en.bin");
+        std::string model = j.value("model", "models/ggml-tiny.en.bin");
         std::string lang = j.value("language", "en");
         int device = j.value("device_index", -1);
         start_engine(model, lang, device);

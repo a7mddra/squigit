@@ -259,11 +259,7 @@ fn sidecar_checks() -> Result<Vec<CheckResult>> {
 }
 
 fn expected_sidecar_artifacts(host: &str) -> Vec<(String, PathBuf)> {
-    let whisper_name = if cfg!(windows) {
-        format!("whisper-stt-{host}.exe")
-    } else {
-        format!("whisper-stt-{host}")
-    };
+    let whisper_runtime_dir = format!("whisper-stt-{host}");
 
     vec![
         (
@@ -274,7 +270,10 @@ fn expected_sidecar_artifacts(host: &str) -> Vec<(String, PathBuf)> {
             "Capture runtime".to_string(),
             PathBuf::from(format!("qt-capture-{host}")),
         ),
-        ("Whisper binary".to_string(), PathBuf::from(whisper_name)),
+        (
+            "Whisper runtime".to_string(),
+            PathBuf::from(whisper_runtime_dir),
+        ),
     ]
 }
 
