@@ -41,8 +41,8 @@
   text-align: left;
   margin-bottom: 2rem;
   display: flex;
-  align-items: baseline;
-  gap: 0.25rem;
+  align-items: center;
+  gap: 0.5rem;
   padding: 40px 20px 0 20px;
   flex-shrink: 0;
 }

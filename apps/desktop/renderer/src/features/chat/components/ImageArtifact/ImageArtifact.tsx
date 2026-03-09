@@ -58,6 +58,7 @@ export interface ImageArtifactProps {
 
   ocrData: OcrFrame;
   onUpdateOCRData: (
+    chatId: string | null,
     modelId: string,
     data: { text: string; box: number[][] }[],
   ) => void;
@@ -161,19 +162,61 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
   });
 
   const hasScannedRef = useRef(false);
-  const prevImageBase64Ref = useRef<string | null>(null);
+  const latestOcrModelRef = useRef(currentOcrModel);
+  const latestContextRef = useRef<{
+    chatId: string | null;
+    imageId: string | null;
+    imagePath: string | null;
+  }>({
+    chatId,
+    imageId: startupImage?.imageId ?? null,
+    imagePath: startupImage?.path ?? null,
+  });
+  const prevScanContextRef = useRef<string | null>(null);
 
-  const currentPath = startupImage?.path ?? null;
   useEffect(() => {
-    if (currentPath !== prevImageBase64Ref.current) {
+    latestContextRef.current = {
+      chatId,
+      imageId: startupImage?.imageId ?? null,
+      imagePath: startupImage?.path ?? null,
+    };
+  }, [chatId, startupImage?.imageId, startupImage?.path]);
+  useEffect(() => {
+    latestOcrModelRef.current = currentOcrModel;
+  }, [currentOcrModel]);
+
+  const isScanContextCurrent = useCallback(
+    (
+      context: { chatId: string | null; imageId: string; imagePath: string },
+      requestId?: number,
+    ) => {
+      if (requestId !== undefined && requestId !== scanRequestRef.current) {
+        return false;
+      }
+      if (cancelledRef.current) {
+        return false;
+      }
+      const latest = latestContextRef.current;
+      return (
+        latest.chatId === context.chatId &&
+        latest.imageId === context.imageId &&
+        latest.imagePath === context.imagePath
+      );
+    },
+    [],
+  );
+
+  const scanContextKey = `${chatId ?? "__none__"}::${startupImage?.imageId ?? "__none__"}::${startupImage?.path ?? "__none__"}`;
+  useEffect(() => {
+    if (scanContextKey !== prevScanContextRef.current) {
       scanRequestRef.current += 1;
       cancelOcrJob();
       hasScannedRef.current = false;
-      prevImageBase64Ref.current = currentPath;
+      prevScanContextRef.current = scanContextKey;
       setLoading(false);
       cancelledRef.current = false;
     }
-  }, [currentPath, setLoading]);
+  }, [scanContextKey, setLoading]);
 
   const scan = useCallback(
     async (
@@ -182,10 +225,13 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
       options?: { manual?: boolean; force?: boolean },
     ) => {
       if (!startupImage?.path) return;
-
-      const currentChatId = chatId;
       const modelToUse = modelId || currentOcrModel;
       if (!modelToUse) return;
+      const scanContext = {
+        chatId,
+        imageId: startupImage.imageId,
+        imagePath: startupImage.path,
+      };
 
       if (!options?.manual && !ocrEnabled) {
         return;
@@ -198,7 +244,7 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
         return;
       }
 
-      const lockKey = `${startupImage.imageId}-${modelToUse}`;
+      const lockKey = `${scanContext.chatId ?? "__no_chat__"}-${scanContext.imageId}-${modelToUse}`;
       if (globalScanLock.has(lockKey)) {
         console.log(`[ImageArtifact] Scan already in progress for: ${lockKey}`);
         return;
@@ -226,61 +272,51 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
           modelName: modelToUse,
         });
 
-        if (requestId !== undefined && requestId !== scanRequestRef.current) {
+        if (!isScanContextCurrent(scanContext, requestId)) {
           console.log(
-            `[ImageArtifact] Ignoring result from old request ID: ${requestId} (Current: ${scanRequestRef.current})`,
+            `[ImageArtifact] Ignoring stale OCR result for ${modelToUse}`,
           );
           return;
         }
 
-        if (cancelledRef.current) {
-          console.log(
-            "[ImageArtifact] Scan result ignored due to manual cancellation",
-          );
-          return;
-        }
+        const converted = results.map((r) => ({
+          text: r.text,
+          box: r.box_coords,
+        }));
+        console.log(`[ImageArtifact] Updating OCR data for ${modelToUse}`);
+        onUpdateOCRData(scanContext.chatId, modelToUse, converted);
 
-        if (currentChatId === chatId) {
-          const converted = results.map((r) => ({
-            text: r.text,
-            box: r.box_coords,
-          }));
-          console.log(`[ImageArtifact] Updating OCR data for ${modelToUse}`);
-          onUpdateOCRData(modelToUse, converted);
-
-          if (
-            autoExpandOCR &&
-            onToggleExpand &&
-            !hasScannedRef.current &&
-            !isExpanded
-          ) {
-            onToggleExpand();
-          }
-          hasScannedRef.current = true;
+        if (
+          autoExpandOCR &&
+          onToggleExpand &&
+          !hasScannedRef.current &&
+          !isExpanded
+        ) {
+          onToggleExpand();
         }
+        hasScannedRef.current = true;
       } catch (e: any) {
-        if (requestId !== undefined && requestId !== scanRequestRef.current) {
+        const errorText = e instanceof Error ? e.message : String(e);
+        if (!isScanContextCurrent(scanContext, requestId)) {
           return;
         }
 
         if (
-          cancelledRef.current ||
-          e.toString().includes("cancelled") ||
-          e.toString().includes("Download Cancelled")
+          errorText.toLowerCase().includes("cancelled") ||
+          errorText.includes("Download Cancelled")
         ) {
           return;
         }
 
-        if (currentChatId === chatId) {
-          setErrorDialog(getErrorDialog(e.toString()));
+        setErrorDialog(getErrorDialog(errorText));
+        if (latestOcrModelRef.current === modelToUse) {
+          onOcrModelChange("");
         }
       } finally {
-        globalScanLock.delete(`${startupImage.imageId}-${modelToUse}`);
+        globalScanLock.delete(lockKey);
 
-        if (currentChatId === chatId && !cancelledRef.current) {
-          if (requestId === undefined || requestId === scanRequestRef.current) {
-            setLoading(false);
-          }
+        if (isScanContextCurrent(scanContext, requestId)) {
+          setLoading(false);
         }
       }
     },
@@ -293,7 +329,9 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
       isExpanded,
       onUpdateOCRData,
       currentOcrModel,
+      onOcrModelChange,
       ocrData,
+      isScanContextCurrent,
     ],
   );
 

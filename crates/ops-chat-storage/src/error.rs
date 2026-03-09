@@ -35,6 +35,10 @@ pub enum StorageError {
     /// Chat not found.
     #[error("Chat not found: {0}")]
     ChatNotFound(String),
+
+    /// Unsupported OCR model/frame key.
+    #[error("Unsupported OCR model id: {0}")]
+    InvalidOcrModel(String),
 }
 
 /// Result type alias for storage operations.

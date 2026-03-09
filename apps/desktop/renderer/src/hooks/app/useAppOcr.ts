@@ -4,13 +4,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { OcrFrame, saveImgbbUrl, saveOcrData } from "@/lib";
 
 export const useAppOcr = (activeSessionId: string | null) => {
   const [sessionLensUrl, setSessionLensUrl] = useState<string | null>(null);
   const [ocrData, setOcrData] = useState<OcrFrame>({});
   const [isOcrScanning, setIsOcrScanning] = useState(false);
+  const activeSessionIdRef = useRef(activeSessionId);
+
+  useEffect(() => {
+    activeSessionIdRef.current = activeSessionId;
+  }, [activeSessionId]);
 
   const handleUpdateLensUrl = useCallback(
     (url: string | null) => {
@@ -25,16 +30,29 @@ export const useAppOcr = (activeSessionId: string | null) => {
   );
 
   const handleUpdateOCRData = useCallback(
-    (modelId: string, data: { text: string; box: number[][] }[]) => {
+    (
+      targetChatId: string | null,
+      modelId: string,
+      data: { text: string; box: number[][] }[],
+    ) => {
       const regions = data.map((d) => ({
         text: d.text,
         bbox: d.box,
       }));
+      const chatIdForWrite = targetChatId || activeSessionIdRef.current;
 
-      if (activeSessionId && modelId) {
-        saveOcrData(activeSessionId, modelId, regions).catch((e) =>
+      if (chatIdForWrite && modelId) {
+        saveOcrData(chatIdForWrite, modelId, regions).catch((e) =>
           console.error("Failed to save OCR", e),
         );
+      }
+
+      if (
+        !chatIdForWrite ||
+        chatIdForWrite !== activeSessionIdRef.current ||
+        !modelId
+      ) {
+        return;
       }
 
       console.log(`[useApp] Updating OCR data for model: ${modelId}`);
@@ -49,7 +67,7 @@ export const useAppOcr = (activeSessionId: string | null) => {
         return newState;
       });
     },
-    [activeSessionId],
+    [],
   );
 
   return {

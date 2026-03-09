@@ -11,6 +11,7 @@ use crate::error::{Result, StorageError};
 use crate::types::{ChatData, ChatMessage, ChatMetadata, OcrFrame, OcrRegion, StoredImage};
 
 const DEFAULT_OCR_MODEL_ID: &str = "pp-ocr-v5-en";
+const AUTO_OCR_DISABLED_MODEL_ID: &str = "__meta_auto_ocr_disabled__";
 
 fn is_supported_ocr_model_id(model_id: &str) -> bool {
     matches!(
@@ -35,12 +36,27 @@ fn normalize_ocr_model_id(model_id: &str) -> &str {
     DEFAULT_OCR_MODEL_ID
 }
 
+fn is_reserved_ocr_frame_id(model_id: &str) -> bool {
+    model_id == AUTO_OCR_DISABLED_MODEL_ID
+}
+
+fn canonicalize_ocr_frame_id(model_id: &str) -> Option<&str> {
+    let trimmed = model_id.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if is_supported_ocr_model_id(trimmed) || is_reserved_ocr_frame_id(trimmed) {
+        return Some(trimmed);
+    }
+    None
+}
+
 fn retain_supported_ocr_frame_ids(frame: &mut OcrFrame) -> bool {
     let keys: Vec<String> = frame.keys().cloned().collect();
     let mut changed = false;
 
     for key in keys {
-        if !is_supported_ocr_model_id(&key) {
+        if !is_supported_ocr_model_id(&key) && !is_reserved_ocr_frame_id(&key) {
             frame.remove(&key);
             changed = true;
         }
@@ -405,7 +421,8 @@ impl ChatStorage {
     ) -> Result<()> {
         let chat_dir = self.chat_dir(chat_id);
         fs::create_dir_all(&chat_dir)?;
-        let canonical_model_id = normalize_ocr_model_id(model_id);
+        let canonical_model_id = canonicalize_ocr_frame_id(model_id)
+            .ok_or_else(|| StorageError::InvalidOcrModel(model_id.to_string()))?;
 
         let frame_path = chat_dir.join("ocr_frame.json");
         let mut frame: OcrFrame = if frame_path.exists() {
@@ -428,7 +445,8 @@ impl ChatStorage {
     /// Returns None if the model hasn't scanned yet, or empty vec if no frame exists.
     pub fn get_ocr_data(&self, chat_id: &str, model_id: &str) -> Result<Option<Vec<OcrRegion>>> {
         let frame_path = self.chat_dir(chat_id).join("ocr_frame.json");
-        let canonical_model_id = normalize_ocr_model_id(model_id);
+        let canonical_model_id = canonicalize_ocr_frame_id(model_id)
+            .ok_or_else(|| StorageError::InvalidOcrModel(model_id.to_string()))?;
 
         if !frame_path.exists() {
             return Ok(None);
@@ -476,7 +494,8 @@ impl ChatStorage {
         retain_supported_ocr_frame_ids(&mut frame);
 
         for model_id in model_ids {
-            let canonical_model_id = normalize_ocr_model_id(model_id);
+            let canonical_model_id = canonicalize_ocr_frame_id(model_id)
+                .ok_or_else(|| StorageError::InvalidOcrModel(model_id.clone()))?;
             frame.entry(canonical_model_id.to_string()).or_insert(None);
         }
 
@@ -652,5 +671,62 @@ impl ChatStorage {
         }
 
         messages
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_test_storage() -> (ChatStorage, PathBuf) {
+        let base_dir =
+            std::env::temp_dir().join(format!("squigit-ocr-storage-test-{}", uuid::Uuid::new_v4()));
+        let storage = ChatStorage::with_base_dir(base_dir.clone()).expect("storage init");
+        (storage, base_dir)
+    }
+
+    #[test]
+    fn auto_ocr_disabled_key_is_preserved_and_does_not_overwrite_english() {
+        let (storage, base_dir) = make_test_storage();
+        let metadata = ChatMetadata::new("Test".to_string(), "0".repeat(64), None);
+        let chat = ChatData::new(metadata.clone());
+        storage.save_chat(&chat).expect("save chat");
+
+        let en_regions = vec![OcrRegion {
+            text: "hello".to_string(),
+            bbox: vec![vec![0, 0], vec![10, 0], vec![10, 10], vec![0, 10]],
+        }];
+
+        storage
+            .save_ocr_data(&metadata.id, DEFAULT_OCR_MODEL_ID, &en_regions)
+            .expect("save english ocr");
+        storage
+            .save_ocr_data(&metadata.id, AUTO_OCR_DISABLED_MODEL_ID, &[])
+            .expect("save auto-disable marker");
+
+        let frame = storage.get_ocr_frame(&metadata.id).expect("load frame");
+        let en = frame
+            .get(DEFAULT_OCR_MODEL_ID)
+            .and_then(|v| v.as_ref())
+            .expect("english ocr present");
+        assert_eq!(en.len(), 1);
+
+        let auto_disabled = frame
+            .get(AUTO_OCR_DISABLED_MODEL_ID)
+            .and_then(|v| v.as_ref())
+            .expect("auto-disable marker present");
+        assert!(auto_disabled.is_empty());
+
+        let _ = std::fs::remove_dir_all(base_dir);
+    }
+
+    #[test]
+    fn invalid_ocr_model_id_returns_error() {
+        let (storage, base_dir) = make_test_storage();
+        let result = storage.save_ocr_data("chat-1", "bogus-model", &[]);
+
+        assert!(matches!(result, Err(StorageError::InvalidOcrModel(_))));
+
+        let _ = std::fs::remove_dir_all(base_dir);
     }
 }

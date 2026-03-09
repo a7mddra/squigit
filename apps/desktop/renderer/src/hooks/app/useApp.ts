@@ -25,6 +25,7 @@ import {
   commands,
   getAppBusyDialog,
   github,
+  SUPPORTED_OCR_MODEL_IDS,
   resolveOcrModelId,
 } from "@/lib";
 import {
@@ -55,7 +56,6 @@ const SYSTEM_GALLERY_ID = "__system_gallery";
 const getChatOcrModel = (
   frame: OcrFrame,
   metadataOcrLanguage?: string,
-  fallbackModel: string = "",
 ): string => {
   const hasModelData = (modelId?: string) =>
     !!modelId &&
@@ -67,36 +67,30 @@ const getChatOcrModel = (
     return resolvedMetadataModel;
   }
 
-  const scannedModels = Object.entries(frame)
+  const scannedModelSet = new Set(
+    Object.entries(frame)
+      .filter(
+        ([modelId, regions]) =>
+          modelId !== AUTO_OCR_DISABLED_MODEL_ID && Array.isArray(regions),
+      )
+      .map(([modelId]) => resolveOcrModelId(modelId, ""))
+      .filter((modelId) => !!modelId),
+  );
+
+  for (const modelId of SUPPORTED_OCR_MODEL_IDS) {
+    if (scannedModelSet.has(modelId)) {
+      return modelId;
+    }
+  }
+
+  const fallbackScannedModel = Object.keys(frame)
     .filter(
-      ([modelId, regions]) =>
-        modelId !== AUTO_OCR_DISABLED_MODEL_ID && Array.isArray(regions),
+      (modelId) =>
+        modelId !== AUTO_OCR_DISABLED_MODEL_ID && hasModelData(modelId),
     )
-    .map(([modelId]) => resolveOcrModelId(modelId, ""))
-    .filter((modelId) => !!modelId);
+    .sort()[0];
 
-  if (scannedModels.length > 0) {
-    return scannedModels[scannedModels.length - 1];
-  }
-
-  const firstScannedModel = Object.entries(frame).find(
-    ([modelId, regions]) =>
-      modelId !== AUTO_OCR_DISABLED_MODEL_ID && Array.isArray(regions),
-  );
-  if (firstScannedModel?.[0]) {
-    return resolveOcrModelId(firstScannedModel[0], fallbackModel);
-  }
-
-  const firstKnownModel = Object.keys(frame).find(
-    (modelId) => modelId !== AUTO_OCR_DISABLED_MODEL_ID,
-  );
-  if (firstKnownModel) {
-    return resolveOcrModelId(firstKnownModel, fallbackModel);
-  }
-
-  return fallbackModel === ""
-    ? ""
-    : resolveOcrModelId(undefined, fallbackModel);
+  return fallbackScannedModel ? resolveOcrModelId(fallbackScannedModel, "") : "";
 };
 
 const withNavigationOcrGuard = (frame: OcrFrame): OcrFrame => ({
@@ -321,6 +315,7 @@ export const useApp = () => {
     chat.isGenerating ||
     chat.isAiTyping ||
     ocr.isOcrScanning;
+  const [isNavigating, setIsNavigating] = useState(false);
   const busyTouchStateRef = useRef<{ chatId: string | null; isBusy: boolean }>({
     chatId: null,
     isBusy: false,
@@ -344,6 +339,8 @@ export const useApp = () => {
   }, [chatHistory.activeSessionId, chatHistory.touchChat, isActiveChatBusy]);
 
   useEffect(() => {
+    if (isNavigating) return;
+
     const activeId = chatHistory.activeSessionId;
     if (activeId && chatTitle && chatTitle !== "New thread") {
       const currentChat = chatHistory.chats.find((c: any) => c.id === activeId);
@@ -356,9 +353,11 @@ export const useApp = () => {
         });
       }
     }
-  }, [chatTitle, chatHistory.activeSessionId]);
+  }, [chatTitle, chatHistory.activeSessionId, isNavigating]);
 
   useEffect(() => {
+    if (isNavigating) return;
+
     const activeId = chatHistory.activeSessionId;
     if (!activeId || isOnboardingId(activeId)) return;
 
@@ -382,6 +381,7 @@ export const useApp = () => {
     system.sessionOcrLanguage,
     chatHistory.activeSessionId,
     chatHistory.chats,
+    isNavigating,
   ]);
 
   const handleUpdateLensUrl = useCallback(
@@ -392,13 +392,16 @@ export const useApp = () => {
   );
 
   const handleUpdateOCRData = useCallback(
-    (modelId: string, data: { text: string; box: number[][] }[]) => {
-      ocr.handleUpdateOCRData(modelId, data);
+    (
+      chatId: string | null,
+      modelId: string,
+      data: { text: string; box: number[][] }[],
+    ) => {
+      ocr.handleUpdateOCRData(chatId, modelId, data);
     },
     [ocr],
   );
 
-  const [isNavigating, setIsNavigating] = useState(false);
   const [busyDialog, setBusyDialog] = useState<DialogContent | null>(null);
   const pendingBusyActionRef = useRef<GuardedAction | null>(null);
   const runWithBusyGuardRef = useRef<(action: GuardedAction) => void>(() => {});
@@ -441,7 +444,7 @@ export const useApp = () => {
   const killActiveJobs = useCallback(() => {
     cancelOcrJob();
     ocr.setIsOcrScanning(false);
-    const safeOcrModel = getChatOcrModel(ocr.ocrData, undefined, "");
+    const safeOcrModel = getChatOcrModel(ocr.ocrData, undefined);
     system.setSessionOcrLanguage(safeOcrModel);
 
     if (chat.isAnalyzing || chat.isGenerating || chat.isAiTyping) {
@@ -732,7 +735,6 @@ export const useApp = () => {
         const chatOcrModel = getChatOcrModel(
           loadedOcrData,
           chatData.metadata.ocr_lang,
-          resolveOcrModelId(chatData.metadata.ocr_lang, ""),
         );
         system.setSessionOcrLanguage(system.ocrEnabled ? chatOcrModel : "");
 
