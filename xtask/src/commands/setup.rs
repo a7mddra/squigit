@@ -3,7 +3,6 @@
 
 use crate::console::Ansi;
 use anyhow::Result;
-use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 use which::which;
@@ -494,25 +493,6 @@ fn attempt_admin_install_windows(component: Component, ansi: &Ansi) {
             ansi,
         );
     }
-}
-
-fn run_maybe_sudo(cmd: &str, args: &[&str], ansi: &Ansi) {
-    if should_use_sudo() {
-        let mut sudo_args = vec![cmd];
-        sudo_args.extend(args.iter().copied());
-        run_command("sudo", &sudo_args, ansi);
-    } else {
-        run_command(cmd, args, ansi);
-    }
-}
-
-fn should_use_sudo() -> bool {
-    if cfg!(windows) {
-        return false;
-    }
-
-    let user = env::var("USER").unwrap_or_default();
-    user != "root" && which("sudo").is_ok()
 }
 
 fn run_command(cmd: &str, args: &[&str], ansi: &Ansi) {
