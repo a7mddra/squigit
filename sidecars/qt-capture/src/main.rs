@@ -1,3 +1,5 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 

@@ -150,7 +150,7 @@ pub fn deploy(native_dir: &Path) -> Result<()> {
     let qt_path = find_qt_path()?;
 
     println!("  Running windeployqt...");
-    create_distribution(&build_dir, &dist_dir, &qt_path)?;
+    create_distribution(native_dir, &build_dir, &dist_dir, &qt_path)?;
 
     Ok(())
 }
@@ -214,7 +214,7 @@ fn find_qt_path() -> Result<String> {
     }
 
     anyhow::bail!(
-        "Qt6 with required modules not found. Checked: {}. Install Qt Declarative (Qt Quick/QML + Core5Compat) or set Qt6_DIR to a full Qt kit root.",
+        "Qt6 with required modules not found. Checked: {}. Install Qt Declarative (Qt Quick/QML) and Qt5Compat.GraphicalEffects for this kit, or set Qt6_DIR to a full Qt kit root.",
         attempted.join(", ")
     )
 }
@@ -255,12 +255,18 @@ fn qt_has_required_modules(prefix: &Path) -> bool {
         prefix.join(r"lib\cmake\Qt6\Qt6Config.cmake"),
         prefix.join(r"lib\cmake\Qt6Quick\Qt6QuickConfig.cmake"),
         prefix.join(r"lib\cmake\Qt6Qml\Qt6QmlConfig.cmake"),
+        prefix.join(r"qml\Qt5Compat\GraphicalEffects\qmldir"),
     ];
 
     required.iter().all(|p| p.exists())
 }
 
-fn create_distribution(build_dir: &Path, dist_dir: &Path, qt_path: &str) -> Result<()> {
+fn create_distribution(
+    native_dir: &Path,
+    build_dir: &Path,
+    dist_dir: &Path,
+    qt_path: &str,
+) -> Result<()> {
     if dist_dir.exists() {
         fs::remove_dir_all(dist_dir)?;
     }
@@ -284,11 +290,15 @@ fn create_distribution(build_dir: &Path, dist_dir: &Path, qt_path: &str) -> Resu
     let windeployqt = Path::new(qt_path).join("bin").join("windeployqt.exe");
 
     if windeployqt.exists() {
+        let qml_dir = native_dir.join("qml");
+        let qml_dir_arg = qml_dir.to_string_lossy().to_string();
         let status = Command::new(&windeployqt)
             .current_dir(dist_dir)
             .args([
                 exe_name,
                 "--release",
+                "--qmldir",
+                &qml_dir_arg,
                 "--compiler-runtime",
                 "--no-translations",
                 "--no-opengl-sw",
@@ -304,8 +314,43 @@ fn create_distribution(build_dir: &Path, dist_dir: &Path, qt_path: &str) -> Resu
         anyhow::bail!("windeployqt not found at {}", windeployqt.display());
     }
 
+    ensure_qt5compat_graphicaleffects(dist_dir, qt_path)?;
     bundle_vc_runtime(dist_dir)?;
 
+    Ok(())
+}
+
+fn ensure_qt5compat_graphicaleffects(dist_dir: &Path, qt_path: &str) -> Result<()> {
+    let qt_qml_root = Path::new(qt_path).join("qml");
+    let src_qt5compat = qt_qml_root.join("Qt5Compat");
+    let src_graphicaleffects_qmldir = src_qt5compat.join("GraphicalEffects").join("qmldir");
+
+    if !src_graphicaleffects_qmldir.exists() {
+        anyhow::bail!(
+            "Missing Qt module 'Qt5Compat.GraphicalEffects' under {}.\n\
+Install Qt5Compat for this Qt kit (Qt Maintenance Tool or aqt module 'qt5compat').",
+            qt_qml_root.display()
+        );
+    }
+
+    let dst_qt5compat = dist_dir.join("qml").join("Qt5Compat");
+    copy_dir_recursive(&src_qt5compat, &dst_qt5compat)?;
+    Ok(())
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else if file_type.is_file() {
+            fs::copy(&src_path, &dst_path)?;
+        }
+    }
     Ok(())
 }
 

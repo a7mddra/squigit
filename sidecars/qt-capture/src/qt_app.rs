@@ -14,12 +14,30 @@ use ops_profile_store::ProfileStore;
 
 use crate::paths::QtPaths;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 pub struct QtApp {
     args: Vec<String>,
     input_only: bool,
 }
 
 impl QtApp {
+    fn is_capture_path_line(line: &str) -> bool {
+        if line.starts_with('/') || line.starts_with("\\\\") {
+            return true;
+        }
+
+        let bytes = line.as_bytes();
+        bytes.len() > 2
+            && bytes[1] == b':'
+            && (bytes[2] == b'/' || bytes[2] == b'\\')
+            && bytes[0].is_ascii_alphabetic()
+    }
+
     pub fn new() -> Self {
         let mut args: Vec<String> = env::args().skip(1).collect();
         let input_only = args.contains(&"--input-only".to_string());
@@ -57,7 +75,10 @@ impl QtApp {
             .env("GIO_LAUNCHED_DESKTOP_APP_ID", "squigit")
             .env("G_APPLICATION_ID", "squigit")
             .stdout(Stdio::piped())
-            .stderr(Stdio::null());
+            .stderr(Stdio::inherit());
+
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(CREATE_NO_WINDOW);
 
         for (key, val) in paths.env_vars {
             cmd.env(key, val);
@@ -70,6 +91,7 @@ impl QtApp {
         if let Some(stdout) = child.stdout.take() {
             let reader = BufReader::new(stdout);
             let mut capture_success = false;
+            let mut saw_terminal_signal = false;
             let mut capture_path: Option<String> = None;
             let mut image_hash: Option<String> = None;
             let mut display_geo: Option<String> = None;
@@ -88,9 +110,11 @@ impl QtApp {
                                 capture_success = true;
                             }
                             "CAPTURE_FAIL" => {
+                                saw_terminal_signal = true;
                                 break;
                             }
                             "CAPTURE_DENIED" => {
+                                saw_terminal_signal = true;
                                 println!("CAPTURE_DENIED");
                                 eprintln!("\n============================================================");
                                 eprintln!("Screen Recording Permission Denied");
@@ -108,7 +132,7 @@ impl QtApp {
                                 break;
                             }
                             _ => {
-                                if trimmed.starts_with('/') && capture_success {
+                                if capture_success && Self::is_capture_path_line(trimmed) {
                                     if self.input_only {
                                         let (path, hash) = self.process_capture_input_only(trimmed);
                                         if let Some(p) = path {
@@ -145,6 +169,12 @@ impl QtApp {
                 }
                 ExitCode::from(0)
             } else {
+                if !saw_terminal_signal {
+                    eprintln!(
+                        "[qt-capture] Native capture process exited without CAPTURE_* protocol output. \
+This usually indicates a native crash during startup/capture."
+                    );
+                }
                 ExitCode::from(1)
             }
         } else {
@@ -173,7 +203,8 @@ impl QtApp {
                     .map(|stored| (storage, stored))
             })
             .map(|(storage, stored)| {
-                let metadata = ChatMetadata::new("New thread".to_string(), stored.hash.clone(), None);
+                let metadata =
+                    ChatMetadata::new("New thread".to_string(), stored.hash.clone(), None);
                 let chat = ChatData::new(metadata.clone());
                 let _ = storage.save_chat(&chat);
                 let _ = std::fs::remove_file(path);
@@ -211,7 +242,9 @@ impl QtApp {
         }
         #[cfg(windows)]
         {
-            let _ = Command::new("taskkill")
+            let mut cmd = Command::new("taskkill");
+            let _ = cmd
+                .creation_flags(CREATE_NO_WINDOW)
                 .args(["/F", "/PID", &pid.to_string()])
                 .output();
         }

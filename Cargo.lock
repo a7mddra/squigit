@@ -5655,6 +5655,7 @@ name = "sys-display-hotplug"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

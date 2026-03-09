@@ -129,19 +129,39 @@ impl DisplayMonitor {
 
     #[cfg(target_os = "windows")]
     fn get_monitor_count() -> i32 {
-        use std::process::Command;
-        let out = Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                "(Get-CimInstance -ClassName Win32_DesktopMonitor | Measure-Object).Count",
-            ])
-            .output();
-        if let Ok(o) = out {
-            String::from_utf8_lossy(&o.stdout)
-                .trim()
-                .parse()
-                .unwrap_or(1)
+        use windows_sys::core::BOOL;
+        use windows_sys::Win32::Foundation::{LPARAM, RECT};
+        use windows_sys::Win32::Graphics::Gdi::{EnumDisplayMonitors, HDC, HMONITOR};
+
+        unsafe extern "system" fn count_monitor_cb(
+            _hmonitor: HMONITOR,
+            _hdc: HDC,
+            _lprc_monitor: *mut RECT,
+            lparam: LPARAM,
+        ) -> BOOL {
+            let count_ptr = lparam as *mut i32;
+            if !count_ptr.is_null() {
+                // SAFETY: The caller passes a valid pointer to `count`.
+                unsafe {
+                    *count_ptr += 1;
+                }
+            }
+            1
+        }
+
+        let mut count: i32 = 0;
+        // SAFETY: Null HDC/clip is valid to enumerate all displays; callback and lparam are valid.
+        let ok = unsafe {
+            EnumDisplayMonitors(
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                Some(count_monitor_cb),
+                (&mut count as *mut i32) as isize,
+            )
+        };
+
+        if ok != 0 && count > 0 {
+            count
         } else {
             1
         }

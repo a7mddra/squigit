@@ -11,6 +11,7 @@
 #include <QQmlContext>
 #include <QQuickWindow>
 #include <QScreen>
+#include <iostream>
 #include <vector>
 
 #include "config.h"
@@ -142,12 +143,16 @@ int main(int argc, char *argv[]) {
 #endif
 
   if (!engine) {
+    std::cerr << "CAPTURE_NATIVE_ERROR: failed to create platform screen grabber"
+              << std::endl;
     return 1;
   }
 
   std::vector<CapturedFrame> frames = engine->captureAll();
 
   if (frames.empty()) {
+    std::cerr << "CAPTURE_NATIVE_ERROR: no frames captured from display backend"
+              << std::endl;
     return 1;
   }
 
@@ -184,6 +189,11 @@ int main(int argc, char *argv[]) {
                             QUrl("qrc:/CaptureQml/qml/CaptureWindow.qml"));
 
     if (component.isError()) {
+      const auto errors = component.errors();
+      for (const QQmlError &err : errors) {
+        std::cerr << "CAPTURE_NATIVE_ERROR: QML component error: "
+                  << err.toString().toStdString() << std::endl;
+      }
       return 1;
     }
 
@@ -194,6 +204,8 @@ int main(int argc, char *argv[]) {
     QQuickWindow *window = qobject_cast<QQuickWindow *>(obj);
 
     if (!window) {
+      std::cerr << "CAPTURE_NATIVE_ERROR: QML root is not a QQuickWindow"
+                << std::endl;
       return 1;
     }
 

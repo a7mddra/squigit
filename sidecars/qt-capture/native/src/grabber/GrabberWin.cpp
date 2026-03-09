@@ -7,9 +7,10 @@
 #include "ScreenGrabber.h"
 #include <QGuiApplication>
 #include <QScreen>
+#include <iostream>
 
-#include <gdiplus.h>
 #include <windows.h>
+#include <gdiplus.h>
 
 #pragma comment(lib, "Gdiplus.lib")
 #pragma comment(lib, "User32.lib")
@@ -27,20 +28,41 @@ struct MonitorData {
 
 class ScreenGrabberWin : public ScreenGrabber {
 public:
-  ScreenGrabberWin(QObject *parent = nullptr) : ScreenGrabber(parent) {
+  ScreenGrabberWin(QObject *parent = nullptr)
+      : ScreenGrabber(parent), m_gdiplusToken(0), m_gdiplusReady(false) {
     GdiplusStartupInput gdiplusStartupInput;
-    GdiplusStartup(&m_gdiplusToken, &gdiplusStartupInput, NULL);
+    Status status =
+        GdiplusStartup(&m_gdiplusToken, &gdiplusStartupInput, nullptr);
+    m_gdiplusReady = (status == Ok);
+    if (!m_gdiplusReady) {
+      std::cerr << "CAPTURE_NATIVE_ERROR: GdiplusStartup failed with status "
+                << static_cast<int>(status) << std::endl;
+    }
   }
 
-  ~ScreenGrabberWin() { GdiplusShutdown(m_gdiplusToken); }
+  ~ScreenGrabberWin() override {
+    if (m_gdiplusReady && m_gdiplusToken != 0) {
+      GdiplusShutdown(m_gdiplusToken);
+    }
+  }
 
   std::vector<CapturedFrame> captureAll() override {
+    if (!m_gdiplusReady) {
+      return {};
+    }
+
     MonitorData data;
 
-    HDC hdc = GetDC(NULL);
-    EnumDisplayMonitors(hdc, NULL, MonitorEnumProc,
+    HDC hdc = GetDC(nullptr);
+    if (!hdc) {
+      std::cerr << "CAPTURE_NATIVE_ERROR: GetDC returned null in captureAll"
+                << std::endl;
+      return {};
+    }
+
+    EnumDisplayMonitors(hdc, nullptr, MonitorEnumProc,
                         reinterpret_cast<LPARAM>(&data));
-    ReleaseDC(NULL, hdc);
+    ReleaseDC(nullptr, hdc);
 
     ScreenGrabber::sortLeftToRight(data.frames);
 
@@ -53,10 +75,17 @@ public:
 
 private:
   ULONG_PTR m_gdiplusToken;
+  bool m_gdiplusReady;
 
   static BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor,
                                        LPRECT lprcMonitor, LPARAM dwData) {
+    (void)hdcMonitor;
+    (void)lprcMonitor;
+
     MonitorData *data = reinterpret_cast<MonitorData *>(dwData);
+    if (!data) {
+      return TRUE;
+    }
 
     MONITORINFOEXW mi;
     mi.cbSize = sizeof(MONITORINFOEXW);
@@ -69,22 +98,61 @@ private:
 
     int w = geometry.width();
     int h = geometry.height();
+    if (w <= 0 || h <= 0) {
+      return TRUE;
+    }
 
-    HDC hScreenDC = GetDC(NULL);
+    HDC hScreenDC = GetDC(nullptr);
+    if (!hScreenDC) {
+      return TRUE;
+    }
+
     HDC hMemoryDC = CreateCompatibleDC(hScreenDC);
+    if (!hMemoryDC) {
+      ReleaseDC(nullptr, hScreenDC);
+      return TRUE;
+    }
+
     HBITMAP hBitmap = CreateCompatibleBitmap(hScreenDC, w, h);
-    HBITMAP hOldBitmap = (HBITMAP)SelectObject(hMemoryDC, hBitmap);
+    if (!hBitmap) {
+      DeleteDC(hMemoryDC);
+      ReleaseDC(nullptr, hScreenDC);
+      return TRUE;
+    }
 
-    BitBlt(hMemoryDC, 0, 0, w, h, hScreenDC, geometry.x(), geometry.y(),
-           SRCCOPY);
+    HGDIOBJ hOldBitmap = SelectObject(hMemoryDC, hBitmap);
+    if (!hOldBitmap || hOldBitmap == HGDI_ERROR) {
+      DeleteObject(hBitmap);
+      DeleteDC(hMemoryDC);
+      ReleaseDC(nullptr, hScreenDC);
+      return TRUE;
+    }
 
-    Bitmap *gdiBitmap = Bitmap::FromHBITMAP(hBitmap, NULL);
+    if (!BitBlt(hMemoryDC, 0, 0, w, h, hScreenDC, geometry.x(), geometry.y(),
+                SRCCOPY)) {
+      SelectObject(hMemoryDC, hOldBitmap);
+      DeleteObject(hBitmap);
+      DeleteDC(hMemoryDC);
+      ReleaseDC(nullptr, hScreenDC);
+      return TRUE;
+    }
 
-    BitmapData bitmapData;
+    Bitmap *gdiBitmap = Bitmap::FromHBITMAP(hBitmap, nullptr);
+    if (!gdiBitmap || gdiBitmap->GetLastStatus() != Ok) {
+      delete gdiBitmap;
+      SelectObject(hMemoryDC, hOldBitmap);
+      DeleteObject(hBitmap);
+      DeleteDC(hMemoryDC);
+      ReleaseDC(nullptr, hScreenDC);
+      return TRUE;
+    }
+
+    BitmapData bitmapData = {};
     Rect rect(0, 0, w, h);
 
-    if (gdiBitmap->LockBits(&rect, ImageLockModeRead, PixelFormat32bppARGB,
-                            &bitmapData) == Ok) {
+    Status lockStatus = gdiBitmap->LockBits(&rect, ImageLockModeRead,
+                                            PixelFormat32bppARGB, &bitmapData);
+    if (lockStatus == Ok) {
 
       QImage qtImage(static_cast<uchar *>(bitmapData.Scan0), w, h,
                      bitmapData.Stride, QImage::Format_ARGB32);
@@ -116,7 +184,7 @@ private:
     SelectObject(hMemoryDC, hOldBitmap);
     DeleteObject(hBitmap);
     DeleteDC(hMemoryDC);
-    ReleaseDC(NULL, hScreenDC);
+    ReleaseDC(nullptr, hScreenDC);
 
     return TRUE;
   }

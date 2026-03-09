@@ -3,6 +3,8 @@
 
 use crate::console::Ansi;
 use anyhow::Result;
+#[cfg(target_os = "windows")]
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use which::which;
@@ -204,7 +206,26 @@ fn check_qt() -> ComponentReport {
         None => "qt tool: missing (qmake6/qmake/macdeployqt/windeployqt)".to_string(),
     });
 
-    if cmake.is_some() && qt_tool.is_some() {
+    let mut ready = cmake.is_some();
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        ready &= qt_tool.is_some();
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let windows_qt = check_windows_qt_modules();
+        details.extend(windows_qt.details);
+        if qt_tool.is_none() && windows_qt.ready {
+            details.push(
+                "qt tool note: not on PATH; using windeployqt from detected Qt kit".to_string(),
+            );
+        }
+        ready &= windows_qt.ready;
+    }
+
+    if ready {
         ComponentReport::ready(details)
     } else {
         ComponentReport::missing(details)
@@ -493,6 +514,15 @@ fn attempt_admin_install_windows(component: Component, ansi: &Ansi) {
             ansi,
         );
     }
+
+    if component == Component::Qt {
+        println!(
+            "  {}",
+            ansi.yellow(
+                "winget Qt package can miss optional modules; install qt5compat + qtshadertools if build/deploy fails."
+            )
+        );
+    }
 }
 
 fn run_command(cmd: &str, args: &[&str], ansi: &Ansi) {
@@ -527,6 +557,15 @@ fn guidance(component: Component) -> Vec<String> {
             #[cfg(target_os = "windows")]
             tips.push(
                 "Windows: install Qt 6 + CMake + VS 2022 Build Tools (Desktop C++)".to_string(),
+            );
+            #[cfg(target_os = "windows")]
+            tips.push(
+                "Required Qt modules for capture sidecar: qt5compat and qtshadertools."
+                    .to_string(),
+            );
+            #[cfg(target_os = "windows")]
+            tips.push(
+                "If using aqt: aqt install-qt windows desktop 6.6.0 win64_msvc2019_64 -O %USERPROFILE% -m qt5compat qtshadertools".to_string(),
             );
             tips.push(
                 "If Qt is installed but not detected, set PATH/Qt6_DIR to your Qt kit root."
@@ -577,4 +616,166 @@ fn current_os_label() -> &'static str {
     } else {
         "unknown"
     }
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone)]
+struct WindowsQtCheck {
+    ready: bool,
+    details: Vec<String>,
+}
+
+#[cfg(target_os = "windows")]
+fn check_windows_qt_modules() -> WindowsQtCheck {
+    let candidates = find_windows_qt_candidates();
+    if candidates.is_empty() {
+        return WindowsQtCheck {
+            ready: false,
+            details: vec![
+                "qt kit: not found (set Qt6_DIR/QTDIR/CMAKE_PREFIX_PATH or install Qt 6 kit)"
+                    .to_string(),
+            ],
+        };
+    }
+
+    let mut first_failure = None;
+    for prefix in candidates {
+        let check = evaluate_windows_qt_prefix(&prefix);
+        if check.ready {
+            return check;
+        }
+        if first_failure.is_none() {
+            first_failure = Some(check);
+        }
+    }
+
+    first_failure.unwrap_or_else(|| WindowsQtCheck {
+        ready: false,
+        details: vec!["qt kit: no usable Qt installation found".to_string()],
+    })
+}
+
+#[cfg(target_os = "windows")]
+fn evaluate_windows_qt_prefix(prefix: &Path) -> WindowsQtCheck {
+    let required = [
+        ("windeployqt", prefix.join(r"bin\windeployqt.exe")),
+        (
+            "Qt6 CMake package",
+            prefix.join(r"lib\cmake\Qt6\Qt6Config.cmake"),
+        ),
+        (
+            "Qt Quick CMake package",
+            prefix.join(r"lib\cmake\Qt6Quick\Qt6QuickConfig.cmake"),
+        ),
+        (
+            "Qt Qml CMake package",
+            prefix.join(r"lib\cmake\Qt6Qml\Qt6QmlConfig.cmake"),
+        ),
+        (
+            "Qt5Compat.GraphicalEffects",
+            prefix.join(r"qml\Qt5Compat\GraphicalEffects\qmldir"),
+        ),
+        (
+            "Qt6ShaderTools runtime",
+            prefix.join(r"bin\Qt6ShaderTools.dll"),
+        ),
+    ];
+
+    let mut ready = true;
+    let mut details = vec![format!("qt kit: {}", prefix.display())];
+
+    for (label, path) in required {
+        if path.exists() {
+            details.push(format!("{label}: ok"));
+        } else {
+            ready = false;
+            details.push(format!("{label}: missing ({})", path.display()));
+        }
+    }
+
+    WindowsQtCheck { ready, details }
+}
+
+#[cfg(target_os = "windows")]
+fn find_windows_qt_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+
+    if let Ok(qt6_dir) = std::env::var("Qt6_DIR") {
+        candidates.push(normalize_windows_qt_prefix(PathBuf::from(qt6_dir)));
+    }
+    if let Ok(qtdir) = std::env::var("QTDIR") {
+        candidates.push(PathBuf::from(qtdir));
+    }
+    if let Ok(prefix_path) = std::env::var("CMAKE_PREFIX_PATH") {
+        for path in std::env::split_paths(&prefix_path) {
+            candidates.push(normalize_windows_qt_prefix(path));
+        }
+    }
+
+    for qmake in ["qmake", "qmake6"] {
+        if let Ok(output) = Command::new(qmake).args(["-query", "QT_INSTALL_PREFIX"]).output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() {
+                    candidates.push(PathBuf::from(path));
+                    break;
+                }
+            }
+        }
+    }
+
+    for candidate in [
+        r"C:\Qt\6.8.0\msvc2022_64",
+        r"C:\Qt\6.8.0\msvc2019_64",
+        r"C:\Qt\6.7.0\msvc2022_64",
+        r"C:\Qt\6.7.0\msvc2019_64",
+        r"C:\Qt\6.6.0\msvc2022_64",
+        r"C:\Qt\6.6.0\msvc2019_64",
+    ] {
+        candidates.push(PathBuf::from(candidate));
+    }
+
+    if let Some(home) = dirs::home_dir() {
+        for version in ["6.8.0", "6.7.0", "6.6.0"] {
+            candidates.push(home.join(version).join("msvc2022_64"));
+            candidates.push(home.join(version).join("msvc2019_64"));
+            candidates.push(home.join("Qt").join(version).join("msvc2022_64"));
+            candidates.push(home.join("Qt").join(version).join("msvc2019_64"));
+        }
+    }
+
+    dedupe_existing_windows_paths(candidates)
+}
+
+#[cfg(target_os = "windows")]
+fn normalize_windows_qt_prefix(path: PathBuf) -> PathBuf {
+    let qt6_config = path.join("Qt6Config.cmake");
+    let is_qt6_cmake_dir = path
+        .file_name()
+        .map(|name| name.to_string_lossy().eq_ignore_ascii_case("Qt6"))
+        .unwrap_or(false)
+        && qt6_config.exists();
+
+    if is_qt6_cmake_dir {
+        if let Some(prefix) = path.parent().and_then(Path::parent).and_then(Path::parent) {
+            return prefix.to_path_buf();
+        }
+    }
+
+    path
+}
+
+#[cfg(target_os = "windows")]
+fn dedupe_existing_windows_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for path in paths {
+        if !path.exists() {
+            continue;
+        }
+        if out.iter().any(|existing| existing == &path) {
+            continue;
+        }
+        out.push(path);
+    }
+    out
 }
