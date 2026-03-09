@@ -10,9 +10,10 @@ import {
   startNewThreadStream,
   sendMessage as apiSendMessage,
   retryFromMessage as apiRetryFromMessage,
-  editUserMessage as apiEditUserMessage,
   cancelCurrentRequest,
   replaceLastAssistantHistory,
+  restoreSession as apiRestoreSession,
+  getImageDescription,
   setImageDescription,
   ModelType,
 } from "@/lib";
@@ -496,85 +497,45 @@ export const useGeminiEngine = (config: {
     }
   };
 
-  const handleEditMessage = async (
-    messageId: string,
-    newText: string,
-    modelId?: string,
-  ) => {
+  const handleUndoMessage = (messageId: string) => {
     const msgIndex = messages.findIndex((m: Message) => m.id === messageId);
     if (msgIndex === -1) return;
 
     const truncatedMessages = messages.slice(0, msgIndex);
-    const retryModelId = modelId || config.currentModel;
 
-    preRetryMessagesRef.current = [...messages];
-    const editedUserMsg: Message = {
-      ...messages[msgIndex],
-      text: newText,
-    };
-    setMessages([...truncatedMessages, editedUserMsg]);
-    setIsLoading(true);
-    isRequestCancelledRef.current = false;
+    cancelCurrentRequest();
+    cleanupAbortController();
+    isRequestCancelledRef.current = true;
 
-    const newResponseId = Date.now().toString();
+    setMessages(truncatedMessages);
+    config.onOverwriteMessages?.(truncatedMessages);
 
-    let fallbackImagePath: string | undefined;
-    if (config.startupImage) {
-      fallbackImagePath = config.startupImage.path;
-    }
+    setRetryingMessageId(null);
+    setLastSentMessage(null);
+    setIsLoading(false);
+    setIsStreaming(false);
+    setIsAiTyping(false);
+    setStreamingText("");
+    setFirstResponseId(null);
 
-    try {
-      const responseText = await apiEditUserMessage(
-        msgIndex,
-        newText,
-        messages,
-        retryModelId,
-        undefined,
-        fallbackImagePath,
-      );
+    const firstAssistantMessage = truncatedMessages.find(
+      (message) => message.role === "model",
+    );
+    const firstUserMessage = truncatedMessages.find(
+      (message) => message.role === "user",
+    );
+    const savedHistory = truncatedMessages.map((message) => ({
+      role: message.role === "model" ? "Assistant" : "User",
+      content: message.text,
+    }));
 
-      setMessages([...truncatedMessages, editedUserMsg]);
-      setIsLoading(false);
-      setIsStreaming(true);
-      setIsAiTyping(true);
-      setFirstResponseId(newResponseId);
-      setStreamingText(responseText);
-    } catch (apiError: any) {
-      if (apiError?.message === "CANCELLED" || isRequestCancelledRef.current) {
-        setIsLoading(false);
-        setIsStreaming(false);
-        setIsAiTyping(false);
-        setStreamingText("");
-        setFirstResponseId(null);
-        return;
-      }
-      console.error("Edit failed:", apiError);
-
-      const errorMsg =
-        "An error occurred while generating the response. " +
-        (apiError.message || "");
-
-      const errorBubble: Message = {
-        id: Date.now().toString(),
-        role: "model",
-        text: errorMsg,
-        timestamp: Date.now(),
-        stopped: true,
-      };
-
-      const newMessages = [...truncatedMessages, editedUserMsg, errorBubble];
-      setMessages(newMessages);
-
-      if (config.onOverwriteMessages) {
-        config.onOverwriteMessages(newMessages);
-      }
-
-      setIsLoading(false);
-      setIsStreaming(false);
-      setIsAiTyping(false);
-      setStreamingText("");
-      setFirstResponseId(null);
-    }
+    apiRestoreSession(
+      config.currentModel,
+      firstAssistantMessage?.text || getImageDescription() || "",
+      firstUserMessage?.text || null,
+      savedHistory,
+      config.startupImage?.path || null,
+    );
   };
 
   const handleStopGeneration = (truncatedText?: string) => {
@@ -719,7 +680,7 @@ export const useGeminiEngine = (config: {
     handleSend,
     handleRetrySend,
     handleRetryMessage,
-    handleEditMessage,
+    handleUndoMessage,
     handleDescribeEdits,
     handleStopGeneration,
     handleStreamComplete,

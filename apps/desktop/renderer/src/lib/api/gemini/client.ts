@@ -19,4 +19,4 @@ export {
 } from "./context";
 export { startNewThreadStream, startNewThread } from "./chat";
 export { sendMessage } from "./message";
-export { retryFromMessage, editUserMessage } from "./edit";
+export { retryFromMessage } from "./edit";

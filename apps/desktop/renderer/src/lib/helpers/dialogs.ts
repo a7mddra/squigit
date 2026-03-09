@@ -70,6 +70,16 @@ export const getDialogs = (appName: string): Record<string, DialogContent> => ({
       { label: "Delete Conversation", variant: "danger", actionKey: "confirm" },
     ],
   },
+  UNDO_MESSAGE: {
+    title: "Undo to This Message",
+    message:
+      "This will remove this message and all following messages from the conversation.\nThe message text and attachments will be restored to the input editor.",
+    variant: "warning",
+    actions: [
+      { label: "Cancel", variant: "secondary", actionKey: "cancel" },
+      { label: "Undo and Edit", variant: "danger", actionKey: "confirm" },
+    ],
+  },
   LOGIN_REQUIRED: {
     title: "Login Required",
     message: `You need to sign in first to use ${appName}.`,

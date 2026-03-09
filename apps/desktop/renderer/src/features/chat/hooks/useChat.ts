@@ -97,7 +97,7 @@ export const useChat = ({
     handleSend: engine.handleSend,
     handleRetrySend: engine.handleRetrySend,
     handleRetryMessage: engine.handleRetryMessage,
-    handleEditMessage: engine.handleEditMessage,
+    handleUndoMessage: engine.handleUndoMessage,
     handleDescribeEdits: engine.handleDescribeEdits,
     handleStreamComplete: engine.handleStreamComplete,
     handleStopGeneration: engine.handleStopGeneration,

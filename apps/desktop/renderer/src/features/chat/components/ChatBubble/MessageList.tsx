@@ -23,11 +23,7 @@ interface MessageListProps {
   onStopGeneration?: (truncatedText?: string) => void;
   onStopRequestedChange?: (requested: boolean) => void;
   onRetryMessage?: (messageId: string, modelId?: string) => void;
-  onEditMessage?: (
-    messageId: string,
-    newText: string,
-    modelId?: string,
-  ) => void;
+  onUndoMessage?: (messageId: string) => void;
   onSystemAction?: (actionId: string, value?: string) => void;
 }
 
@@ -44,7 +40,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   onStopGeneration,
   onStopRequestedChange,
   onRetryMessage,
-  onEditMessage,
+  onUndoMessage,
   onSystemAction,
 }) => {
   const retryIndex = retryingMessageId
@@ -111,9 +107,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                     : undefined
                 }
                 isRetrying={msg.id === retryingMessageId}
-                onEdit={
-                  msg.role === "user" && onEditMessage
-                    ? (newText) => onEditMessage(msg.id, newText, selectedModel)
+                onUndo={
+                  msg.role === "user" && onUndoMessage
+                    ? () => onUndoMessage(msg.id)
                     : undefined
                 }
                 onAction={msg.role === "system" ? onSystemAction : undefined}

@@ -103,6 +103,8 @@
   gap: 8px;
   background: var(--c-raw-013);
   padding: 0 0 10px;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .threadsDivider {

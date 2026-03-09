@@ -12,6 +12,9 @@ import { useInlineMenu } from "@/hooks";
 import { InlineMenu, LoadingSpinner, TextShimmer, Dialog } from "@/components";
 import {
   buildAttachmentMention,
+  parseAttachmentPaths,
+  stripAttachmentMentions,
+  attachmentFromPath,
   ChatInput,
   ImageArtifact,
   useChatScroll,
@@ -22,10 +25,17 @@ import {
 } from "@/features";
 import styles from "./Chat.module.css";
 
+function getBaseName(path: string): string {
+  const lastSlash = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+}
+
 export const Chat: React.FC = () => {
   const app = useAppContext();
   const [stopRequested, setStopRequested] = useState(false);
-  const [inputValue, setInputValue] = useState("");
+  const [pendingUndoMessageId, setPendingUndoMessageId] = useState<
+    string | null
+  >(null);
 
   // Refs
   const headerRef = useRef<HTMLDivElement>(null);
@@ -136,22 +146,23 @@ export const Chat: React.FC = () => {
 
   // Handlers
   const handleSend = useCallback(() => {
-    let finalInput = inputValue;
+    let finalInput = app.input;
     if (app.attachments.length > 0) {
       const mentions = app.attachments
         .map((a) => buildAttachmentMention(a.path))
         .join("\n");
-      finalInput = `${inputValue}\n\n${mentions}`.trim();
+      finalInput = `${app.input}\n\n${mentions}`.trim();
     }
     app.chat.handleSend(finalInput, app.inputModel);
-    setInputValue("");
+    app.setInput("");
     app.clearAttachments();
   }, [
     app.attachments,
     app.chat,
     app.clearAttachments,
+    app.input,
     app.inputModel,
-    inputValue,
+    app.setInput,
   ]);
 
   const handleCaptureToInput = async () => {
@@ -162,8 +173,42 @@ export const Chat: React.FC = () => {
     }
   };
 
+  const handleRequestUndoMessage = useCallback((messageId: string) => {
+    setPendingUndoMessageId(messageId);
+  }, []);
+
+  const handleUndoDialogAction = useCallback(
+    (actionKey: string) => {
+      const messageId = pendingUndoMessageId;
+      setPendingUndoMessageId(null);
+
+      if (actionKey !== "confirm" || !messageId) {
+        return;
+      }
+
+      const targetMessage = app.chat.messages.find(
+        (message) => message.id === messageId && message.role === "user",
+      );
+      if (!targetMessage) return;
+
+      const restoredText = stripAttachmentMentions(targetMessage.text);
+      const restoredAttachments = parseAttachmentPaths(targetMessage.text).map(
+        (path) => {
+          const sourcePath = app.getAttachmentSourcePath(path) || undefined;
+          const originalName = sourcePath ? getBaseName(sourcePath) : undefined;
+          return attachmentFromPath(path, undefined, originalName, sourcePath);
+        },
+      );
+
+      app.setInput(restoredText);
+      app.setAttachments(restoredAttachments);
+      app.chat.handleUndoMessage(messageId);
+    },
+    [app, pendingUndoMessageId],
+  );
+
   useEffect(() => {
-    setInputValue("");
+    setPendingUndoMessageId(null);
   }, [app.chatHistory.activeSessionId]);
 
   useEffect(() => {
@@ -292,6 +337,11 @@ export const Chat: React.FC = () => {
                   actions={errorActions}
                 />
               )}
+              <Dialog
+                isOpen={!!pendingUndoMessageId}
+                type="UNDO_MESSAGE"
+                onAction={handleUndoDialogAction}
+              />
 
               {isSpinnerVisible ? (
                 <div className={styles.spinnerContainer}>
@@ -313,7 +363,7 @@ export const Chat: React.FC = () => {
                   }
                   onStopRequestedChange={setStopRequested}
                   onRetryMessage={app.chat.handleRetryMessage}
-                  onEditMessage={app.chat.handleEditMessage}
+                  onUndoMessage={handleRequestUndoMessage}
                   onSystemAction={app.handleSystemAction}
                 />
               )}
@@ -329,8 +379,8 @@ export const Chat: React.FC = () => {
           <div style={{ pointerEvents: "auto", width: "100%" }}>
             <ChatInput
               startupImage={app.system.startupImage}
-              input={inputValue}
-              onInputChange={setInputValue}
+              input={app.input}
+              onInputChange={app.setInput}
               onSend={handleSend}
               isLoading={app.chat.isLoading}
               isAiTyping={app.chat.isAiTyping}

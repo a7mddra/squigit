@@ -19,7 +19,6 @@ import {
   remarkDisableIndentedCode,
   type StreamSegment,
 } from "@/lib";
-import { BubbleEditor } from "./BubbleEditor";
 import {
   parseAttachmentPaths,
   stripAttachmentMentions,
@@ -39,7 +38,7 @@ interface ChatBubbleProps {
   onStopGeneration?: (truncatedText: string) => void;
   onRetry?: () => void;
   isRetrying?: boolean;
-  onEdit?: (newText: string) => void;
+  onUndo?: () => void;
   onAction?: (actionId: string, value?: string) => void;
 }
 
@@ -137,14 +136,11 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
   onStopGeneration,
   onRetry,
   isRetrying,
-  onEdit,
+  onUndo,
 }) => {
   const app = useAppContext();
   const isUser = message.role === "user";
   const [isCopied, setIsCopied] = useState(false);
-
-  const [isEditing, setIsEditing] = useState(false);
-  const [editorValue, setEditorValue] = useState(message.text);
 
   const attachments = useMemo(() => {
     const paths = parseAttachmentPaths(message.text);
@@ -165,24 +161,6 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
       displayText,
     );
   }, [displayText, isUser]);
-  const [bubbleWidth, setBubbleWidth] = useState<number | undefined>(undefined);
-  const [bubbleHeight, setBubbleHeight] = useState<number | undefined>(
-    undefined,
-  );
-
-  const bubbleRef = useRef<HTMLDivElement>(null);
-
-  const handleEditSubmit = () => {
-    const originalPaths = message.text.match(/\{\{[^}]+\}\}/g) || [];
-    const restoredText = `${editorValue.trim()}${
-      originalPaths.length > 0 ? ` ${originalPaths.join(" ")}` : ""
-    }`;
-
-    if (restoredText !== message.text) {
-      onEdit?.(restoredText);
-    }
-    setIsEditing(false);
-  };
 
   const [revealedCount, setRevealedCount] = useState(0);
   const [isStreamingComplete, setIsStreamingComplete] = useState(!isStreamed);
@@ -194,21 +172,6 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
     });
-  };
-
-  const handleEditStart = () => {
-    if (bubbleRef.current) {
-      const rect = bubbleRef.current.getBoundingClientRect();
-      setBubbleWidth(Math.max(300, rect.width));
-      setBubbleHeight(rect.height);
-    }
-    setEditorValue(stripAttachmentMentions(message.text));
-    setIsEditing(true);
-  };
-
-  const handleEditCancel = () => {
-    setIsEditing(false);
-    setEditorValue(stripAttachmentMentions(message.text));
   };
 
   const { segments, tokens } = useMemo(() => {
@@ -283,31 +246,6 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
       onTypingChange?.(isTyping);
     }
   }, [isTyping, onTypingChange]);
-
-  useEffect(() => {
-    if (isEditing && bubbleRef.current) {
-      let parent = bubbleRef.current.parentElement;
-      while (parent) {
-        const style = window.getComputedStyle(parent);
-        if (
-          style.overflowY === "auto" ||
-          style.overflowY === "scroll" ||
-          parent.getAttribute("data-scroll-container") === "true"
-        ) {
-          const parentRect = parent.getBoundingClientRect();
-          const bubbleRect = bubbleRef.current.getBoundingClientRect();
-          const currentScrollTop = parent.scrollTop;
-          const relativeTop = bubbleRect.top - parentRect.top;
-          parent.scrollTo({
-            top: currentScrollTop + relativeTop - 90,
-            behavior: "instant",
-          });
-          break;
-        }
-        parent = parent.parentElement;
-      }
-    }
-  }, [isEditing]);
 
   const stoppedRef = useRef(false);
 
@@ -657,26 +595,14 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
               data-message-role={isUser ? "user" : "assistant"}
               className={`${styles.bubble} ${
                 isUser ? styles.userBubble : styles.botBubble
-              } ${isEditing ? styles.editing : ""} ${
+              } ${
                 isUser && isRichMarkdownUserMessage ? styles.userRichBubble : ""
               }`}
-              ref={bubbleRef}
-              style={
-                isEditing && bubbleWidth
-                  ? {
-                      width: `${bubbleWidth}px`,
-                      maxWidth: "none",
-                      minHeight: bubbleHeight ? `${bubbleHeight}px` : undefined,
-                    }
-                  : undefined
-              }
             >
               {attachments.length > 0 && (
                 <div
                   style={{
-                    padding: isEditing ? "1rem" : "0",
-                    marginBottom:
-                      isEditing || displayText.length > 0 ? "8px" : "0",
+                    marginBottom: displayText.length > 0 ? "8px" : "0",
                   }}
                 >
                   <AttachmentStrip
@@ -686,15 +612,7 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
                   />
                 </div>
               )}
-              {isEditing ? (
-                <BubbleEditor
-                  value={editorValue}
-                  onChange={setEditorValue}
-                  onConfirm={handleEditSubmit}
-                  onCancel={handleEditCancel}
-                  width={bubbleWidth}
-                />
-              ) : isRetrying ? (
+              {isRetrying ? (
                 <TextShimmer text="Regenerating response..." />
               ) : !isUser ? (
                 shouldRenderStreaming ? (
@@ -762,7 +680,7 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
                 isUser ? styles.userFooter : styles.botFooter
               }`}
             >
-              {isUser && !isEditing && (
+              {isUser && (
                 <span className={styles.timestamp}>
                   {new Date(message.timestamp).toLocaleTimeString([], {
                     hour: "2-digit",
@@ -772,7 +690,6 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
               )}
 
               {!isStreamingComplete && isStreamed ? null : isRetrying ||
-                isEditing ||
                 message.role === "system" ? null : (
                 <>
                   {!isUser && onRetry && (
@@ -783,11 +700,11 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
                   <button onClick={handleCopy} title="Copy" aria-label="Copy">
                     {isCopied ? <Check size={14} /> : <Copy size={14} />}
                   </button>
-                  {isUser && onEdit && (
+                  {isUser && onUndo && (
                     <button
-                      onClick={handleEditStart}
-                      title="Edit"
-                      aria-label="Edit"
+                      onClick={onUndo}
+                      title="Undo and Edit"
+                      aria-label="Undo and Edit"
                     >
                       <Pencil size={14} />
                     </button>
@@ -812,7 +729,7 @@ export const ChatBubble = React.memo(
       prevProps.stopRequested === nextProps.stopRequested &&
       !!prevProps.onRetry === !!nextProps.onRetry &&
       prevProps.isRetrying === nextProps.isRetrying &&
-      !!prevProps.onEdit === !!nextProps.onEdit
+      !!prevProps.onUndo === !!nextProps.onUndo
     );
   },
 );
