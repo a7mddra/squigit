@@ -49,13 +49,77 @@ pub fn tauri_dir() -> PathBuf {
     project_root().join("apps").join("desktop")
 }
 
+fn resolve_command_path(cmd: &str) -> PathBuf {
+    let cmd_path = Path::new(cmd);
+    if cmd_path.components().count() > 1 || cmd_path.extension().is_some() {
+        return cmd_path.to_path_buf();
+    }
+
+    if let Ok(path) = which::which(cmd) {
+        return path;
+    }
+
+    #[cfg(windows)]
+    {
+        for ext in ["cmd", "exe", "bat"] {
+            let candidate = format!("{cmd}.{ext}");
+            if let Ok(path) = which::which(&candidate) {
+                return path;
+            }
+        }
+
+        if let Some(path) = windows_node_tool_fallback(cmd) {
+            return path;
+        }
+    }
+
+    cmd_path.to_path_buf()
+}
+
+#[cfg(windows)]
+fn windows_node_tool_fallback(cmd: &str) -> Option<PathBuf> {
+    let names: &[&str] = match cmd {
+        "npm" => &["npm.cmd", "npm.exe"],
+        "npx" => &["npx.cmd", "npx.exe"],
+        "node" => &["node.exe"],
+        _ => return None,
+    };
+
+    let mut roots = Vec::new();
+    if let Some(program_files) = env::var_os("ProgramFiles") {
+        roots.push(PathBuf::from(program_files).join("nodejs"));
+    }
+    if let Some(program_files_x86) = env::var_os("ProgramFiles(x86)") {
+        roots.push(PathBuf::from(program_files_x86).join("nodejs"));
+    }
+    if let Some(local_app_data) = env::var_os("LocalAppData") {
+        roots.push(
+            PathBuf::from(local_app_data)
+                .join("Programs")
+                .join("nodejs"),
+        );
+    }
+
+    for root in roots {
+        for name in names {
+            let candidate = root.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    None
+}
+
 pub fn run_cmd(cmd: &str, args: &[&str], cwd: &Path) -> Result<()> {
-    println!("  $ {} {}", cmd, args.join(" "));
-    let status = Command::new(cmd)
+    let command_path = resolve_command_path(cmd);
+    println!("  $ {} {}", command_path.display(), args.join(" "));
+    let status = Command::new(&command_path)
         .args(args)
         .current_dir(cwd)
         .status()
-        .with_context(|| format!("Failed to run: {} {:?}", cmd, args))?;
+        .with_context(|| format!("Failed to run: {} {:?}", command_path.display(), args))?;
 
     if !status.success() {
         anyhow::bail!("Command failed with exit code: {:?}", status.code());
@@ -69,8 +133,6 @@ pub fn run_cmd_with_node_bin(
     cwd: &Path,
     node_bin_dir: &Path,
 ) -> Result<()> {
-    println!("  $ {} {}", cmd, args.join(" "));
-
     let path_var = env::var("PATH").unwrap_or_default();
     #[cfg(windows)]
     let new_path = format!("{};{}", node_bin_dir.display(), path_var);
@@ -80,15 +142,24 @@ pub fn run_cmd_with_node_bin(
     let path_env_key = if cfg!(windows) { "Path" } else { "PATH" };
 
     let command_path = if cfg!(windows) {
-        let candidate = node_bin_dir.join(format!("{}.cmd", cmd));
-        if !candidate.exists() {
-            PathBuf::from(cmd)
+        let cmd_shim = node_bin_dir.join(format!("{cmd}.cmd"));
+        let exe_shim = node_bin_dir.join(format!("{cmd}.exe"));
+        if cmd_shim.exists() {
+            cmd_shim
+        } else if exe_shim.exists() {
+            exe_shim
         } else {
-            candidate
+            resolve_command_path(cmd)
         }
     } else {
-        PathBuf::from(cmd)
+        let shim = node_bin_dir.join(cmd);
+        if shim.exists() {
+            shim
+        } else {
+            resolve_command_path(cmd)
+        }
     };
+    println!("  $ {} {}", command_path.display(), args.join(" "));
 
     let status = Command::new(&command_path)
         .args(args)
