@@ -21,28 +21,9 @@ Item {
     property var strokes: []
     property bool isDrawing: false
     property point lastPoint: Qt.point(0, 0)
-    property point currentMouse: Qt.point(0, 0)
     
     readonly property real smoothingFactor: 0.3
     readonly property real brushSize: 7
-    
-    Rectangle {
-        id: cursorCircle
-        width: 56
-        height: 56
-        radius: 28
-        color: Qt.rgba(1, 1, 1, 0.12)
-        visible: root.isDrawing
-        x: root.currentMouse.x - 28
-        y: root.currentMouse.y - 28
-        
-        SequentialAnimation on scale {
-            running: root.isDrawing
-            loops: Animation.Infinite
-            NumberAnimation { to: 1.05; duration: 600; easing.type: Easing.InOutSine }
-            NumberAnimation { to: 1.0; duration: 600; easing.type: Easing.InOutSine }
-        }
-    }
     
     Canvas {
         id: canvas
@@ -97,14 +78,11 @@ Item {
             root.strokes = []
             root.isDrawing = true
             root.lastPoint = Qt.point(mouse.x, mouse.y)
-            root.currentMouse = Qt.point(mouse.x, mouse.y)
             root.strokes.push({x: mouse.x, y: mouse.y})
             canvas.requestPaint()
         }
         
         onPositionChanged: function(mouse) {
-            root.currentMouse = Qt.point(mouse.x, mouse.y)
-            
             if (!root.isDrawing) return
             
             var smoothedX = root.lastPoint.x + (mouse.x - root.lastPoint.x) * root.smoothingFactor

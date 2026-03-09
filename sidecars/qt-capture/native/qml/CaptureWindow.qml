@@ -38,7 +38,8 @@ Window {
         id: background
         anchors.fill: parent
         source: root.controller.backgroundSource
-        fillMode: Image.PreserveAspectCrop
+        fillMode: Image.Stretch
+        asynchronous: true
         cache: false
     }
     
@@ -56,7 +57,7 @@ Window {
         NumberAnimation on opacity {
             from: 0; to: 1
             duration: 200
-            running: true
+            running: dimOverlay.visible
             easing.type: Easing.OutQuad
         }
     }
