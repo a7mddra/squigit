@@ -31,7 +31,7 @@
 .container {
   position: relative;
   pointer-events: auto;
-  top: 0;
+  top: -4px;
   right: 0;
   height: 550px;
   width: 700px;
@@ -47,20 +47,16 @@
 
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-4px);
-  will-change: opacity, transform;
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
   transition:
     opacity 0.15s ease,
     visibility 0.15s ease,
-    transform 0.15s ease;
+    top 0.15s ease;
 }
 
 .container.open {
   opacity: 1;
   visibility: visible;
-  transform: translateY(0);
+  top: 0;
 }
 
 .sidebar {
