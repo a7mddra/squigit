@@ -92,9 +92,9 @@ endif()
 if(APPLE)
     set_target_properties(capture PROPERTIES
         MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.capture.app"
-        MACOSX_BUNDLE_BUNDLE_NAME "Capture"
-        MACOSX_BUNDLE_INFO_STRING "Capture Screen Capture"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.squigit.capture"
+        MACOSX_BUNDLE_BUNDLE_NAME "Squigit Capture"
+        MACOSX_BUNDLE_INFO_STRING "Squigit Screen Capture"
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in"
     )
 endif()

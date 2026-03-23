@@ -8,7 +8,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 use xtask::{capture_sidecar_dir, qt_native_dir};
 use xtask::{get_host_target_triple, ocr_sidecar_dir, venv_python};
-use xtask::{project_root, run_cmd, run_cmd_with_node_bin};
+use xtask::{project_root, run_cmd, run_cmd_with_node_bin, run_cmd_with_node_bin_and_env};
 use xtask::{tauri_dir, ui_dir};
 
 use crate::commands::pkg;
@@ -582,7 +582,44 @@ pub fn desktop() -> Result<()> {
         println!("\nInstalling npm dependencies...");
         run_cmd("npm", &["install"], &ui)?;
     }
-    run_cmd_with_node_bin("tauri", &["build"], &app, &node_bin)?;
+
+    let mut tauri_args = vec!["build"];
+    if cfg!(target_os = "linux") {
+        tauri_args.push("--bundles");
+        tauri_args.push("appimage");
+    }
+
+    let mut env_vars = Vec::new();
+    if cfg!(target_os = "linux") {
+        let host_triple = get_host_target_triple()?;
+        let ocr_sidecar_path = project_root()
+            .join("apps")
+            .join("desktop")
+            .join("binaries")
+            .join(format!("paddle-ocr-{}", host_triple))
+            .join("_internal");
+
+        if ocr_sidecar_path.exists() {
+            println!("  [info] Applying LD_LIBRARY_PATH for paddle-ocr sidecar");
+            env_vars.push((
+                "LD_LIBRARY_PATH".to_string(),
+                ocr_sidecar_path.to_string_lossy().to_string(),
+            ));
+        }
+    }
+
+    if env_vars.is_empty() {
+        run_cmd_with_node_bin("tauri", &tauri_args, &app, &node_bin)?;
+    } else {
+        run_cmd_with_node_bin_and_env(
+            "tauri",
+            &tauri_args,
+            &app,
+            &node_bin,
+            &env_vars,
+        )?;
+    }
+
     println!("\nDesktop app build complete!");
     Ok(())
 }

@@ -133,6 +133,16 @@ pub fn run_cmd_with_node_bin(
     cwd: &Path,
     node_bin_dir: &Path,
 ) -> Result<()> {
+    run_cmd_with_node_bin_and_env(cmd, args, cwd, node_bin_dir, &[])
+}
+
+pub fn run_cmd_with_node_bin_and_env(
+    cmd: &str,
+    args: &[&str],
+    cwd: &Path,
+    node_bin_dir: &Path,
+    env_vars: &[(String, String)],
+) -> Result<()> {
     let path_var = env::var("PATH").unwrap_or_default();
     #[cfg(windows)]
     let new_path = format!("{};{}", node_bin_dir.display(), path_var);
@@ -161,10 +171,17 @@ pub fn run_cmd_with_node_bin(
     };
     println!("  $ {} {}", command_path.display(), args.join(" "));
 
-    let status = Command::new(&command_path)
+    let mut command = Command::new(&command_path);
+    command
         .args(args)
         .current_dir(cwd)
-        .env(path_env_key, new_path)
+        .env(path_env_key, new_path);
+
+    for (key, value) in env_vars {
+        command.env(key, value);
+    }
+
+    let status = command
         .status()
         .with_context(|| format!("Failed to run: {} {:?}", command_path.display(), args))?;
 

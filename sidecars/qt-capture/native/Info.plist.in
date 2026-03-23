@@ -3,11 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>Capture</string>
+    <string>capture</string>
     <key>CFBundleIconFile</key>
     <string>capture.icns</string>
     <key>CFBundleIdentifier</key>
-    <string>com.capture.app</string>
+    <string>com.squigit.capture</string>
+    <key>CFBundleName</key>
+    <string>Squigit Capture</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>
@@ -17,8 +19,8 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSDesktopFolderUsageDescription</key>
-    <string>We need access to capture screenshots.</string>
+    <string>Squigit needs access to capture screenshots.</string>
     <key>NSScreenCaptureUsageDescription</key>
-    <string>We need access to record the screen for screenshots.</string>
+    <string>Squigit needs access to record the screen for screenshots.</string>
 </dict>
 </plist>

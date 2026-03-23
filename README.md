@@ -19,7 +19,7 @@ Explore detailed guides and architecture in our [documentation](https://github.c
 - **🪄 Google Lens Integration**: One-click visual search by automatically hosting images and launching Google Lens.
 - **🔒 Local-First Security**: Your API keys, images, and conversations never leave your machine.
 
-## 📦 Installation
+## 📦 Download
 
 ### Pre-requisites before installation
 
@@ -41,6 +41,42 @@ Download [`squigit-installer.dmg`](https://github.com/a7mddra/squigit/releases/d
 #### Linux
 
 Download [`squigit-installer`](https://github.com/a7mddra/squigit/releases/download/installers/squigit-installer-linux-x64.zip).
+
+## Installation
+
+Grab the latest version of Squigit for your operating system from our [Latest Releases](https://github.com/a7mddra/squigit/releases/latest) page.
+
+### 🪟 Windows
+
+1. Download the latest Windows setup executable.
+2. Run the installer.
+3. **SmartScreen Warning:** Because Squigit is an open-source project without a commercial EV certificate, Microsoft Defender SmartScreen may initially flag the installer as unrecognized.
+   - **Fix:** If you see the "Windows protected your PC" screen, simply click **More info**, and then select **Run anyway**.
+
+### 🍎 macOS (Apple Silicon / ARM only)
+
+_Note: Squigit's local AI engines are currently optimized strictly for Apple Silicon (M1/M2/M3/M4). Intel Macs are not supported._
+
+1. Download the latest `.dmg` file.
+2. Open it and drag **Squigit** into your `Applications` folder.
+3. **Gatekeeper / "App is damaged" Warning:** Because we use an ad-hoc open-source signature, macOS Gatekeeper may block the app from launching or claim the file is damaged.
+   - **Fix:** Open your **Terminal** and run this command to clear the Apple quarantine flag:
+     ```bash
+     sudo xattr -rd com.apple.quarantine /Applications/Squigit.app
+     ```
+   - _(Alternatively: Go to System Settings -> Privacy & Security, scroll to the bottom, and click "Open Anyway")._
+
+### 🐧 Linux (AppImage only)
+
+_Note: Squigit is distributed as an AppImage to ensure maximum compatibility across different Linux distributions._
+
+1. Download the latest `.AppImage` file.
+2. **Make it Executable:** By default, Linux prevents new downloads from running as programs. You must grant the file execution permissions before launching it.
+   - **Fix:** Open your terminal in the directory where you downloaded the file and run:
+     ```bash
+     chmod +x Squigit-*.AppImage
+     ```
+   - You can now double-click the file to run it, or integrate it into your desktop environment using tools like AppImageLauncher.
 
 ## ⭐ Key Features
 

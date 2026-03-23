@@ -1,38 +1,49 @@
-# macOS Configuration & Privacy Policy
+# We're thrilled to have you!
 
-Squigit requires specific system permissions to capture screen data and process global hotkeys. Please review the following configuration steps and privacy protocols.
+Before you dive in, let's quickly go over how Squigit integrates with your system, how to get started, and how we protect your data.
 
-## 1. Installation Verification
+## 1. Global Shortcuts & Menu Bar
 
-Due to Apple's security policies for open-source software, macOS may flag the application as "damaged" upon first launch.
+We've registered `Cmd+Shift+A` with macOS so you can trigger a capture from anywhere. Go ahead and press it to test it out! (macOS will ask you to grant **Accessibility** permission so we can detect this keyboard shortcut in the background. Just click "OK" when prompted).
 
-- **Action:** If launch fails, open **Terminal** and execute:
+**Important:** For this to work instantly, Squigit needs to stay running in your menu bar. It's incredibly lightweight, so you can safely leave it alive 24/7 to guarantee a rapid response when you need it.
 
-```bash
-    `xattr -cr /Applications/Squigit.app`
-```
+<details>
+<summary><strong>See a blank black screen? Let's fix it</strong></summary>
 
-## 2. Essential Permissions
+Because Apple takes your privacy seriously, Squigit's screen capture engine needs explicit permission to read screen pixels. The first time you try to capture, Squigit will show a popup that takes you straight to the right settings page.
 
-To prevent "black screen" captures and ensure hotkey responsiveness, you must grant the following in **System Settings > Privacy & Security**:
+1. Go to your Mac's **System Settings -> Privacy & Security -> Screen & System Audio Recording**.
+2. Look for **Squigit Capture** in the list and toggle it **ON**.
+3. **The macOS Bug:** If it's already toggled ON but your capture is still black:
+   - Highlight **Squigit Capture** and click the minus (**-**) button to remove it.
+   - Trigger a new capture (`Cmd+Shift+A`). The app will automatically open the settings page again.
+   - Toggle it **ON** once more.
+   - **Restart your Mac.** (This is required due to a known macOS bug).
 
-1. **Input Monitoring** (Required)
-   - _Enable for:_ **Squigit**
-   - _Function:_ Allows the background daemon to detect the `Cmd+Shift+A` trigger.
-2. **Screen Recording** (Critical)
-   - _Enable for:_ **Squigit**
-   - _Function:_ Grants the capture engine access to display pixels. **Failure to enable this will result in black/empty screenshots.**
-3. **Automation** (Optional)
-   - _Enable for:_ **Squigit > System Events**
-   - _Function:_ Allows the application to silence the system shutter sound during capture.
+</details>
 
-## 3. Usage
+## 2. Quick Start
 
-- **Trigger:** Press `Cmd ⌘` + `Shift ⇧` + `A`.
-- **Analysis:** Draw a region to instantly capture and analyze.
+Once you agree to this guide, the login button will activate. Continue with Google to set up your local profile, and you're ready to go!
 
-## 4. Zero-Trust Architecture
+- **Capture & Upload:** Use your shortcut, press `Cmd+V` to paste, or simply drag and drop an image into the app.
+- **On-Device OCR:** Squigit extracts text locally on your machine. You can download additional language models in **Settings -> Models**.
+- **AI & Reverse Search:** To unlock AI overviews and reverse image search, configure your Bring Your Own Key (BYOK) setup in **Settings -> API Keys**.
+- **Make it Yours:** Tailor your AI's responses and behavior in **Settings -> Personalization**.
 
-- **Local-First:** Application logic and encryption occur locally on your device.
-- **Direct Connection:** API requests are sent directly to Google (`generativelanguage.googleapis.com`). No intermediate servers are used.
-- **Lens Feature:** This optional feature uses ImgBB as a temporary bridge. Do not use "Lens" mode for sensitive personal data.
+## 3. Security & Privacy
+
+Because Squigit analyzes your screen, your privacy is our absolute highest priority. We use a zero-trust architecture:
+
+- **Local First:** Your images, chats, and data never leave your device unless you explicitly trigger an AI feature.
+- **Encrypted Keys:** Your API keys are hashed and stored locally using AES-256 encryption. We cannot read them, ever.
+- **Stateless API Requests:** When you use AI features, requests are sent directly to your provider statelessly. Providers do not get your full context or history.
+- **Google OAuth:** We use Google sign-in purely for local profile isolation. We only fetch your account name and avatar to personalize your app experience.
+- **⚠️ Lens Feature Warning:** Reverse image search uses ImgBB as a temporary, free image host to process the search. **Do not use the Lens feature for images containing sensitive personal data.**
+
+## 4. Help & Support
+
+Need assistance or want to report a bug? Head over to **Settings -> Help & Support**.
+
+There, you can view your system diagnostics, report bugs, visit our GitHub, or contact us directly. Note: When you contact support, some basic system information (like your OS, Squigit version, and backend engine status) may be sent to help us troubleshoot your issue faster, subject to our [Privacy Policy](https://github.com/a7mddra/squigit/blob/main/docs/06-policies/SECURITY.md).
