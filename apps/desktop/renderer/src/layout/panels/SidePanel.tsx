@@ -19,14 +19,15 @@ import {
   X,
   Search,
   FolderOpen,
+  Milestone,
+  ArrowUpRight,
 } from "lucide-react";
 
-import { ChatMetadata } from "@/lib";
-import { Dialog, LoadingSpinner } from "@/components";
-import { getDeleteMultipleChatsDialog } from "@/lib";
-import { PanelContextMenu } from "@/layout";
+import { ChatMetadata, getDeleteMultipleChatsDialog } from "@/lib";
 import { useAppContext } from "@/providers/AppProvider";
-import { useKeyDown } from "@/hooks";
+import { Dialog, LoadingSpinner } from "@/components";
+import { PanelContextMenu } from "@/layout";
+import { useKeyDown, usePlatform } from "@/hooks";
 import styles from "./SidePanel.module.css";
 
 const Checkbox: React.FC<{ checked: boolean; onChange: () => void }> = ({
@@ -174,7 +175,7 @@ const ChatItem: React.FC<ChatItemProps> = React.memo(
           )}
 
           {!isSelectionMode && (
-            <div className={styles.chatLeading}>
+            <div className={styles.chatLeading} style={{ paddingLeft: "2px" }}>
               {isBusy ? (
                 <span className={styles.rowSpinner} aria-hidden="true">
                   <span className={styles.rowSpinnerInner}>
@@ -274,6 +275,7 @@ const ChatItem: React.FC<ChatItemProps> = React.memo(
 
 export const SidePanel: React.FC = () => {
   const app = useAppContext();
+  const platform = usePlatform();
   const chats = app.chatHistory.chats;
   const activeSessionId = app.chatHistory.activeSessionId;
 
@@ -328,6 +330,20 @@ export const SidePanel: React.FC = () => {
     app.chat.isAiTyping ||
     app.isOcrScanning;
   const busyChatId = isChatBusy ? activeSessionId : null;
+
+  const searchShortcutLabel = useMemo(() => {
+    if (platform.isMac) {
+      return `${platform.modSymbol}K`;
+    }
+    return `${platform.modSymbol} + K`;
+  }, [platform.isMac, platform.modSymbol]);
+
+  const newThreadShortcutLabel = useMemo(() => {
+    if (platform.isMac) {
+      return `${platform.modSymbol}${platform.shiftSymbol}O`;
+    }
+    return `${platform.modSymbol} + Shift + O`;
+  }, [platform.isMac, platform.modSymbol, platform.shiftSymbol]);
 
   const handleOpenContextMenu = useCallback(
     (id: string, x: number, y: number) => {
@@ -453,7 +469,7 @@ export const SidePanel: React.FC = () => {
           <div className={styles.groupContent}>
             <div className={styles.groupInner}>
               <div className={styles.chatRow} onClick={app.handleNewSession}>
-                <div className={styles.chatIconMain}>
+                <div className={styles.chatIconMain} style={{paddingLeft: "2px"}}>
                   <svg
                     width="18"
                     height="18"
@@ -476,16 +492,26 @@ export const SidePanel: React.FC = () => {
                   </svg>
                 </div>
                 <span className={styles.chatTitle}>New thread</span>
+                <div className={styles.rowShortcut} aria-hidden="true">
+                  <span className={styles.rowShortcutText}>
+                    {newThreadShortcutLabel}
+                  </span>
+                </div>
               </div>
 
               <div
                 className={`${styles.chatRow} ${app.searchOverlay.isOpen ? styles.active : ""}`}
                 onClick={app.openSearchOverlay}
               >
-                <div className={styles.chatIconMain}>
+                <div className={styles.chatIconMain} style={{paddingLeft: "1px"}}>
                   <Search size={19} />
                 </div>
                 <span className={styles.chatTitle}>Search chats</span>
+                <div className={styles.rowShortcut} aria-hidden="true">
+                  <span className={styles.rowShortcutText}>
+                    {searchShortcutLabel}
+                  </span>
+                </div>
               </div>
 
               <div
@@ -525,7 +551,10 @@ export const SidePanel: React.FC = () => {
                     />
                   </svg>
                 </div>
-                <span className={styles.chatTitle}>Images</span>
+                <span className={styles.chatTitle}>Your squigits</span>
+                <div className={styles.rowShortcut} aria-hidden="true">
+                  <ArrowUpRight size={14} className={styles.rowShortcutIcon} />
+                </div>
               </div>
             </div>
           </div>
@@ -533,57 +562,48 @@ export const SidePanel: React.FC = () => {
       )}
 
       <div className={styles.scrollArea}>
-        <div className={styles.stickyThreadHeader}>
-          {(pinnedChats.length > 0 || (showWelcome && !isSelectionMode)) && (
-            <div className={styles.groupInner}>
-              {pinnedChats.map((chat) => (
-                <ChatItem
-                  key={chat.id}
-                  chat={chat}
-                  isActive={chat.id === activeSessionId}
-                  isBusy={busyChatId === chat.id}
-                  isSelectionMode={isSelectionMode}
-                  isSelected={selectedIdSet.has(chat.id)}
-                  menuState={
-                    activeContextMenu?.id === chat.id ? activeContextMenu : null
-                  }
-                  onSelectChat={handleSelectChat}
-                  onToggleSelectionChat={toggleChatSelection}
-                  onDeleteChat={handleQueueDeleteChat}
-                  onRenameChat={handleRenameChat}
-                  onTogglePinChat={handleTogglePin}
-                  onOpenContextMenu={handleOpenContextMenu}
-                  onCloseContextMenu={handleCloseContextMenu}
-                  onEnableSelectionMode={handleEnableSelectionMode}
-                />
-              ))}
+        {(pinnedChats.length > 0 || (showWelcome && !isSelectionMode)) && (
+          <div className={styles.groupInner}>
+            {pinnedChats.map((chat) => (
+              <ChatItem
+                key={chat.id}
+                chat={chat}
+                isActive={chat.id === activeSessionId}
+                isBusy={busyChatId === chat.id}
+                isSelectionMode={isSelectionMode}
+                isSelected={selectedIdSet.has(chat.id)}
+                menuState={
+                  activeContextMenu?.id === chat.id ? activeContextMenu : null
+                }
+                onSelectChat={handleSelectChat}
+                onToggleSelectionChat={toggleChatSelection}
+                onDeleteChat={handleQueueDeleteChat}
+                onRenameChat={handleRenameChat}
+                onTogglePinChat={handleTogglePin}
+                onOpenContextMenu={handleOpenContextMenu}
+                onCloseContextMenu={handleCloseContextMenu}
+                onEnableSelectionMode={handleEnableSelectionMode}
+              />
+            ))}
 
-              {showWelcome && !isSelectionMode && (
-                <div
-                  className={`${styles.chatRow} ${activeSessionId === "__system_welcome" ? styles.active : ""}`}
-                  onClick={() => app.handleSelectChat("__system_welcome")}
-                >
-                  <div className={styles.chatLeading}>
-                    {busyChatId === "__system_welcome" ? (
-                      <span className={styles.rowSpinner} aria-hidden="true">
-                        <span className={styles.rowSpinnerInner}>
-                          <LoadingSpinner />
-                        </span>
-                      </span>
-                    ) : (
-                      <span className={styles.welcomeDot} aria-hidden="true" />
-                    )}
-                  </div>
-                  <span className={styles.chatTitle}>
-                    Welcome to {app.system.appName}!
-                  </span>
+            {showWelcome && !isSelectionMode && (
+              <div
+                className={`${styles.chatRow} ${activeSessionId === "__system_welcome" ? styles.active : ""}`}
+                onClick={() => app.handleSelectChat("__system_welcome")}
+              >
+                <div className={styles.chatIconMain}>
+                  <Milestone size={20} />
                 </div>
-              )}
-            </div>
-          )}
-          <div className={styles.threadsDivider}>
-            <span>Threads</span>
+                <span className={styles.chatTitle}>
+                  Welcome to {app.system.appName}!
+                </span>
+              </div>
+            )}
           </div>
+        )}
+
+        <div className={styles.threadsDivider}>
+          <span>Threads</span>
         </div>
 
         <div className={styles.groupInner}>

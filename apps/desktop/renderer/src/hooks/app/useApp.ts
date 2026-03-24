@@ -230,7 +230,13 @@ export const useApp = () => {
     isCheckingImage ||
     isPendingAutoSelectWelcome;
 
-  const panel = useAppPanel(isLoadingState);
+  const shouldAutoClosePanelForWelcome =
+    system.hasAgreed === false && !system.activeProfile;
+
+  const panel = useAppPanel(
+    isLoadingState,
+    shouldAutoClosePanelForWelcome,
+  );
 
   const hasActiveOnboarding = chatHistory.activeSessionId
     ? isOnboardingId(chatHistory.activeSessionId)

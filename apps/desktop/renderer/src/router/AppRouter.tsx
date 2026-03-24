@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from "react";
+import React, { useEffect } from "react";
 import { getDialogs } from "@/lib";
 import { Dialog } from "@/components";
+import { usePlatform } from "@/hooks";
 import {
   Welcome,
   Agreement,
@@ -26,6 +27,34 @@ const isOnboardingId = (id: string) => id.startsWith("__system_");
 
 const AppRouterContent: React.FC = () => {
   const app = useAppContext();
+  const { isMac } = usePlatform();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.isComposing) return;
+
+      const modPressed = isMac ? e.metaKey : e.ctrlKey;
+      if (!modPressed) return;
+
+      const key = e.key.toLowerCase();
+
+      if (!e.shiftKey && !e.altKey && key === "k") {
+        e.preventDefault();
+        app.openSearchOverlay();
+        return;
+      }
+
+      if (e.shiftKey && !e.altKey && key === "o") {
+        e.preventDefault();
+        app.handleNewSession();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, { capture: true });
+    };
+  }, [app, isMac]);
 
   const isAgreed = app.system.hasAgreed || app.agreedToTerms;
   const baseLoginDialog = getDialogs(app.system.appName).LOGIN_REQUIRED;

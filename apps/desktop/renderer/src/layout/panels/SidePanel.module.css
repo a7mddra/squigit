@@ -24,8 +24,6 @@
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
-  transform: translateZ(0);
-  backface-visibility: hidden;
 }
 
 .headerArea {
@@ -76,8 +74,6 @@
   overflow-x: hidden;
   padding: 8px 0 12px;
   background: var(--c-raw-013);
-  transform: translateZ(0);
-  backface-visibility: hidden;
 }
 
 .groupContent {
@@ -94,21 +90,13 @@
   padding-inline: var(--panel-gutter);
 }
 
-.stickyThreadHeader {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: var(--c-raw-013);
-  padding: 0 0 10px;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-}
-
 .threadsDivider {
+  position: relative;
+  top: auto;
+  z-index: 1;
   margin: 0;
+  padding-top: 8px;
+  padding-bottom: 10px;
   padding-left: calc(var(--panel-gutter) + 10px);
   padding-right: var(--panel-gutter);
   font-size: 0.85rem;
@@ -117,6 +105,9 @@
   text-transform: none;
   color: var(--c-raw-000);
   text-align: left;
+  background: var(--c-raw-013);
+  transform: translateZ(0);
+  -webkit-font-smoothing: antialiased;
 }
 
 .chatRow {
@@ -157,6 +148,11 @@
 .chatIconMain {
   color: var(--c-raw-106);
   flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .chatRow:hover .chatIconMain,
@@ -165,13 +161,13 @@
 }
 
 .chatLeading {
-  width: 17px;
-  height: 17px;
+  width: 22px; 
+  height: 22px;
+  flex-shrink: 0;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 17px;
 }
 
 .chatBubbleIcon {
@@ -298,6 +294,36 @@
   transform: translateY(-50%);
   text-align: right;
   transition: opacity 0.15s ease;
+}
+
+.rowShortcut {
+  margin-left: auto;
+  min-width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--c-raw-000);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease;
+}
+
+.rowShortcutText {
+  font-size: 0.72rem;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.rowShortcutIcon {
+  display: inline-flex;
+}
+
+.chatRow:hover .rowShortcut {
+  opacity: 1;
 }
 
 .chatRow:hover .chatDate,

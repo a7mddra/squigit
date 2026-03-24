@@ -13,8 +13,8 @@
   color: var(--c-raw-050);
   border-radius: 6px;
   padding: 6px 12px;
-  font-size: 0.8rem;
-  font-weight: 100;
+  font-size: 0.83rem;
+  font-weight: 150;
   font-family:
     "Inter",
     system-ui,
@@ -26,7 +26,7 @@
   cursor: pointer;
   transition: all 0.2s ease;
   height: 32px;
-  width: 143px;
+  width: 150px;
   pointer-events: auto;
   -webkit-app-region: no-drag;
 }
@@ -36,7 +36,8 @@
 }
 
 .loginBtn.disabled {
-  opacity: 0.35;
+  opacity: 0.45;
+  font-weight: 200;
   cursor: not-allowed;
 }
 

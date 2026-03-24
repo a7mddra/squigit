@@ -49,4 +49,4 @@ Because Squigit analyzes your screen, your privacy is our absolute highest prior
 
 Need assistance or want to report a bug? Head over to **Settings -> Help & Support**.
 
-There, you can view your system diagnostics, report bugs, visit our GitHub, or contact us directly. Note: When you contact support, some basic system information (like your OS, Squigit version, and backend engine status) may be sent to help us troubleshoot your issue faster, subject to our [Privacy Policy](https://github.com/a7mddra/squigit/blob/main/docs/06-policies/SECURITY.md).
+There, you can view your system diagnostics, report bugs, visit our GitHub, or contact us directly. Note: When you contact support, some basic system information (like your OS, Squigit version, and backend engine status) may be sent to help us troubleshoot your issue faster, subject to our **[Privacy Policy](https://github.com/a7mddra/squigit/blob/main/docs/06-policies/SECURITY.md)**.

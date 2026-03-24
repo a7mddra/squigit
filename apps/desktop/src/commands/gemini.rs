@@ -354,8 +354,7 @@ pub async fn stream_gemini_chat_v2(
                             buffer.drain(..idx + 1);
                             
                             let trimmed = line.trim();
-                            if trimmed.starts_with("data: ") {
-                                let data = &trimmed[6..];
+                            if let Some(data) = trimmed.strip_prefix("data: ") {
                                 if data == "[DONE]" {
                                     break 'stream_loop;
                                 }

@@ -80,7 +80,7 @@
 }
 
 .iconButton:hover {
-  background-color: var(--c-raw-038);
+  background-color: var(--c-raw-067);
 }
 
 body.has-open-dialog .iconButton {
@@ -109,7 +109,7 @@ body.has-open-dialog .iconButton {
   top: 4px;
   right: 4px;
   width: 10.5px;
-  height: 10.5px;
+  height: 9.5px;
   border-radius: 50%;
   border: 1px solid var(--c-raw-013);
   background-color: var(--c-raw-059);
