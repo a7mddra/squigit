@@ -523,6 +523,7 @@ export const useGeminiEngine = (config: {
 
     try {
       let fullResponse = "";
+      let hasReceivedFirstToken = false;
       setFirstResponseId(newResponseId);
       setIsStreaming(true);
       setIsAiTyping(true);
@@ -534,6 +535,11 @@ export const useGeminiEngine = (config: {
         retryModelId,
         (token: string) => {
           fullResponse += token;
+          if (!hasReceivedFirstToken) {
+            hasReceivedFirstToken = true;
+            setStreamingText(fullResponse);
+            return;
+          }
           if (Date.now() - lastUpdateTime > STREAM_UPDATE_INTERVAL_MS) {
             setStreamingText(fullResponse);
             lastUpdateTime = Date.now();

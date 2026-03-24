@@ -106,7 +106,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                     ? () => onRetryMessage(msg.id, selectedModel)
                     : undefined
                 }
-                isRetrying={msg.id === retryingMessageId}
+                isRetrying={
+                  msg.id === retryingMessageId && streamingText.length === 0
+                }
                 onUndo={
                   msg.role === "user" && onUndoMessage
                     ? () => onUndoMessage(msg.id)
