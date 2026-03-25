@@ -1,0 +1,27 @@
+name: "Build Whisper Engine"
+description: "Builds the C++ Whisper sidecar and packages it for Tauri"
+inputs:
+  python-version:
+    description: "Python version used to download Whisper models"
+    required: false
+    default: "3.13"
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Setup CMake
+      uses: jwlawson/actions-setup-cmake@v2
+
+    - name: Download Whisper Models
+      shell: bash
+      run: |
+        python sidecars/whisper-stt/download_models.py --clean-stale
+
+    - name: Build Whisper Engine
+      shell: bash
+      run: |
+        cargo xtask build whisper

@@ -1,18 +1,17 @@
 name: "Distribute"
 
 on:
-  # push:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  # -----------------------------------------------------------------------------
-  # Job 1: Build Capture Engine (Qt + Rust)
-  # -----------------------------------------------------------------------------
-  build-capture:
-    name: Capture ${{ matrix.name }}
+  build-and-package:
+    name: Build + Bundle ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -31,134 +30,111 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Capture Engine
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/desktop/renderer/package-lock.json
+
+      - name: Install Linux Dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Build Capture Sidecar
         uses: ./.github/actions/build-capture-engine
         with:
           target: ${{ matrix.target }}
 
-      - name: Prepare Artifacts (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          mkdir -p dist-staging/qt-capture-${{ matrix.target }}/_internal
-          cp -r apps/desktop/binaries/qt-capture-${{ matrix.target }}/_internal/* dist-staging/qt-capture-${{ matrix.target }}/_internal/
-          cp apps/desktop/binaries/qt-capture-${{ matrix.target }}/capture-engine dist-staging/qt-capture-${{ matrix.target }}/
-
-      - name: Prepare Artifacts (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path dist-staging/qt-capture-${{ matrix.target }}/_internal -Force
-          Copy-Item -Recurse apps/desktop/binaries/qt-capture-${{ matrix.target }}/_internal/* dist-staging/qt-capture-${{ matrix.target }}/_internal/
-          Copy-Item apps/desktop/binaries/qt-capture-${{ matrix.target }}/capture-engine.exe dist-staging/qt-capture-${{ matrix.target }}/
-
-      - name: Upload Capture Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: capture-engine-${{ matrix.target }}
-          path: dist-staging/*
-
-  # -----------------------------------------------------------------------------
-  # Job 2: Build OCR Engine (Python/PyInstaller)
-  # -----------------------------------------------------------------------------
-  build-ocr:
-    name: OCR ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            name: Linux-x64
-            target: x86_64-unknown-linux-gnu
-          - os: windows-latest
-            name: Windows-x64
-            target: x86_64-pc-windows-msvc
-          - os: macos-latest
-            name: macOS-ARM
-            target: aarch64-apple-darwin
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build OCR Engine
+      - name: Build OCR Sidecar
         uses: ./.github/actions/build-ocr-engine
         with:
           python-version: "3.13"
 
-      - name: Prepare Artifacts (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          mkdir -p dist-staging/paddle-ocr-${{ matrix.target }}
-          cp -r apps/desktop/binaries/paddle-ocr-${{ matrix.target }}/* dist-staging/paddle-ocr-${{ matrix.target }}/
+      - name: Build Whisper Sidecar
+        uses: ./.github/actions/build-whisper-engine
+        with:
+          python-version: "3.13"
 
-      - name: Prepare Artifacts (Windows)
+      - name: Re-sign sidecars (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          IDENTITY="-"
+
+          find "apps/desktop/binaries" -type f \( -name "*.dylib" -o -name "capture-engine" -o -name "whisper-stt" -o -name "ocr-engine" \) -print0 | while IFS= read -r -d '' f; do
+            codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$f"
+          done
+
+          if [ -d "apps/desktop/binaries/qt-capture-${{ matrix.target }}/_internal/capture.app" ]; then
+            codesign --force --deep --options runtime --timestamp=none --sign "$IDENTITY" "apps/desktop/binaries/qt-capture-${{ matrix.target }}/_internal/capture.app"
+          fi
+
+      - name: Build Tauri Desktop
+        run: cargo xtask build desktop
+
+      - name: Collect Linux Artifact
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APPIMAGE_PATH="$(find "$PWD" -type f -path "*/bundle/appimage/*.AppImage" | head -n 1)"
+          if [ -z "$APPIMAGE_PATH" ]; then
+            echo "AppImage not found"
+            exit 1
+          fi
+          cp "$APPIMAGE_PATH" dist/squigit.appimage
+
+      - name: Collect Windows Artifact
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path dist-staging/paddle-ocr-${{ matrix.target }} -Force
-          Copy-Item -Recurse apps/desktop/binaries/paddle-ocr-${{ matrix.target }}/* dist-staging/paddle-ocr-${{ matrix.target }}/
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
 
-      - name: Upload OCR Artifacts
+          $candidate = Get-ChildItem -Path $PWD -Recurse -File -Filter Squigit.exe |
+            Where-Object { $_.FullName -match '[\\/]target[\\/]release[\\/]Squigit\.exe$' } |
+            Select-Object -First 1
+
+          if (-not $candidate) {
+            throw "Squigit.exe not found under target/release"
+          }
+
+          Copy-Item $candidate.FullName dist/squigit.exe
+
+      - name: Collect macOS Artifact
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          BIN_PATH="$(find "$PWD" -type f -path "*/target/release/Squigit.app/Contents/MacOS/Squigit" | head -n 1)"
+          if [ -z "$BIN_PATH" ]; then
+            BIN_PATH="$(find "$PWD" -type f -path "*/target/release/Squigit" | head -n 1)"
+          fi
+          if [ -z "$BIN_PATH" ]; then
+            echo "macOS executable not found"
+            exit 1
+          fi
+
+          cp "$BIN_PATH" dist/squigit
+          chmod +x dist/squigit
+          codesign --force --options runtime --timestamp=none --sign "-" dist/squigit
+
+      - name: Upload Executable Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ocr-engine-${{ matrix.target }}
-          path: dist-staging/*
-
-  # -----------------------------------------------------------------------------
-  # Job 3: Package & Release
-  # -----------------------------------------------------------------------------
-  package:
-    name: Package & Release
-    needs: [build-capture, build-ocr]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-
-    strategy:
-      matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - x86_64-pc-windows-msvc
-          - aarch64-apple-darwin
-
-    steps:
-      - name: Download Capture Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: capture-engine-${{ matrix.target }}
-          path: staging/capture
-
-      - name: Download OCR Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: ocr-engine-${{ matrix.target }}
-          path: staging/ocr
-
-      - name: Assemble & Zip
-        run: |
-          mkdir -p final/sidecars
-
-          if [ -d staging/capture/qt-capture-${{ matrix.target }} ]; then
-            cp -r staging/capture/qt-capture-${{ matrix.target }} final/sidecars/
-          else
-            echo "Missing capture artifact for ${{ matrix.target }}"
-            exit 1
-          fi
-
-          if [ -d staging/ocr/paddle-ocr-${{ matrix.target }} ]; then
-            cp -r staging/ocr/paddle-ocr-${{ matrix.target }} final/sidecars/
-          else
-            echo "Missing OCR artifact for ${{ matrix.target }}"
-            exit 1
-          fi
-
-          cd final
-          zip -r ../sidecars-${{ matrix.target }}.zip sidecars
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-          files: sidecars-${{ matrix.target }}.zip
+          name: squigit-${{ matrix.target }}
+          path: dist/*

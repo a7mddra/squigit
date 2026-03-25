@@ -78,8 +78,20 @@ pub fn sign(native_dir: &Path) -> Result<()> {
         anyhow::bail!("App bundle not found at {}", app_bundle.display());
     }
 
+    let signing_identity = std::env::var("APPLE_SIGNING_IDENTITY")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| "-".to_string());
+
     let status = Command::new("codesign")
-        .args(["-s", "-", "--deep", "--force", "--options", "runtime"])
+        .args([
+            "-s",
+            signing_identity.as_str(),
+            "--deep",
+            "--force",
+            "--options",
+            "runtime",
+        ])
         .arg(&app_bundle)
         .status()
         .context("Failed to execute codesign")?;
