@@ -184,7 +184,7 @@ const ChatItem: React.FC<ChatItemProps> = React.memo(
                 </span>
               ) : (
                 <>
-                  <FolderOpen size={22} className={styles.chatBubbleIcon} />
+                  <FolderOpen size={21} className={styles.chatBubbleIcon} />
                   <button
                     type="button"
                     className={`${styles.pinLeftBtn} ${chat.is_pinned ? styles.pinActive : ""}`}
