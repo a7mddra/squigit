@@ -9,11 +9,15 @@
 //!
 //! Windows and X11 are silent by default, so no action needed.
 
+#[cfg(target_os = "linux")]
 use std::env;
 use std::process::Command;
+#[cfg(target_os = "linux")]
 use std::sync::OnceLock;
 
+#[cfg(target_os = "linux")]
 static HAS_WPCTL: OnceLock<bool> = OnceLock::new();
+#[cfg(target_os = "linux")]
 static HAS_PACTL: OnceLock<bool> = OnceLock::new();
 
 pub struct AudioGuard;

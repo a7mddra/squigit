@@ -16,6 +16,11 @@ runs:
       run: |
         docker build -t squigit-builder -f sidecars/qt-capture/Dockerfile .
         docker run --rm -v $PWD:/build -w /build squigit-builder bash -c "cargo xtask build capture"
+        for path in target apps/desktop/binaries sidecars/qt-capture/native/_internal; do
+          if [ -e "$path" ]; then
+            sudo chown -R "$(id -u):$(id -g)" "$path"
+          fi
+        done
 
     - name: Install Qt (macOS)
       if: runner.os == 'macOS'

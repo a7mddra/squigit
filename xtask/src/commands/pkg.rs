@@ -12,6 +12,20 @@ use xtask::{
     whisper_sidecar_dir,
 };
 
+fn copy_capture_runtime_dir(src: &Path, dst: &Path) -> Result<()> {
+    #[cfg(windows)]
+    {
+        copy_dir_all(src, dst)?;
+        return Ok(());
+    }
+
+    #[cfg(not(windows))]
+    {
+        copy_dir_all_preserve_symlinks(src, dst)?;
+        Ok(())
+    }
+}
+
 fn copy_ocr_runtime_dir(src: &Path, dst: &Path) -> Result<()> {
     #[cfg(windows)]
     {
@@ -91,7 +105,7 @@ pub fn capture() -> Result<()> {
 
     println!("  Moving _internal to {}", internal_dst.display());
     if fs::rename(&qt_internal_src, &internal_dst).is_err() {
-        copy_dir_all(&qt_internal_src, &internal_dst)?;
+        copy_capture_runtime_dir(&qt_internal_src, &internal_dst)?;
         fs::remove_dir_all(&qt_internal_src)?;
     }
 
@@ -115,7 +129,7 @@ pub fn capture() -> Result<()> {
     if debug_sidecar_dst.exists() {
         fs::remove_dir_all(&debug_sidecar_dst)?;
     }
-    copy_dir_all(&sidecar_dst, &debug_sidecar_dst)?;
+    copy_capture_runtime_dir(&sidecar_dst, &debug_sidecar_dst)?;
 
     Ok(())
 }

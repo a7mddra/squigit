@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use std::fs;
 use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -14,7 +15,7 @@ use url::Url;
 
 use ops_profile_store::{Profile, ProfileStore};
 
-const EMBEDDED_SECRETS_JSON: &str = include_str!("../data/credentials.json");
+const EMBEDDED_SECRETS_JSON: &str = include_str!("../data/credentials.example.json");
 
 const HTML_TEMPLATE: &str = include_str!("../data/success.html");
 
@@ -87,8 +88,34 @@ fn missing_credentials_message() -> String {
     )
 }
 
+fn load_google_credentials_raw() -> Result<String, String> {
+    if let Ok(raw) = std::env::var("SQUIGIT_GOOGLE_CREDENTIALS_JSON") {
+        if !raw.trim().is_empty() {
+            return Ok(raw);
+        }
+    }
+
+    if let Ok(path) = std::env::var("SQUIGIT_GOOGLE_CREDENTIALS_PATH") {
+        let trimmed = path.trim();
+        if !trimmed.is_empty() {
+            return fs::read_to_string(trimmed)
+                .map_err(|e| format!("Failed reading SQUIGIT_GOOGLE_CREDENTIALS_PATH: {}", e));
+        }
+    }
+
+    Ok(EMBEDDED_SECRETS_JSON.to_string())
+}
+
+fn is_placeholder_config(config: &OAuthConfig) -> bool {
+    config.client_id.contains("replace-me")
+        || config.client_secret.contains("replace-me")
+        || config.client_id.trim().is_empty()
+        || config.client_secret.trim().is_empty()
+}
+
 fn load_google_oauth_config() -> Result<OAuthConfig, String> {
-    let raw = EMBEDDED_SECRETS_JSON.trim();
+    let raw = load_google_credentials_raw()?;
+    let raw = raw.trim();
     if raw.is_empty() {
         let message = missing_credentials_message();
         AUTH_MISSING_CREDENTIALS_LOG_ONCE.call_once(|| {
@@ -100,10 +127,20 @@ fn load_google_oauth_config() -> Result<OAuthConfig, String> {
     let wrapper: GoogleCredentials = serde_json::from_str(raw)
         .map_err(|e| format!("Failed to parse Google OAuth credentials: {}", e))?;
 
-    wrapper
+    let config = wrapper
         .installed
         .or(wrapper.web)
-        .ok_or_else(|| "Invalid credentials.json: missing 'installed' or 'web' object".to_string())
+        .ok_or_else(|| "Invalid credentials.json: missing 'installed' or 'web' object".to_string())?;
+
+    if is_placeholder_config(&config) {
+        let message = missing_credentials_message();
+        AUTH_MISSING_CREDENTIALS_LOG_ONCE.call_once(|| {
+            eprintln!("[auth] {}", message.replace('\n', "\n[auth] "));
+        });
+        return Err(message);
+    }
+
+    Ok(config)
 }
 
 pub fn start_google_auth_flow(
