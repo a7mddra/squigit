@@ -45,7 +45,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["appimage", "nsis", "dmg"],
     "resources": [
       "binaries/qt-capture-*/**/*",
       "binaries/paddle-ocr-*/**/*",

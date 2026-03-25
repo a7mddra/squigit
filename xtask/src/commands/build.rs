@@ -587,6 +587,12 @@ pub fn desktop() -> Result<()> {
     if cfg!(target_os = "linux") {
         tauri_args.push("--bundles");
         tauri_args.push("appimage");
+    } else if cfg!(target_os = "windows") {
+        tauri_args.push("--bundles");
+        tauri_args.push("nsis");
+    } else if cfg!(target_os = "macos") {
+        tauri_args.push("--bundles");
+        tauri_args.push("dmg");
     }
 
     let mut env_vars = Vec::new();

@@ -52,6 +52,10 @@ jobs:
             libasound2-dev \
             patchelf
 
+          # ubuntu-latest can change (22.04/24.04). AppImage runtime needs libfuse.so.2.
+          # Try the current package name first, then the legacy one.
+          sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
+
       - name: Build Capture Sidecar
         uses: ./.github/actions/build-capture-engine
         with:
@@ -101,6 +105,9 @@ jobs:
           path: apps/desktop/binaries/whisper-stt-${{ matrix.target }}/
 
       - name: Build Tauri Desktop
+        env:
+          # linuxdeploy and plugin binaries are AppImages; avoid FUSE runtime issues in CI.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
         run: cargo xtask build desktop
 
       - name: Collect Linux Artifact
@@ -123,13 +130,10 @@ jobs:
           New-Item -ItemType Directory -Path dist -Force | Out-Null
 
           $nsis = Get-ChildItem -Path "$PWD/target/release/bundle/nsis" -Filter "*-setup.exe" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($nsis) { Copy-Item $nsis.FullName dist/ }
-
-          $msi = Get-ChildItem -Path "$PWD/target/release/bundle/msi" -Filter "*.msi" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($msi) { Copy-Item $msi.FullName dist/ }
-
-          if (-not $nsis -and -not $msi) {
-            throw "No NSIS or MSI bundle found under target/release/bundle"
+          if ($nsis) {
+            Copy-Item $nsis.FullName dist/
+          } else {
+            throw "NSIS setup.exe not found under target/release/bundle/nsis"
           }
 
       - name: Collect macOS Artifact
@@ -143,12 +147,8 @@ jobs:
           if [ -n "$DMG_PATH" ]; then
             cp "$DMG_PATH" dist/
           else
-            echo "No .dmg bundle found, falling back to raw binary"
-            BIN_PATH="$(find "$PWD" -type f -path "*/target/release/Squigit" | head -n 1)"
-            if [ -z "$BIN_PATH" ]; then echo "macOS executable not found"; exit 1; fi
-            cp "$BIN_PATH" dist/squigit
-            chmod +x dist/squigit
-            codesign --force --options runtime --timestamp=none --sign "-" dist/squigit
+            echo "No .dmg bundle found under target/release/bundle"
+            exit 1
           fi
 
       - name: Upload Executable Artifact

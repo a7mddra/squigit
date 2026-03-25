@@ -77,3 +77,4 @@ winapi = { version = "0.3", features = ["winuser", "winreg", "winnt", "minwindef
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2"
 cocoa = "0.24"
+libc = "0.2"
