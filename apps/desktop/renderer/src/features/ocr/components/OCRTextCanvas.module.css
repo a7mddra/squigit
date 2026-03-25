@@ -20,9 +20,16 @@
 }
 
 .highlightBg {
-  fill: var(--c-raw-085);
   mix-blend-mode: screen;
   pointer-events: none;
+}
+
+.highlightBgOnDark {
+  fill: var(--c-raw-085);
+}
+
+.highlightBgOnLight {
+  fill: rgba(17, 17, 17, 0.0925);
 }
 
 .selectableText {

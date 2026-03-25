@@ -17,6 +17,7 @@ interface OCRTextCanvasProps {
   size: { w: number; h: number };
   svgRef: React.RefObject<SVGSVGElement | null>;
   onTextMouseDown: (e: React.MouseEvent, boxIndex: number) => void;
+  imageToneMode?: "dark" | "light";
 }
 
 export const OCRTextCanvas: React.FC<OCRTextCanvasProps> = ({
@@ -24,6 +25,7 @@ export const OCRTextCanvas: React.FC<OCRTextCanvasProps> = ({
   size,
   svgRef,
   onTextMouseDown,
+  imageToneMode = "dark",
 }) => {
   if (data.length === 0 || size.w === 0) return null;
 
@@ -74,7 +76,14 @@ export const OCRTextCanvas: React.FC<OCRTextCanvasProps> = ({
 
         return (
           <g key={i}>
-            <polygon className={styles.highlightBg} points={points} />
+            <polygon
+              className={`${styles.highlightBg} ${
+                imageToneMode === "light"
+                  ? styles.highlightBgOnLight
+                  : styles.highlightBgOnDark
+              }`}
+              points={points}
+            />
             <text
               id={`text-${i}`}
               x={b[0][0]}

@@ -10,5 +10,6 @@ pub mod network;
 pub mod search;
 pub mod security;
 pub mod theme;
+pub mod tone;
 pub mod tray;
 pub mod window;

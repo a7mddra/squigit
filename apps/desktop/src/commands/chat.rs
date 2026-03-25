@@ -4,6 +4,7 @@
 //! Chat storage Tauri commands.
 
 use crate::services::search::{search_local_chats, ChatSearchResult};
+use crate::services::tone::detect_image_tone_from_bytes;
 use ops_chat_storage::{
     ChatData, ChatMessage, ChatMetadata, ChatStorage, OcrFrame, OcrRegion, StoredImage,
 };
@@ -71,15 +72,20 @@ pub(crate) fn resolve_attachment_path_internal(path: &str) -> Result<std::path::
 #[tauri::command]
 pub fn store_image_bytes(bytes: Vec<u8>) -> Result<StoredImage, String> {
     let storage = get_active_storage()?;
-    storage.store_image(&bytes).map_err(|e| e.to_string())
+    let explicit_tone = detect_image_tone_from_bytes(&bytes);
+    storage
+        .store_image(&bytes, explicit_tone)
+        .map_err(|e| e.to_string())
 }
 
 /// Store image from file path and return hash + path.
 #[tauri::command]
 pub fn store_image_from_path(path: String) -> Result<StoredImage, String> {
     let storage = get_active_storage()?;
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let explicit_tone = detect_image_tone_from_bytes(&bytes);
     storage
-        .store_image_from_path(&path)
+        .store_image(&bytes, explicit_tone)
         .map_err(|e| e.to_string())
 }
 
@@ -88,7 +94,7 @@ pub fn store_image_from_path(path: String) -> Result<StoredImage, String> {
 pub fn store_file_from_path(path: String) -> Result<StoredImage, String> {
     let storage = get_active_storage()?;
     storage
-        .store_file_from_path(&path)
+        .store_file_from_path(&path, None)
         .map_err(|e| e.to_string())
 }
 
@@ -132,6 +138,20 @@ pub fn get_image_path(hash: String) -> Result<String, String> {
 pub fn resolve_attachment_path(path: String) -> Result<String, String> {
     let resolved = resolve_attachment_path_internal(&path)?;
     Ok(resolved.to_string_lossy().to_string())
+}
+
+/// Detect image tone for a given attachment path.
+#[tauri::command]
+pub fn detect_image_tone(path: String) -> Result<String, String> {
+    let resolved = resolve_attachment_path_internal(&path)?;
+    let bytes = std::fs::read(resolved).map_err(|e| e.to_string())?;
+
+    match detect_image_tone_from_bytes(&bytes).as_deref() {
+        Some("l") => Ok("light".to_string()),
+        Some("d") => Ok("dark".to_string()),
+        Some(other) => Ok(other.to_string()),
+        None => Err("Failed to detect image tone".to_string()),
+    }
 }
 
 /// Read UTF-8 text content from an attachment path.
@@ -241,7 +261,8 @@ pub fn create_chat(
     ocr_lang: Option<String>,
 ) -> Result<ChatMetadata, String> {
     let storage = get_active_storage()?;
-    let metadata = ChatMetadata::new(title, image_hash, ocr_lang);
+    let mut metadata = ChatMetadata::new(title, image_hash.clone(), ocr_lang);
+    metadata.image_tone = storage.get_image_tone(&image_hash);
     let chat = ChatData::new(metadata.clone());
     storage.save_chat(&chat).map_err(|e| e.to_string())?;
     Ok(metadata)

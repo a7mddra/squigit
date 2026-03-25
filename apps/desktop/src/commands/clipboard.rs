@@ -49,7 +49,7 @@ pub async fn read_clipboard_image(_state: State<'_, AppState>) -> Result<StoredI
 
     let chats_dir = profile_store.get_chats_dir(&active_id);
     let storage = ChatStorage::with_base_dir(chats_dir).map_err(|e| e.to_string())?;
-    let stored = storage.store_image(&buffer).map_err(|e| e.to_string())?;
+    let stored = storage.store_image(&buffer, None).map_err(|e| e.to_string())?;
 
     Ok(stored)
 }

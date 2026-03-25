@@ -39,7 +39,9 @@ pub fn process_bytes_internal(
 
     let chats_dir = profile_store.get_chats_dir(&active_id);
     let storage = ChatStorage::with_base_dir(chats_dir).map_err(|e| e.to_string())?;
-    let stored = storage.store_image(&buffer).map_err(|e| e.to_string())?;
+    
+    let explicit_tone = crate::services::tone::detect_image_tone_from_bytes(&buffer);
+    let stored = storage.store_image(&buffer, explicit_tone).map_err(|e| e.to_string())?;
 
     let mut image_lock = state.image_data.lock();
     *image_lock = Some(stored.clone());

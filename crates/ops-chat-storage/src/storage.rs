@@ -141,7 +141,7 @@ impl ChatStorage {
     ///
     /// Returns the hash and path to the stored image.
     /// If the image already exists (same hash), returns the existing path.
-    pub fn store_image(&self, bytes: &[u8]) -> Result<StoredImage> {
+    pub fn store_image(&self, bytes: &[u8], explicit_tone: Option<String>) -> Result<StoredImage> {
         if bytes.is_empty() {
             return Err(StorageError::EmptyImage);
         }
@@ -156,32 +156,56 @@ impl ChatStorage {
 
         // Full path: objects/<prefix>/<hash>.png
         let file_path = subdir.join(format!("{}.png", hash));
+        let tone_path = subdir.join(format!("{}.tone", hash));
+
+        let explicit_tone = explicit_tone
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(|v| v.to_string());
+        let mut tone = explicit_tone.clone().unwrap_or_else(|| "d".to_string());
 
         // Only write if file doesn't exist (deduplication)
         if !file_path.exists() {
             let mut file = File::create(&file_path)?;
             file.write_all(bytes)?;
+
+            // Cache explicit tone
+            let _ = fs::write(&tone_path, &tone);
+        } else if let Some(explicit) = explicit_tone {
+            // If caller provided a tone for an existing deduplicated object,
+            // prefer it over stale cached values.
+            tone = explicit;
+            let _ = fs::write(&tone_path, &tone);
+        } else if tone_path.exists() {
+            if let Ok(cached) = fs::read_to_string(&tone_path) {
+                let trimmed = cached.trim();
+                if !trimmed.is_empty() {
+                    tone = trimmed.to_string();
+                }
+            }
         }
 
         Ok(StoredImage {
             hash,
             path: file_path.to_string_lossy().to_string(),
+            tone: Some(tone),
         })
     }
 
     /// Store an image from a file path.
-    pub fn store_image_from_path(&self, path: &str) -> Result<StoredImage> {
+    pub fn store_image_from_path(&self, path: &str, explicit_tone: Option<String>) -> Result<StoredImage> {
         let mut file = File::open(path)?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
-        self.store_image(&buffer)
+        self.store_image(&buffer, explicit_tone)
     }
 
     /// Store a generic file using content-addressable storage, preserving the original extension.
     ///
     /// Returns the hash and path to the stored file.
     /// If the file already exists (same hash + extension), returns the existing path.
-    pub fn store_file(&self, bytes: &[u8], extension: &str) -> Result<StoredImage> {
+    pub fn store_file(&self, bytes: &[u8], extension: &str, explicit_tone: Option<String>) -> Result<StoredImage> {
         if bytes.is_empty() {
             return Err(StorageError::EmptyImage);
         }
@@ -197,21 +221,53 @@ impl ChatStorage {
         } else {
             extension
         };
+        let is_image_ext = ext == "png" || ext == "jpeg" || ext == "jpg" || ext == "webp";
         let file_path = subdir.join(format!("{}.{}", hash, ext));
+        let tone_path = subdir.join(format!("{}.tone", hash));
+        let explicit_tone = explicit_tone
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(|v| v.to_string());
+        let mut tone = explicit_tone.clone().unwrap_or_else(|| "d".to_string());
 
         if !file_path.exists() {
             let mut file = File::create(&file_path)?;
             file.write_all(bytes)?;
+
+            if is_image_ext {
+                 let _ = fs::write(&tone_path, &tone);
+            }
+        } else if is_image_ext {
+            if let Some(explicit) = explicit_tone {
+                tone = explicit;
+                let _ = fs::write(&tone_path, &tone);
+            } else if tone_path.exists() {
+                if let Ok(cached) = fs::read_to_string(&tone_path) {
+                    let trimmed = cached.trim();
+                    if !trimmed.is_empty() {
+                        tone = trimmed.to_string();
+                    }
+                }
+            }
+        } else if tone_path.exists() {
+            if let Ok(cached) = fs::read_to_string(&tone_path) {
+                let trimmed = cached.trim();
+                if !trimmed.is_empty() {
+                    tone = trimmed.to_string();
+                }
+            }
         }
 
         Ok(StoredImage {
             hash,
             path: file_path.to_string_lossy().to_string(),
+            tone: Some(tone),
         })
     }
 
     /// Store a file from a filesystem path, preserving the original extension.
-    pub fn store_file_from_path(&self, path: &str) -> Result<StoredImage> {
+    pub fn store_file_from_path(&self, path: &str, explicit_tone: Option<String>) -> Result<StoredImage> {
         let source = std::path::Path::new(path);
         let extension = source
             .extension()
@@ -222,7 +278,7 @@ impl ChatStorage {
         let mut file = File::open(path)?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
-        self.store_file(&buffer, &extension)
+        self.store_file(&buffer, &extension, explicit_tone)
     }
 
     /// Get the path to a stored image by its hash.
@@ -235,6 +291,21 @@ impl ChatStorage {
         } else {
             Err(StorageError::ImageNotFound(hash.to_string()))
         }
+    }
+
+    /// Get the cached tone for a stored image by its hash.
+    pub fn get_image_tone(&self, hash: &str) -> Option<String> {
+        let prefix = hash.get(..2)?;
+        let tone_path = self.objects_dir.join(prefix).join(format!("{}.tone", hash));
+        if tone_path.exists() {
+            if let Ok(cached) = fs::read_to_string(&tone_path) {
+                let trimmed = cached.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+        None
     }
 
     // =========================================================================

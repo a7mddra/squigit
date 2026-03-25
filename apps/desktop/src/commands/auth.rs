@@ -181,7 +181,7 @@ pub async fn cache_avatar(
 
         // Store image
         let stored_image = storage
-            .store_image(&bytes)
+            .store_image(&bytes, None)
             .map_err(|e| format!("Failed to store avatar: {}", e))?;
 
         let local_path = stored_image.path.clone();

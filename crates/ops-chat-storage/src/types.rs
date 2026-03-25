@@ -30,9 +30,10 @@ pub struct ChatMetadata {
     /// When the chat was pinned.
     #[serde(default)]
     pub pinned_at: Option<DateTime<Utc>>,
-    /// Last used OCR language.
-    #[serde(default)]
     pub ocr_lang: Option<String>,
+    /// Image tone detected upon upload (light/dark).
+    #[serde(default)]
+    pub image_tone: Option<String>,
 }
 
 impl ChatMetadata {
@@ -55,6 +56,7 @@ impl ChatMetadata {
             is_starred: false,
             pinned_at: None,
             ocr_lang,
+            image_tone: None,
         }
     }
 }
@@ -139,4 +141,7 @@ pub struct StoredImage {
     pub hash: String,
     /// Absolute path to the stored image file.
     pub path: String,
+    /// Image tone detected upon upload (light/dark).
+    #[serde(default)]
+    pub tone: Option<String>,
 }

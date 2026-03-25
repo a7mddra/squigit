@@ -198,7 +198,7 @@ This usually indicates a native crash during startup/capture."
             })
             .and_then(|storage| {
                 storage
-                    .store_image_from_path(path)
+                    .store_image_from_path(path, None)
                     .ok()
                     .map(|stored| (storage, stored))
             })
@@ -227,7 +227,7 @@ This usually indicates a native crash during startup/capture."
                 let chats_dir = profile_store.get_chats_dir(&active_id);
                 ChatStorage::with_base_dir(chats_dir).ok()
             })
-            .and_then(|storage| storage.store_image_from_path(path).ok())
+            .and_then(|storage| storage.store_image_from_path(path, None).ok())
             .map(|stored| {
                 let _ = std::fs::remove_file(path);
                 (Some(stored.path), Some(stored.hash))

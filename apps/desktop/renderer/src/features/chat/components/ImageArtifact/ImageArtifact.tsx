@@ -48,6 +48,7 @@ export interface ImageArtifactProps {
     path: string;
     mimeType: string;
     imageId: string;
+    tone?: string;
   } | null;
   sessionLensUrl: string | null;
   setSessionLensUrl: (url: string) => void;
@@ -81,6 +82,15 @@ export interface ImageArtifactProps {
 }
 
 const globalScanLock = new Set<string>();
+type ImageToneMode = "dark" | "light";
+
+const normalizeToneResult = (value: string): ImageToneMode => {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "light" || normalized === "l") {
+    return "light";
+  }
+  return "dark";
+};
 
 export const ImageArtifact: React.FC<ImageArtifactProps> = ({
   startupImage,
@@ -111,6 +121,66 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
   const [errorDialog, setErrorDialog] = useState<DialogContent | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [showScrollbar, setShowScrollbar] = useState(false);
+  const [imageToneMode, setImageToneMode] = useState<ImageToneMode>(
+    (startupImage?.tone as ImageToneMode) || "dark",
+  );
+
+  useEffect(() => {
+    if (startupImage?.tone) {
+      setImageToneMode(startupImage.tone as ImageToneMode);
+    }
+  }, [startupImage?.tone]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const runToneDetection = async () => {
+      if (!startupImage?.path) {
+        return;
+      }
+
+      const runs: ImageToneMode[] = [];
+
+      for (let i = 1; i <= 5; i += 1) {
+        try {
+          const raw = await invoke<string>("detect_image_tone", {
+            path: startupImage.path,
+          });
+          const tone = normalizeToneResult(raw);
+          runs.push(tone);
+          console.log(
+            `[ToneDetector] run ${i}/5 image=${startupImage.imageId} tone=${tone}`,
+          );
+        } catch (err) {
+          console.error(
+            `[ToneDetector] run ${i}/5 image=${startupImage.imageId} failed`,
+            err,
+          );
+        }
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      if (runs.length > 0) {
+        const darkCount = runs.filter((v) => v === "dark").length;
+        const lightCount = runs.length - darkCount;
+        const finalTone: ImageToneMode = lightCount >= darkCount ? "light" : "dark";
+        setImageToneMode(finalTone);
+        console.log(
+          `[ToneDetector] final image=${startupImage.imageId} dark=${darkCount} light=${lightCount} result=${finalTone}`,
+        );
+      }
+
+    };
+
+    void runToneDetection();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [startupImage?.imageId, startupImage?.path]);
 
   const scanRequestRef = useRef(0);
 
@@ -626,6 +696,7 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
                       size={size}
                       svgRef={svgRef}
                       onTextMouseDown={handleTextMouseDown}
+                      imageToneMode={imageToneMode}
                     />
                   )}
                 </div>

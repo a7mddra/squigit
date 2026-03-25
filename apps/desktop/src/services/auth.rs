@@ -226,7 +226,7 @@ pub fn start_google_auth_flow(
                         // Download and save to CAS
                         if let Ok(response) = client.get(&avatar).send() {
                             if let Ok(bytes) = response.bytes() {
-                                if let Ok(stored_image) = storage.store_image(&bytes) {
+                                if let Ok(stored_image) = storage.store_image(&bytes, None) {
                                     local_avatar = stored_image.path;
                                 }
                             }
