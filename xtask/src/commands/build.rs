@@ -1,48 +1,42 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::collections::HashSet;
-use std::fs;
-use std::path::Path;
 use std::time::{Duration, Instant};
-use xtask::{capture_sidecar_dir, qt_native_dir};
-use xtask::{get_host_target_triple, ocr_sidecar_dir, venv_python};
-use xtask::{project_root, run_cmd, run_cmd_with_node_bin, run_cmd_with_node_bin_and_env};
-use xtask::{tauri_dir, ui_dir};
-
-use crate::commands::pkg;
+use xtask::{run_cmd_with_node_bin, run_cmd_with_node_bin_and_env, tauri_dir, ui_dir};
+use xtask::run_cmd;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BuildTarget {
+    Cli,
     Ocr,
-    Whisper,
+    Stt,
     Capture,
     CaptureQt,
     Desktop,
-    Cli,
 }
 
 impl BuildTarget {
     fn key(self) -> &'static str {
         match self {
+            Self::Cli => "cli",
             Self::Ocr => "ocr",
-            Self::Whisper => "whisper",
+            Self::Stt => "stt",
             Self::Capture => "capture",
             Self::CaptureQt => "capture-qt",
             Self::Desktop => "desktop",
-            Self::Cli => "cli",
         }
     }
 
     fn label(self) -> &'static str {
         match self {
+            Self::Cli => "CLI",
             Self::Ocr => "PaddleOCR",
-            Self::Whisper => "Whisper STT",
+            Self::Stt => "Whisper STT",
             Self::Capture => "Capture Engine",
             Self::CaptureQt => "Capture Qt",
             Self::Desktop => "Desktop (Tauri)",
-            Self::Cli => "CLI (reserved)",
         }
     }
 }
@@ -52,11 +46,6 @@ pub struct BuildCommandOptions {
     pub selectors: Vec<String>,
     pub include_all: bool,
     pub measure_ocr_size: bool,
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-pub struct OcrBuildOptions {
-    pub measure_payload_size: bool,
 }
 
 #[derive(Debug)]
@@ -76,8 +65,7 @@ pub fn run(options: BuildCommandOptions) -> Result<()> {
         anyhow::bail!("No build targets selected.");
     }
 
-    let measure_ocr_size =
-        should_measure_ocr_size(options.measure_ocr_size || inline_flags.measure_ocr_size);
+    let measure_ocr_size = options.measure_ocr_size || inline_flags.measure_ocr_size;
 
     println!("\nBuild plan:");
     for target in &targets {
@@ -86,21 +74,21 @@ pub fn run(options: BuildCommandOptions) -> Result<()> {
     if measure_ocr_size {
         println!("  - OCR size measurement: enabled");
     } else {
-        println!("  - OCR size measurement: disabled (use --measure-ocr-size or SQUIGIT_OCR_MEASURE_SIZE=1)");
+        println!("  - OCR size measurement: disabled (use --measure-ocr-size)");
     }
 
     let mut results = Vec::with_capacity(targets.len());
     for target in targets {
         let started = Instant::now();
         let result = match target {
-            BuildTarget::Ocr => ocr_with_options(OcrBuildOptions {
+            BuildTarget::Cli => cli_placeholder(),
+            BuildTarget::Ocr => crate::compile::paddle_ocr::build(crate::compile::paddle_ocr::OcrBuildOptions {
                 measure_payload_size: measure_ocr_size,
             }),
-            BuildTarget::Whisper => whisper(),
-            BuildTarget::Capture => capture(),
-            BuildTarget::CaptureQt => capture_qt_only(),
+            BuildTarget::Stt => crate::compile::whisper_stt::build(),
+            BuildTarget::Capture => crate::compile::qt_capture::build_all(),
+            BuildTarget::CaptureQt => crate::compile::qt_capture::qt_only(),
             BuildTarget::Desktop => desktop(),
-            BuildTarget::Cli => cli_placeholder(),
         };
 
         let elapsed = started.elapsed();
@@ -234,14 +222,14 @@ fn print_build_summary(results: &[BuildRunResult]) {
 
 fn parse_target(token: &str) -> Result<BuildTarget> {
     match token {
+        "cli" => Ok(BuildTarget::Cli),
         "ocr" => Ok(BuildTarget::Ocr),
-        "whisper" => Ok(BuildTarget::Whisper),
+        "stt" => Ok(BuildTarget::Stt),
         "capture" => Ok(BuildTarget::Capture),
         "capture-qt" | "captureqt" | "qt" => Ok(BuildTarget::CaptureQt),
         "desktop" | "tauri" | "app" => Ok(BuildTarget::Desktop),
-        "cli" => Ok(BuildTarget::Cli),
         _ => anyhow::bail!(
-            "Unknown build target '{token}'. Supported targets: ocr, whisper, capture, capture-qt, desktop, tauri, app, cli"
+            "Unknown build target '{token}'. Supported targets: ocr, stt, capture, capture-qt, desktop, tauri, app, cli"
         ),
     }
 }
@@ -249,7 +237,7 @@ fn parse_target(token: &str) -> Result<BuildTarget> {
 fn default_targets() -> Vec<BuildTarget> {
     vec![
         BuildTarget::Ocr,
-        BuildTarget::Whisper,
+        BuildTarget::Stt,
         BuildTarget::Capture,
         BuildTarget::Desktop,
     ]
@@ -269,308 +257,6 @@ fn parse_bool_env(name: &str) -> bool {
             )
         })
         .unwrap_or(false)
-}
-
-fn should_measure_ocr_size(cli_flag: bool) -> bool {
-    cli_flag || parse_bool_env("SQUIGIT_OCR_MEASURE_SIZE")
-}
-
-pub fn capture() -> Result<()> {
-    println!("\nBuilding Capture Engine...");
-    build_qt_native()?;
-    println!("\nDeploying Qt runtime...");
-    deploy_qt_native()?;
-    #[cfg(target_os = "macos")]
-    {
-        println!("\nSigning macOS bundle...");
-        crate::platforms::macos::sign(&qt_native_dir())?;
-    }
-    build_capture_rust_wrapper()?;
-    pkg::capture()?;
-    println!("\nCapture Engine build complete!");
-    Ok(())
-}
-
-pub fn capture_qt_only() -> Result<()> {
-    println!("\nBuilding Qt native binary (CMake only)...");
-    build_qt_native()?;
-    println!("\nQt build complete!");
-    Ok(())
-}
-
-fn build_qt_native() -> Result<()> {
-    println!("\nRunning Qt CMake build...");
-    let native_dir = qt_native_dir();
-    #[cfg(target_os = "linux")]
-    crate::platforms::linux::build(&native_dir)?;
-    #[cfg(target_os = "macos")]
-    crate::platforms::macos::build(&native_dir)?;
-    #[cfg(target_os = "windows")]
-    crate::platforms::win::build(&native_dir)?;
-    Ok(())
-}
-
-fn deploy_qt_native() -> Result<()> {
-    let native_dir = qt_native_dir();
-    #[cfg(target_os = "linux")]
-    crate::platforms::linux::deploy(&native_dir)?;
-    #[cfg(target_os = "macos")]
-    crate::platforms::macos::deploy(&native_dir)?;
-    #[cfg(target_os = "windows")]
-    crate::platforms::win::deploy(&native_dir)?;
-    Ok(())
-}
-
-fn build_capture_rust_wrapper() -> Result<()> {
-    println!("\nBuilding Rust wrapper...");
-    let _sidecar = capture_sidecar_dir();
-    run_cmd(
-        "cargo",
-        &["build", "--release", "-p", "capture-engine"],
-        &project_root(),
-    )?;
-    Ok(())
-}
-
-#[cfg(not(target_os = "windows"))]
-fn smoke_packaged_sidecar(py: &str, sidecar_dir: &Path, sidecar_path: &Path) -> Result<()> {
-    let sidecar_str = sidecar_path.to_string_lossy().to_string();
-    run_cmd(
-        py,
-        &["scripts/smoke_sidecar.py", "--sidecar", &sidecar_str],
-        sidecar_dir,
-    )
-}
-
-pub fn ocr_with_options(options: OcrBuildOptions) -> Result<()> {
-    println!("\nBuilding PaddleOCR sidecar...");
-    let sidecar = ocr_sidecar_dir();
-    let venv = sidecar.join("venv");
-    let deps_marker = venv.join(".squigit-ocr-deps-v3");
-    let force_recreate = std::env::var("SQUIGIT_OCR_RECREATE_VENV")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-
-    if venv.exists() && (force_recreate || !deps_marker.exists()) {
-        println!("\nRefreshing OCR venv to match dependency baseline...");
-        fs::remove_dir_all(&venv)?;
-    }
-
-    if !venv.exists() {
-        println!("\nCreating virtual environment...");
-        let mut created = false;
-
-        for (cmd, args) in [
-            ("python3", vec!["-m", "venv", "venv"]),
-            ("python", vec!["-m", "venv", "venv"]),
-            ("py", vec!["-3", "-m", "venv", "venv"]),
-        ] {
-            if run_cmd(cmd, &args, &sidecar).is_ok() {
-                created = true;
-                break;
-            }
-        }
-
-        if !created {
-            anyhow::bail!(
-                "Failed to create OCR venv. Ensure Python 3 is available via `python3`, `python`, or `py -3`."
-            );
-        }
-    }
-    println!("\nInstalling dependencies...");
-    let python = venv_python();
-    let py = python.to_str().unwrap();
-    run_cmd(
-        py,
-        &["-m", "pip", "install", "-r", "requirements-build.txt"],
-        &sidecar,
-    )?;
-    run_cmd(
-        py,
-        &[
-            "-m",
-            "pip",
-            "install",
-            "--no-deps",
-            "-r",
-            "requirements-core.txt",
-        ],
-        &sidecar,
-    )?;
-    run_cmd(
-        py,
-        &["-m", "pip", "install", "-r", "requirements-runtime.txt"],
-        &sidecar,
-    )?;
-    #[cfg(target_os = "macos")]
-    {
-        println!("\nApplying macOS NumPy compatibility pin...");
-        run_cmd(
-            py,
-            &["-m", "pip", "install", "--force-reinstall", "numpy==1.26.4"],
-            &sidecar,
-        )?;
-    }
-
-    println!("\nApplying patches...");
-    run_cmd(py, &["patches/paddle_core.py"], &sidecar)?;
-    run_cmd(py, &["patches/paddlex_official_models.py"], &sidecar)?;
-    run_cmd(py, &["patches/paddlex_deps.py"], &sidecar)?;
-    run_cmd(py, &["patches/paddlex_image_batch_sampler.py"], &sidecar)?;
-
-    run_cmd(
-        py,
-        &[
-            "-m",
-            "pip",
-            "uninstall",
-            "-y",
-            "modelscope",
-            "huggingface-hub",
-            "hf-xet",
-            "pypdfium2",
-            "pypdfium2-raw",
-            "opencv-contrib-python",
-            "rich",
-            "typer",
-            "markdown-it-py",
-            "mdurl",
-        ],
-        &sidecar,
-    )?;
-    run_cmd(
-        py,
-        &[
-            "-c",
-            r###"import pathlib
-import re
-import sys
-from importlib import metadata
-
-req = {}
-for req_file in ("requirements-core.txt", "requirements-build.txt", "requirements-runtime.txt"):
-    for line in pathlib.Path(req_file).read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        line = line.split("#", 1)[0].strip()
-        if "==" not in line:
-            continue
-        name, version = line.split("==", 1)
-        name = re.split(r"[;\s]", name.strip(), maxsplit=1)[0]
-        req[name.lower().replace("_", "-")] = version.strip()
-
-errors = []
-for package, expected in req.items():
-    try:
-        actual = metadata.version(package)
-    except Exception as exc:
-        errors.append(f"{package}: metadata lookup failed: {exc}")
-        continue
-
-    if actual != expected:
-        errors.append(f"{package}: expected {expected}, got {actual}")
-
-if errors:
-    print("OCR dependency verification failed:")
-    print("\n".join(errors))
-    sys.exit(1)
-
-print("OCR dependency verification passed.")"###,
-        ],
-        &sidecar,
-    )?;
-    fs::write(&deps_marker, "v3\n")?;
-
-    println!("\nDownloading models...");
-    #[cfg(target_os = "windows")]
-    run_cmd(py, &["download_models.py"], &sidecar)?;
-    #[cfg(not(target_os = "windows"))]
-    run_cmd(py, &["download_models.py", "--clean-stale"], &sidecar)?;
-    println!("\nRunning OCR runtime smoke check...");
-    run_cmd(py, &["scripts/smoke_runtime.py"], &sidecar)?;
-
-    println!("\nBuilding executable...");
-    run_cmd(
-        py,
-        &["-m", "PyInstaller", "--clean", "-y", "ocr-engine.spec"],
-        &sidecar,
-    )?;
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        println!("\nRunning dist sidecar smoke checks...");
-        let dist_sidecar = sidecar.join("dist").join("squigit-ocr").join("squigit-ocr");
-        smoke_packaged_sidecar(py, &sidecar, &dist_sidecar)?;
-    }
-
-    pkg::ocr()?;
-
-    let host_triple = get_host_target_triple()?;
-    let app_binaries = project_root().join("apps").join("desktop").join("binaries");
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        println!("\nRunning packaged sidecar smoke checks...");
-        let packaged_sidecar = app_binaries
-            .join(format!("paddle-ocr-{}", host_triple))
-            .join("squigit-ocr");
-        smoke_packaged_sidecar(py, &sidecar, &packaged_sidecar)?;
-    }
-
-    let measure_payload_size = should_measure_ocr_size(options.measure_payload_size);
-    if measure_payload_size {
-        println!("\nMeasuring OCR payload size...");
-        let runtime_dir = app_binaries.join(format!("paddle-ocr-{}", host_triple));
-        let legacy_bin = app_binaries.join(format!(
-            "squigit-ocr-{}{}",
-            host_triple,
-            if cfg!(windows) { ".exe" } else { "" }
-        ));
-        let size_input = if runtime_dir.exists() {
-            runtime_dir
-        } else {
-            legacy_bin
-        };
-        if size_input.exists() {
-            let reports_dir = project_root().join("target").join("ocr-size");
-            fs::create_dir_all(&reports_dir)?;
-            let report_path = reports_dir.join(format!("ocr-size-{}.json", host_triple));
-            let size_input_str = size_input.to_string_lossy().to_string();
-            let report_path_str = report_path.to_string_lossy().to_string();
-            #[cfg(target_os = "windows")]
-            let measure_args = vec![
-                "scripts/measure_runtime_size.py".to_string(),
-                "--input".to_string(),
-                size_input_str,
-                "--output".to_string(),
-                report_path_str,
-            ];
-            #[cfg(not(target_os = "windows"))]
-            let mut measure_args = vec![
-                "scripts/measure_runtime_size.py".to_string(),
-                "--input".to_string(),
-                size_input_str,
-                "--output".to_string(),
-                report_path_str,
-            ];
-            #[cfg(not(target_os = "windows"))]
-            measure_args.push("--preserve-symlinks".to_string());
-
-            let measure_arg_refs: Vec<&str> = measure_args.iter().map(String::as_str).collect();
-            run_cmd(py, &measure_arg_refs, &sidecar)?;
-        } else {
-            println!(
-                "  [warn] OCR payload path not found for size report: {}",
-                size_input.display()
-            );
-        }
-    } else {
-        println!("\nSkipping OCR payload size measurement (disabled by default).");
-    }
-
-    println!("\nSidecar build complete!");
-    Ok(())
 }
 
 pub fn desktop() -> Result<()> {
@@ -606,12 +292,7 @@ pub fn desktop() -> Result<()> {
     };
 
     if cfg!(target_os = "linux") {
-        // linuxdeploy is executed during bundling and can break if LD_LIBRARY_PATH is polluted
-        // with sidecar runtime libs. Keep bundling environment clean and only set AppImage
-        // extract mode for CI/non-FUSE environments.
         set_env("APPIMAGE_EXTRACT_AND_RUN", "1");
-        // linuxdeploy's strip step can fail on CI runners (e.g. GitHub Actions).
-        // Disable stripping to avoid "failed to run linuxdeploy" errors.
         set_env("NO_STRIP", "true");
     }
 
@@ -628,15 +309,6 @@ pub fn desktop() -> Result<()> {
 
     println!("\nTauri command: tauri {}", tauri_args.join(" "));
     if env_vars.is_empty() {
-        println!("Tauri env overrides: (none)");
-    } else {
-        println!("Tauri env overrides:");
-        for (key, value) in &env_vars {
-            println!("  - {}={}", key, value);
-        }
-    }
-
-    if env_vars.is_empty() {
         run_cmd_with_node_bin("tauri", &tauri_args, &app, &node_bin)?;
     } else {
         run_cmd_with_node_bin_and_env(
@@ -650,113 +322,6 @@ pub fn desktop() -> Result<()> {
 
     println!("\nDesktop app build complete!");
     Ok(())
-}
-
-pub fn whisper() -> Result<()> {
-    println!("\nBuilding Whisper STT sidecar...");
-    let sidecar = xtask::whisper_sidecar_dir();
-    let build_dir = sidecar.join("build");
-
-    refresh_whisper_cmake_cache_if_stale(&sidecar, &build_dir)?;
-    fs::create_dir_all(&build_dir)?;
-
-    let source_dir = sidecar.to_string_lossy().to_string();
-    let build_dir_str = build_dir.to_string_lossy().to_string();
-
-    println!("\nRunning CMake config...");
-    run_cmd(
-        "cmake",
-        &[
-            "-S",
-            &source_dir,
-            "-B",
-            &build_dir_str,
-            "-DCMAKE_BUILD_TYPE=Release",
-        ],
-        &project_root(),
-    )?;
-
-    println!("\nRunning CMake build...");
-    run_cmd(
-        "cmake",
-        &["--build", &build_dir_str, "--config", "Release"],
-        &project_root(),
-    )?;
-
-    println!("\nSidecar build complete!");
-    crate::commands::pkg::whisper()?;
-    Ok(())
-}
-
-fn refresh_whisper_cmake_cache_if_stale(sidecar: &Path, build_dir: &Path) -> Result<()> {
-    let cache_path = build_dir.join("CMakeCache.txt");
-    if !cache_path.exists() {
-        return Ok(());
-    }
-
-    let content = fs::read_to_string(&cache_path).with_context(|| {
-        format!(
-            "Failed reading Whisper cache file for validation: {}",
-            cache_path.display()
-        )
-    })?;
-
-    let mut cached_home_dir = None;
-    let mut cached_cache_dir = None;
-    for line in content.lines() {
-        if let Some(value) = line.strip_prefix("CMAKE_HOME_DIRECTORY:INTERNAL=") {
-            cached_home_dir = Some(value.trim().to_string());
-        }
-        if let Some(value) = line.strip_prefix("CMAKE_CACHEFILE_DIR:INTERNAL=") {
-            cached_cache_dir = Some(value.trim().to_string());
-        }
-    }
-
-    let expected_home = normalize_path(
-        &sidecar
-            .canonicalize()
-            .unwrap_or_else(|_| sidecar.to_path_buf()),
-    );
-    let expected_cache = normalize_path(
-        &build_dir
-            .canonicalize()
-            .unwrap_or_else(|_| build_dir.to_path_buf()),
-    );
-
-    let home_mismatch = cached_home_dir
-        .as_deref()
-        .map(normalize_path_str)
-        .map(|value| value != expected_home)
-        .unwrap_or(false);
-
-    let cache_mismatch = cached_cache_dir
-        .as_deref()
-        .map(normalize_path_str)
-        .map(|value| value != expected_cache)
-        .unwrap_or(false);
-
-    if home_mismatch || cache_mismatch {
-        println!(
-            "  Detected stale Whisper CMake cache from different source/build path; recreating build directory..."
-        );
-        fs::remove_dir_all(build_dir)?;
-    }
-
-    Ok(())
-}
-
-fn normalize_path(path: &Path) -> String {
-    normalize_path_str(path.to_string_lossy().as_ref())
-}
-
-fn normalize_path_str(value: &str) -> String {
-    let normalized = value.replace('\\', "/").trim_end_matches('/').to_string();
-
-    if cfg!(target_os = "windows") {
-        normalized.to_ascii_lowercase()
-    } else {
-        normalized
-    }
 }
 
 fn cli_placeholder() -> Result<()> {
@@ -780,7 +345,7 @@ mod tests {
             actual,
             vec![
                 BuildTarget::Ocr,
-                BuildTarget::Whisper,
+                BuildTarget::Stt,
                 BuildTarget::Capture,
                 BuildTarget::Desktop,
             ]
@@ -794,51 +359,10 @@ mod tests {
         assert_eq!(
             actual,
             vec![
-                BuildTarget::Whisper,
+                BuildTarget::Stt,
                 BuildTarget::Capture,
                 BuildTarget::Desktop,
             ]
         );
-    }
-
-    #[test]
-    fn aliases_and_dedupe_are_supported() {
-        let actual = resolve_targets(
-            &selectors(&["desktop", "tauri", "app", "whisper", "whisper"]),
-            false,
-        )
-        .expect("resolve aliases");
-        assert_eq!(actual, vec![BuildTarget::Desktop, BuildTarget::Whisper]);
-    }
-
-    #[test]
-    fn explicit_targets_extend_all_selection() {
-        let actual = resolve_targets(&selectors(&["all", "capture-qt", "-ocr"]), false)
-            .expect("resolve mixed");
-        assert_eq!(
-            actual,
-            vec![
-                BuildTarget::Whisper,
-                BuildTarget::Capture,
-                BuildTarget::Desktop,
-                BuildTarget::CaptureQt,
-            ]
-        );
-    }
-
-    #[test]
-    fn invalid_target_returns_error() {
-        let err = resolve_targets(&selectors(&["unknown"]), false)
-            .expect_err("unknown selector should fail")
-            .to_string();
-        assert!(err.contains("Unknown build target"));
-    }
-
-    #[test]
-    fn inline_measure_flag_is_extracted() {
-        let mut items = selectors(&["cli", "--measure-ocr-size"]);
-        let flags = extract_inline_flags(&mut items);
-        assert!(flags.measure_ocr_size);
-        assert_eq!(items, vec!["cli".to_string()]);
     }
 }

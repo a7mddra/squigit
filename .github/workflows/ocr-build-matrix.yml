@@ -1,7 +1,8 @@
 name: "OCR Build Matrix"
 
 on:
-  workflow_dispatch:
+  push:
+  # workflow_dispatch:
 
 jobs:
   build-ocr:
@@ -25,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build OCR Baseline (onefile)
-        uses: ./.github/actions/build-ocr-engine
+        uses: ./.github/actions/build-paddle-ocr
         with:
           python-version: "3.12"
           pyi-mode: "onefile"
@@ -34,7 +35,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           python sidecars/paddle-ocr/scripts/measure_runtime_size.py \
-            --input apps/desktop/binaries/ocr-engine-${{ matrix.target }} \
+            --input packaging/binaries/paddle-ocr-${{ matrix.target }}/squigit-ocr \
             --output target/ocr-size/baseline-${{ matrix.target }}.json \
             --label baseline-onefile
 
@@ -43,7 +44,7 @@ jobs:
         shell: pwsh
         run: |
           python sidecars/paddle-ocr/scripts/measure_runtime_size.py `
-            --input apps/desktop/binaries/ocr-engine-${{ matrix.target }}.exe `
+            --input packaging/binaries/paddle-ocr-${{ matrix.target }}/squigit-ocr.exe `
             --output target/ocr-size/baseline-${{ matrix.target }}.json `
             --label baseline-onefile
 
@@ -65,7 +66,7 @@ jobs:
           Remove-Item -Recurse -Force sidecars/paddle-ocr/build, sidecars/paddle-ocr/dist -ErrorAction SilentlyContinue
 
       - name: Build OCR Candidate (onedir)
-        uses: ./.github/actions/build-ocr-engine
+        uses: ./.github/actions/build-paddle-ocr
         with:
           python-version: "3.12"
           pyi-mode: "onedir"
@@ -74,27 +75,27 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           python sidecars/paddle-ocr/scripts/smoke_sidecar.py \
-            --sidecar apps/desktop/binaries/paddle-ocr-${{ matrix.target }}/ocr-engine
+            --sidecar packaging/binaries/paddle-ocr-${{ matrix.target }}/squigit-ocr
 
       - name: Smoke test sidecar (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           python sidecars/paddle-ocr/scripts/smoke_sidecar.py `
-            --sidecar apps/desktop/binaries/paddle-ocr-${{ matrix.target }}/ocr-engine.exe
+            --sidecar packaging/binaries/paddle-ocr-${{ matrix.target }}/squigit-ocr.exe
 
       - name: Offline smoke (Linux network namespace)
         if: runner.os == 'Linux'
         run: |
           sudo unshare -n python sidecars/paddle-ocr/scripts/smoke_sidecar.py \
-            --sidecar apps/desktop/binaries/paddle-ocr-${{ matrix.target }}/ocr-engine \
+            --sidecar packaging/binaries/paddle-ocr-${{ matrix.target }}/squigit-ocr \
             --skip-cancel
 
       - name: Measure candidate size (Unix)
         if: runner.os != 'Windows'
         run: |
           python sidecars/paddle-ocr/scripts/measure_runtime_size.py \
-            --input apps/desktop/binaries/paddle-ocr-${{ matrix.target }} \
+            --input packaging/binaries/paddle-ocr-${{ matrix.target }} \
             --output target/ocr-size/candidate-${{ matrix.target }}.json \
             --label candidate-onedir
 
@@ -103,7 +104,7 @@ jobs:
         shell: pwsh
         run: |
           python sidecars/paddle-ocr/scripts/measure_runtime_size.py `
-            --input apps/desktop/binaries/paddle-ocr-${{ matrix.target }} `
+            --input packaging/binaries/paddle-ocr-${{ matrix.target }} `
             --output target/ocr-size/candidate-${{ matrix.target }}.json `
             --label candidate-onedir
 

@@ -33,8 +33,8 @@ jobs:
       - name: Package macOS Tarballs
         if: runner.os == 'macOS'
         run: |
-          tar -cvzf squigit-ocr-mac-aarch64.tar.gz -C target/release/binaries/paddle-ocr-${{ matrix.target }} .
-          tar -cvzf squigit-stt-mac-aarch64.tar.gz -C target/release/binaries/whisper-stt-${{ matrix.target }} .
+          tar -cvzf squigit-ocr-mac-aarch64.tar.gz -C packaging/binaries/paddle-ocr-${{ matrix.target }} .
+          tar -cvzf squigit-stt-mac-aarch64.tar.gz -C packaging/binaries/whisper-stt-${{ matrix.target }} .
           
       # Linux Packaging (Debian & RPM)
       - name: Package Linux DEB and RPM
@@ -44,22 +44,22 @@ jobs:
           
           # OCR DEB
           mkdir -p packaging/debian/squigit-ocr/usr/bin
-          cp -r target/release/binaries/paddle-ocr-${{ matrix.target }}/* packaging/debian/squigit-ocr/usr/bin/
+          cp -r packaging/binaries/paddle-ocr-${{ matrix.target }}/* packaging/debian/squigit-ocr/usr/bin/
           dpkg-deb --build packaging/debian/squigit-ocr squigit-ocr_0.1.0_amd64.deb
           
           # STT DEB
           mkdir -p packaging/debian/squigit-stt/usr/bin
-          cp -r target/release/binaries/whisper-stt-${{ matrix.target }}/* packaging/debian/squigit-stt/usr/bin/
+          cp -r packaging/binaries/whisper-stt-${{ matrix.target }}/* packaging/debian/squigit-stt/usr/bin/
           dpkg-deb --build packaging/debian/squigit-stt squigit-stt_0.1.0_amd64.deb
           
           # OCR RPM
           mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-          cp -r target/release/binaries/paddle-ocr-${{ matrix.target }} rpmbuild/BUILD/squigit-ocr
+          cp -r packaging/binaries/paddle-ocr-${{ matrix.target }} rpmbuild/BUILD/squigit-ocr
           rpmbuild -bb --define "_topdir $PWD/rpmbuild" packaging/rpm/squigit-ocr.spec
           cp rpmbuild/RPMS/x86_64/*.rpm .
           
           # STT RPM
-          cp -r target/release/binaries/whisper-stt-${{ matrix.target }} rpmbuild/BUILD/squigit-stt
+          cp -r packaging/binaries/whisper-stt-${{ matrix.target }} rpmbuild/BUILD/squigit-stt
           rpmbuild -bb --define "_topdir $PWD/rpmbuild" packaging/rpm/squigit-stt.spec
           cp rpmbuild/RPMS/x86_64/*.rpm .
           

@@ -28,7 +28,7 @@ pub fn ocr_sidecar_dir() -> PathBuf {
     project_root().join("sidecars").join("paddle-ocr")
 }
 
-pub fn whisper_sidecar_dir() -> PathBuf {
+pub fn stt_sidecar_dir() -> PathBuf {
     project_root().join("sidecars").join("whisper-stt")
 }
 

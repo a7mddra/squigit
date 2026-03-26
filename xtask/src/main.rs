@@ -5,19 +5,20 @@
 //!   cargo xtask build
 //!   cargo xtask build all -ocr
 //!   cargo xtask build --all --measure-ocr-size
-//!   cargo xtask build ocr whisper
+//!   cargo xtask build ocr stt
 //!   cargo xtask report --strict
 //!   cargo xtask version 0.2.0
 //!   cargo xtask version --bump patch
 //!   cargo xtask setup --all
 
-mod commands;
-mod console;
-mod platforms;
+pub mod compile;
+pub mod packaging;
+pub mod commands;
+pub mod console;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use commands::{build, clean, dev, report, setup, version};
+use commands::{build as cmd_build, clean, dev, report, setup, version};
 
 #[derive(Parser)]
 #[command(name = "xtask")]
@@ -39,7 +40,7 @@ enum Commands {
         #[arg(long)]
         measure_ocr_size: bool,
 
-        /// Build selectors and exclusions (e.g. ocr whisper, all -ocr, capture-qt).
+        /// Build selectors and exclusions (e.g. ocr stt, all -ocr, capture-qt).
         #[arg(value_name = "TARGET", allow_hyphen_values = true)]
         selectors: Vec<String>,
     },
@@ -113,7 +114,7 @@ fn main() -> Result<()> {
             all,
             measure_ocr_size,
             selectors,
-        } => build::run(build::BuildCommandOptions {
+        } => cmd_build::run(cmd_build::BuildCommandOptions {
             selectors,
             include_all: all,
             measure_ocr_size,

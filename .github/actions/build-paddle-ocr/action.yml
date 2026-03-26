@@ -1,4 +1,4 @@
-name: "Build OCR Engine"
+name: "Build PaddleOCR CLI"
 description: "Builds the Python-based PaddleOCR standalone executable"
 inputs:
   python-version:
@@ -17,7 +17,7 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
 
-    - name: Build OCR Engine
+    - name: Build PaddleOCR CLI
       shell: bash
       env:
         SQUIGIT_OCR_PYI_MODE: ${{ inputs.pyi-mode }}

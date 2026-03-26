@@ -3,10 +3,11 @@
 
 use anyhow::Result;
 use std::fs;
-use xtask::{ocr_sidecar_dir, project_root, qt_native_dir, tauri_dir};
+use xtask::{ocr_sidecar_dir, project_root, qt_native_dir, stt_sidecar_dir, tauri_dir};
 
 pub fn all() -> Result<()> {
     ocr()?;
+    stt()?;
     capture()?;
     app()?;
     Ok(())
@@ -25,15 +26,6 @@ pub fn capture() -> Result<()> {
         }
     }
 
-    let qt_internal = project_root()
-        .join("target")
-        .join("release")
-        .join("_internal");
-    if qt_internal.exists() {
-        println!("  Removing {}", qt_internal.display());
-        fs::remove_dir_all(&qt_internal)?;
-    }
-
     Ok(())
 }
 
@@ -42,7 +34,23 @@ pub fn ocr() -> Result<()> {
 
     let sidecar = ocr_sidecar_dir();
 
-    for dir in ["venv", "build", "dist", "models"] {
+    for dir in ["venv", "build", "dist", "models", "dist_bundled"] {
+        let path = sidecar.join(dir);
+        if path.exists() {
+            println!("  Removing {}", path.display());
+            fs::remove_dir_all(&path)?;
+        }
+    }
+
+    Ok(())
+}
+
+pub fn stt() -> Result<()> {
+    println!("\nCleaning STT sidecar artifacts...");
+
+    let sidecar = stt_sidecar_dir();
+
+    for dir in ["build", "models"] {
         let path = sidecar.join(dir);
         if path.exists() {
             println!("  Removing {}", path.display());
@@ -54,42 +62,30 @@ pub fn ocr() -> Result<()> {
 }
 
 pub fn app() -> Result<()> {
-    println!("\nCleaning Tauri app artifacts...");
+    println!("\nCleaning Tauri app and packaging binaries...");
+
+    let desktop_binaries = tauri_dir().join("binaries");
+    if desktop_binaries.exists() {
+        println!("  Removing {}", desktop_binaries.display());
+        fs::remove_dir_all(&desktop_binaries)?;
+    }
+
+    let pkg_binaries = project_root().join("packaging").join("binaries");
+    if pkg_binaries.exists() {
+        println!("  Removing {}", pkg_binaries.display());
+        fs::remove_dir_all(&pkg_binaries)?;
+    }
+
+    let cargo_target = project_root().join("target");
+    if cargo_target.exists() {
+        println!("  Removing {}", cargo_target.display());
+        fs::remove_dir_all(&cargo_target)?;
+    }
 
     let tauri_target = tauri_dir().join("target");
     if tauri_target.exists() {
         println!("  Removing {}", tauri_target.display());
         fs::remove_dir_all(&tauri_target)?;
-    }
-
-    let binaries = tauri_dir().join("binaries");
-    if binaries.exists() {
-        for entry in fs::read_dir(&binaries)? {
-            let entry = entry?;
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name.starts_with("ocr-engine-") || name.starts_with("capture-engine-") {
-                println!("  Removing {}", entry.path().display());
-                fs::remove_file(entry.path())?;
-            } else if name.starts_with("paddle-ocr-") || name.starts_with("qt-capture-") {
-                println!("  Removing {}", entry.path().display());
-                fs::remove_dir_all(entry.path())?;
-            }
-        }
-    }
-
-    let debug_binaries = project_root().join("target").join("debug").join("binaries");
-    if debug_binaries.exists() {
-        for entry in fs::read_dir(&debug_binaries)? {
-            let entry = entry?;
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name.starts_with("ocr-engine-") || name.starts_with("capture-engine-") {
-                println!("  Removing {}", entry.path().display());
-                fs::remove_file(entry.path())?;
-            } else if name.starts_with("paddle-ocr-") || name.starts_with("qt-capture-") {
-                println!("  Removing {}", entry.path().display());
-                fs::remove_dir_all(entry.path())?;
-            }
-        }
     }
 
     Ok(())

@@ -1,5 +1,5 @@
-name: "Build Whisper Engine"
-description: "Builds the C++ Whisper sidecar and packages it for Tauri"
+name: "Build Whisper STT CLI"
+description: "Builds the C++ Whisper STT standalone executable"
 inputs:
   python-version:
     description: "Python version used to download Whisper models"
@@ -21,7 +21,7 @@ runs:
       run: |
         python sidecars/whisper-stt/download_models.py --clean-stale
 
-    - name: Build Whisper Engine
+    - name: Build Whisper STT
       shell: bash
       run: |
-        cargo xtask build whisper
+        cargo xtask build stt

@@ -1,5 +1,415 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
+
+use anyhow::Result;
+use std::path::Path;
+use xtask::{project_root, qt_native_dir, run_cmd};
+#[cfg(target_os = "macos")]
+use xtask::copy_dir_all;
+
+pub fn build_all() -> Result<()> {
+    println!("\nBuilding Capture Engine...");
+    let native_dir = qt_native_dir();
+    
+    println!("\nRunning Qt CMake build...");
+    build(&native_dir)?;
+    
+    println!("\nDeploying Qt runtime...");
+    deploy(&native_dir)?;
+    
+    #[cfg(target_os = "macos")]
+    {
+        println!("\nSigning macOS bundle...");
+        macos::sign(&native_dir)?;
+    }
+    
+    println!("\nBuilding Rust wrapper...");
+    run_cmd(
+        "cargo",
+        &["build", "--release", "-p", "capture-engine"],
+        &project_root(),
+    )?;
+
+    println!("\nCapture Engine build complete!");
+    crate::packaging::qt_capture::capture()?;
+    Ok(())
+}
+
+pub fn qt_only() -> Result<()> {
+    println!("\nBuilding Qt native binary (CMake only)...");
+    let native_dir = qt_native_dir();
+    build(&native_dir)?;
+    println!("\nQt build complete!");
+    Ok(())
+}
+
+fn build(native_dir: &Path) -> Result<()> {
+    #[cfg(target_os = "linux")] return linux::build(native_dir);
+    #[cfg(target_os = "macos")] return macos::build(native_dir);
+    #[cfg(target_os = "windows")] return win::build(native_dir);
+}
+
+fn deploy(native_dir: &Path) -> Result<()> {
+    #[cfg(target_os = "linux")] return linux::deploy(native_dir);
+    #[cfg(target_os = "macos")] return macos::deploy(native_dir);
+    #[cfg(target_os = "windows")] return win::deploy(native_dir);
+}
+
+
+#[cfg(target_os = "linux")]
+mod linux {
+
+//! Linux Qt deployment.
+//!
+//! Builds Qt project with CMake and bundles it using linuxdeployqt.
+
+use anyhow::{Context, Result};
+use std::fs;
+use std::path::Path;
+use std::process::Command;
+
+pub fn build(native_dir: &Path) -> Result<()> {
+    let build_dir = native_dir.join("build");
+
+    println!("  Configuring CMake...");
+    fs::create_dir_all(&build_dir)?;
+
+    let status = Command::new("cmake")
+        .args([
+            "-S",
+            native_dir.to_str().unwrap(),
+            "-B",
+            build_dir.to_str().unwrap(),
+            "-DCMAKE_BUILD_TYPE=Release",
+        ])
+        .status()
+        .context("Failed to run cmake configure")?;
+
+    if !status.success() {
+        anyhow::bail!("CMake configure failed");
+    }
+
+    println!("  Building...");
+    let status = Command::new("cmake")
+        .args([
+            "--build",
+            build_dir.to_str().unwrap(),
+            "--config",
+            "Release",
+            "--parallel",
+        ])
+        .status()
+        .context("Failed to run cmake build")?;
+
+    if !status.success() {
+        anyhow::bail!("CMake build failed");
+    }
+
+    Ok(())
+}
+
+pub fn deploy(native_dir: &Path) -> Result<()> {
+    let build_dir = native_dir.join("build");
+    let runtime_dir = native_dir.join("_internal");
+
+    println!("  Creating '_internal' distribution using linuxdeployqt...");
+    create_runtime_distribution(native_dir, &build_dir, &runtime_dir)?;
+
+    Ok(())
+}
+
+fn create_runtime_distribution(
+    _native_dir: &Path,
+    build_dir: &Path,
+    runtime_dir: &Path,
+) -> Result<()> {
+    if runtime_dir.exists() {
+        fs::remove_dir_all(runtime_dir)?;
+    }
+
+    let bin_dir = runtime_dir.join("usr/bin");
+    fs::create_dir_all(&bin_dir)?;
+
+    let src_bin = build_dir.join("capture-bin");
+    let dst_bin = bin_dir.join("capture-bin");
+
+    if !src_bin.exists() {
+        anyhow::bail!("Compiled binary not found at {}", src_bin.display());
+    }
+
+    fs::copy(&src_bin, &dst_bin)?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&dst_bin, fs::Permissions::from_mode(0o755))?;
+    }
+
+    let qmake_path = resolve_qmake_path();
+    println!("  Using qmake: {}", qmake_path);
+
+    let qmldir = _native_dir.join("qml");
+    if !qmldir.exists() {
+        anyhow::bail!("QML source directory not found at {}", qmldir.display());
+    }
+
+    if let Ok(qt6_dir) = std::env::var("Qt6_DIR") {
+        let sqldrivers_dir = Path::new(&qt6_dir).join("plugins").join("sqldrivers");
+        if sqldrivers_dir.exists() {
+            for plugin in [
+                "libqsqlmimer.so",
+                "libqsqlmysql.so",
+                "libqsqlodbc.so",
+                "libqsqlpsql.so",
+            ] {
+                let plugin_path = sqldrivers_dir.join(plugin);
+                if plugin_path.exists() {
+                    println!("  Removing problematic SQL plugin: {}", plugin);
+                    let _ = fs::remove_file(&plugin_path);
+                }
+            }
+        }
+    }
+
+    let mut cmd = Command::new("linuxdeployqt");
+    cmd.arg(&dst_bin).args([
+        "-bundle-non-qt-libs",
+        "-always-overwrite",
+        "-verbose=2",
+        "-unsupported-allow-new-glibc",
+        &format!("-qmake={}", qmake_path),
+        &format!("-qmldir={}", qmldir.display()),
+    ]);
+
+    if let Ok(qt6_dir) = std::env::var("Qt6_DIR") {
+        let qt_lib_path = Path::new(&qt6_dir).join("lib");
+        if qt_lib_path.exists() {
+            println!(
+                "  Setting LD_LIBRARY_PATH to include: {}",
+                qt_lib_path.display()
+            );
+            let current_path = std::env::var("LD_LIBRARY_PATH").unwrap_or_default();
+            let new_path = if current_path.is_empty() {
+                qt_lib_path.to_string_lossy().into_owned()
+            } else {
+                format!("{}:{}", qt_lib_path.display(), current_path)
+            };
+            cmd.env("LD_LIBRARY_PATH", new_path);
+        }
+    }
+
+    let status = cmd.status().context("Failed to execute linuxdeployqt")?;
+
+    if !status.success() {
+        anyhow::bail!("linuxdeployqt failed to bundle the application.");
+    }
+
+    println!(
+        "  Success! Portable runtime created at: {}",
+        runtime_dir.display()
+    );
+    println!("  Launch it using: {}/AppRun", runtime_dir.display());
+
+    Ok(())
+}
+
+fn resolve_qmake_path() -> String {
+    if let Ok(path) = std::env::var("QMAKE") {
+        return path;
+    }
+
+    if which::which("qmake6").is_ok() {
+        return "qmake6".to_string();
+    }
+
+    if which::which("qmake-qt6").is_ok() {
+        return "qmake-qt6".to_string();
+    }
+
+    if let Ok(output) = Command::new("qmake").arg("-v").output() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if stdout.contains("Qt version 6") {
+            return "qmake".to_string();
+        }
+    }
+
+    "qmake".to_string()
+}
+}
+
+
+#[cfg(target_os = "macos")]
+mod macos {
+#![allow(dead_code)]
+
+//! macOS Qt deployment.
+//!
+//! Builds Qt project with CMake and uses macdeployqt for bundling.
+
+use anyhow::{Context, Result};
+use std::fs;
+use std::path::Path;
+use std::process::Command;
+
+use xtask::copy_dir_all;
+
+pub fn build(native_dir: &Path) -> Result<()> {
+    let build_dir = native_dir.join("build");
+
+    let qt_prefix = find_qt_prefix()?;
+    println!("  Qt Prefix: {}", qt_prefix);
+
+    println!("  Configuring CMake...");
+    fs::create_dir_all(&build_dir)?;
+
+    let status = Command::new("cmake")
+        .args([
+            "-S",
+            native_dir.to_str().unwrap(),
+            "-B",
+            build_dir.to_str().unwrap(),
+            "-DCMAKE_BUILD_TYPE=Release",
+            &format!("-DCMAKE_PREFIX_PATH={}", qt_prefix),
+        ])
+        .status()
+        .context("Failed to run cmake configure")?;
+
+    if !status.success() {
+        anyhow::bail!("CMake configure failed");
+    }
+
+    println!("  Building...");
+    let status = Command::new("cmake")
+        .args([
+            "--build",
+            build_dir.to_str().unwrap(),
+            "--config",
+            "Release",
+            "--parallel",
+        ])
+        .status()
+        .context("Failed to run cmake build")?;
+
+    if !status.success() {
+        anyhow::bail!("CMake build failed");
+    }
+
+    Ok(())
+}
+
+pub fn deploy(native_dir: &Path) -> Result<()> {
+    let build_dir = native_dir.join("build");
+    let dist_dir = native_dir.join("_internal");
+
+    let qt_prefix = find_qt_prefix()?;
+
+    println!("  Running macdeployqt...");
+    create_distribution(&build_dir, &dist_dir, &qt_prefix)?;
+
+    Ok(())
+}
+
+pub fn sign(native_dir: &Path) -> Result<()> {
+    println!("  Signing bundle...");
+
+    let app_bundle = native_dir.join("_internal").join("capture.app");
+
+    if !app_bundle.exists() {
+        anyhow::bail!("App bundle not found at {}", app_bundle.display());
+    }
+
+    let signing_identity = std::env::var("APPLE_SIGNING_IDENTITY")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| "-".to_string());
+
+    let status = Command::new("codesign")
+        .args([
+            "-s",
+            signing_identity.as_str(),
+            "--deep",
+            "--force",
+            "--options",
+            "runtime",
+        ])
+        .arg(&app_bundle)
+        .status()
+        .context("Failed to execute codesign")?;
+
+    if !status.success() {
+        anyhow::bail!("Code signing failed");
+    }
+
+    Ok(())
+}
+
+fn find_qt_prefix() -> Result<String> {
+    let candidates = [
+        "/opt/homebrew/opt/qt@6",
+        "/usr/local/opt/qt@6",
+        "/opt/qt/6.6.0/macos",
+        "/opt/qt/6.6.0/clang_64",
+    ];
+
+    for candidate in candidates {
+        if Path::new(candidate).exists() {
+            return Ok(candidate.to_string());
+        }
+    }
+
+    if let Ok(output) = Command::new("qmake6")
+        .args(["-query", "QT_INSTALL_PREFIX"])
+        .output()
+    {
+        if output.status.success() {
+            return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+        }
+    }
+
+    anyhow::bail!("Qt6 not found. Install with: brew install qt@6")
+}
+
+fn create_distribution(build_dir: &Path, dist_dir: &Path, qt_prefix: &str) -> Result<()> {
+    if dist_dir.exists() {
+        fs::remove_dir_all(dist_dir)?;
+    }
+    fs::create_dir_all(dist_dir)?;
+
+    let app_name = "capture.app";
+    let app_src = build_dir.join(app_name);
+    let app_dst = dist_dir.join(app_name);
+
+    if !app_src.exists() {
+        anyhow::bail!("Built app not found: {}", app_src.display());
+    }
+
+    copy_dir_all(&app_src, &app_dst)?;
+
+    let macdeployqt = Path::new(qt_prefix).join("bin").join("macdeployqt");
+
+    if macdeployqt.exists() {
+        let status = Command::new(&macdeployqt)
+            .arg(&app_dst)
+            .status()
+            .context("Failed to run macdeployqt")?;
+
+        if !status.success() {
+            println!("  Warning: macdeployqt failed, continuing anyway");
+        }
+    } else {
+        println!(
+            "  Warning: macdeployqt not found at {}",
+            macdeployqt.display()
+        );
+    }
+
+    Ok(())
+}
+}
+
+
+#[cfg(target_os = "windows")]
+mod win {
 #![allow(dead_code)]
 
 //! Windows Qt deployment.
@@ -378,4 +788,5 @@ fn bundle_vc_runtime(dist_dir: &Path) -> Result<()> {
     }
 
     Ok(())
+}
 }
