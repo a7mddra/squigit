@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use std::fs;
+#[cfg(not(target_os = "windows"))]
 use std::path::Path;
 use xtask::{get_host_target_triple, ocr_sidecar_dir, project_root, run_cmd, venv_python};
 
@@ -194,7 +195,13 @@ print("OCR dependency verification passed.")"###,
     #[cfg(not(target_os = "windows"))]
     {
         println!("\nRunning dist sidecar smoke checks...");
-        let dist_sidecar = sidecar.join("dist").join("squigit-ocr").join("squigit-ocr");
+        let dist_sidecar_onedir = sidecar.join("dist").join("squigit-ocr").join("squigit-ocr");
+        let dist_sidecar_onefile = sidecar.join("dist").join("squigit-ocr");
+        let dist_sidecar = if dist_sidecar_onedir.exists() {
+            dist_sidecar_onedir
+        } else {
+            dist_sidecar_onefile
+        };
         smoke_packaged_sidecar(py, &sidecar, &dist_sidecar)?;
     }
 

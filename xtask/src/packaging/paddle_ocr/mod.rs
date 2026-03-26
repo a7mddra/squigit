@@ -6,6 +6,8 @@ use std::fs;
 use std::path::Path;
 #[cfg(not(windows))]
 use xtask::copy_dir_all_preserve_symlinks;
+#[cfg(windows)]
+use xtask::copy_dir_all;
 use xtask::{
     get_host_target_triple, ocr_sidecar_dir, project_root,
 };

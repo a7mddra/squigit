@@ -332,7 +332,7 @@ fn cli_placeholder() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_inline_flags, resolve_targets, BuildTarget};
+    use super::{resolve_targets, BuildTarget};
 
     fn selectors(list: &[&str]) -> Vec<String> {
         list.iter().map(|item| item.to_string()).collect()
