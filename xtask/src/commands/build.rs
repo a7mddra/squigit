@@ -577,6 +577,7 @@ pub fn desktop() -> Result<()> {
     println!("\nBuilding Tauri desktop app...");
     let ui = ui_dir();
     let app = tauri_dir();
+    let tauri_debug = parse_bool_env("SQUIGIT_TAURI_DEBUG") || parse_bool_env("CI");
     let node_bin = ui.join("node_modules").join(".bin");
     if !ui.join("node_modules").exists() {
         println!("\nInstalling npm dependencies...");
@@ -596,17 +597,43 @@ pub fn desktop() -> Result<()> {
     }
 
     let mut env_vars = Vec::new();
+    let mut set_env = |key: &str, value: &str| {
+        if let Some((_, existing_value)) = env_vars.iter_mut().find(|(k, _)| k == key) {
+            *existing_value = value.to_string();
+        } else {
+            env_vars.push((key.to_string(), value.to_string()));
+        }
+    };
+
     if cfg!(target_os = "linux") {
         // linuxdeploy is executed during bundling and can break if LD_LIBRARY_PATH is polluted
         // with sidecar runtime libs. Keep bundling environment clean and only set AppImage
         // extract mode for CI/non-FUSE environments.
-        env_vars.push((
-            "APPIMAGE_EXTRACT_AND_RUN".to_string(),
-            "1".to_string(),
-        ));
+        set_env("APPIMAGE_EXTRACT_AND_RUN", "1");
         // linuxdeploy's strip step can fail on CI runners (e.g. GitHub Actions).
         // Disable stripping to avoid "failed to run linuxdeploy" errors.
-        env_vars.push(("NO_STRIP".to_string(), "true".to_string()));
+        set_env("NO_STRIP", "true");
+    }
+
+    if tauri_debug {
+        set_env("RUST_BACKTRACE", "full");
+        set_env("RUST_LOG", "tauri_cli=trace,tauri_bundler=trace");
+        set_env("TAURI_LOG_LEVEL", "debug");
+        set_env("TAURI_BUNDLER_DEBUG", "1");
+
+        println!("\nTauri debug mode: enabled (SQUIGIT_TAURI_DEBUG=1 or CI=true)");
+    } else {
+        println!("\nTauri debug mode: disabled");
+    }
+
+    println!("\nTauri command: tauri {}", tauri_args.join(" "));
+    if env_vars.is_empty() {
+        println!("Tauri env overrides: (none)");
+    } else {
+        println!("Tauri env overrides:");
+        for (key, value) in &env_vars {
+            println!("  - {}={}", key, value);
+        }
     }
 
     if env_vars.is_empty() {

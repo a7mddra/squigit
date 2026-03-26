@@ -118,7 +118,40 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: "1"
           # Prevent linuxdeploy from failing during symbol stripping on CI runners.
           NO_STRIP: "true"
-        run: cargo xtask build desktop
+          # Enable verbose tauri/tauri-bundler diagnostics from xtask.
+          SQUIGIT_TAURI_DEBUG: "1"
+        run: |
+          echo "Build debug flags:"
+          echo "  APPIMAGE_EXTRACT_AND_RUN=${APPIMAGE_EXTRACT_AND_RUN}"
+          echo "  NO_STRIP=${NO_STRIP}"
+          echo "  SQUIGIT_TAURI_DEBUG=${SQUIGIT_TAURI_DEBUG}"
+          cargo xtask build desktop
+
+      - name: Linux bundling diagnostics (always)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "== Runner OS =="
+          uname -a
+          cat /etc/os-release || true
+
+          echo "== Tool availability =="
+          command -v appstreamcli || true
+          command -v desktop-file-validate || true
+          command -v mksquashfs || true
+          command -v patchelf || true
+
+      - name: Linux bundling diagnostics (on failure)
+        if: failure() && runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "== AppImage bundle directory =="
+          find "$PWD/target/release/bundle" -maxdepth 4 -type f 2>/dev/null | sort || true
+
+          echo "== Recent linuxdeploy/appimage traces in workspace =="
+          grep -RInE "linuxdeploy|appimage|AppImage|failed to run linuxdeploy" "$PWD" 2>/dev/null | head -n 200 || true
 
       - name: Collect Linux Artifact
         if: runner.os == 'Linux'
