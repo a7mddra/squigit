@@ -1,5 +1,5 @@
-name: "Build Capture Engine"
-description: "Builds Qt native and Rust wrapper for Capture Engine"
+name: "Build Qt Capture"
+description: "Builds and signs the Qt native Capture Engine standalone wrapper"
 inputs:
   target:
     description: "Rust target triple"
@@ -47,6 +47,27 @@ runs:
       if: runner.os == 'macOS'
       shell: bash
       run: cargo xtask build capture
+
+    - name: Sign Capture Engine (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -euo pipefail
+        IDENTITY="-"
+        # inputs.target handles the matrix logic gracefully inside the action context
+        CAPTURE_APP="apps/desktop/binaries/qt-capture-${{ inputs.target }}/_internal/capture.app"
+
+        find "apps/desktop/binaries" -type f \( -name "*.dylib" -o -name "capture-engine" \) -print0 | while IFS= read -r -d '' f; do
+          codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$f"
+        done
+
+        if [ -d "$CAPTURE_APP" ]; then
+          find "$CAPTURE_APP" -type d -name "*.framework" -print0 | while IFS= read -r -d '' fw; do
+            codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$fw"
+          done
+          codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$CAPTURE_APP"
+        fi
+
 
     - name: Build Capture Engine (Windows)
       if: runner.os == 'Windows'

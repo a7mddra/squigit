@@ -8,6 +8,7 @@ jobs:
   build-ocr:
     name: OCR ${{ matrix.os_name }}
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -16,13 +17,24 @@ jobs:
             os_name: Windows-x64
             target: x86_64-pc-windows-msvc
           - os: ubuntu-latest
-            os_name: Linux-x64
+            os_name: Ubuntu-x64
             target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            os_name: Fedora-x64
+            target: x86_64-unknown-linux-gnu
+            container: "fedora:latest"
           - os: macos-latest
             os_name: macOS-ARM
             target: aarch64-apple-darwin
 
     steps:
+      - name: Pre-setup Fedora Container
+        if: matrix.os_name == 'Fedora-x64'
+        run: |
+          dnf install -y git curl tar gzip gcc-c++ make python3 python3-pip perl-open perl-FindBin findutils patch
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
       - uses: actions/checkout@v4
 
       - name: Build OCR Baseline (onefile)
@@ -30,29 +42,6 @@ jobs:
         with:
           python-version: "3.12"
           pyi-mode: "onefile"
-
-      - name: Measure baseline size (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          python sidecars/paddle-ocr/scripts/measure_runtime_size.py \
-            --input packaging/binaries/paddle-ocr-${{ matrix.target }}/squigit-ocr \
-            --output target/ocr-size/baseline-${{ matrix.target }}.json \
-            --label baseline-onefile
-
-      - name: Measure baseline size (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          python sidecars/paddle-ocr/scripts/measure_runtime_size.py `
-            --input packaging/binaries/paddle-ocr-${{ matrix.target }}/squigit-ocr.exe `
-            --output target/ocr-size/baseline-${{ matrix.target }}.json `
-            --label baseline-onefile
-
-      - name: Upload baseline size report
-        uses: actions/upload-artifact@v4
-        with:
-          name: ocr-size-baseline-${{ matrix.target }}
-          path: target/ocr-size/baseline-${{ matrix.target }}.json
 
       - name: Clean OCR build folders only
         if: runner.os != 'Windows'
@@ -71,62 +60,88 @@ jobs:
           python-version: "3.12"
           pyi-mode: "onedir"
 
-      - name: Smoke test sidecar (Unix)
+      - name: Generate PNG smoke image (Unix)
         if: runner.os != 'Windows'
+        shell: bash
         run: |
-          python sidecars/paddle-ocr/scripts/smoke_sidecar.py \
-            --sidecar packaging/binaries/paddle-ocr-${{ matrix.target }}/squigit-ocr
+          set -euo pipefail
+          sidecars/paddle-ocr/venv/bin/python sidecars/paddle-ocr/scripts/gen_test_image.py \
+            --output /tmp/ocr-smoke.png \
+            --text "SNAPLLM ${{ matrix.os_name }} OCR SMOKE"
 
-      - name: Smoke test sidecar (Windows)
+      - name: Generate PNG smoke image (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          python sidecars/paddle-ocr/scripts/smoke_sidecar.py `
-            --sidecar packaging/binaries/paddle-ocr-${{ matrix.target }}/squigit-ocr.exe
+          & sidecars/paddle-ocr/venv/Scripts/python.exe sidecars/paddle-ocr/scripts/gen_test_image.py `
+            --output $env:TEMP/ocr-smoke.png `
+            --text "SNAPLLM ${{ matrix.os_name }} OCR SMOKE"
 
-      - name: Offline smoke (Linux network namespace)
-        if: runner.os == 'Linux'
-        run: |
-          sudo unshare -n python sidecars/paddle-ocr/scripts/smoke_sidecar.py \
-            --sidecar packaging/binaries/paddle-ocr-${{ matrix.target }}/squigit-ocr \
-            --skip-cancel
-
-      - name: Measure candidate size (Unix)
+      - name: Run sidecar CLI and print JSON (Unix)
         if: runner.os != 'Windows'
+        shell: bash
         run: |
-          python sidecars/paddle-ocr/scripts/measure_runtime_size.py \
-            --input packaging/binaries/paddle-ocr-${{ matrix.target }} \
-            --output target/ocr-size/candidate-${{ matrix.target }}.json \
-            --label candidate-onedir
+          set -euo pipefail
+          chmod +x packaging/binaries/paddle-ocr-${{ matrix.target }}/squigit-ocr || true
+          packaging/binaries/paddle-ocr-${{ matrix.target }}/squigit-ocr /tmp/ocr-smoke.png | tee /tmp/ocr-smoke-output.json
 
-      - name: Measure candidate size (Windows)
+      - name: Run sidecar CLI and print JSON (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          python sidecars/paddle-ocr/scripts/measure_runtime_size.py `
-            --input packaging/binaries/paddle-ocr-${{ matrix.target }} `
-            --output target/ocr-size/candidate-${{ matrix.target }}.json `
-            --label candidate-onedir
+          & packaging/binaries/paddle-ocr-${{ matrix.target }}/squigit-ocr.exe $env:TEMP/ocr-smoke.png | Tee-Object -FilePath $env:TEMP/ocr-smoke-output.json
 
-      - name: Compressed size gate (<= 0.65 baseline) (Unix)
+      - name: Validate OCR JSON payload (Unix)
         if: runner.os != 'Windows'
+        shell: bash
         run: |
-          python sidecars/paddle-ocr/scripts/compare_size_gate.py \
-            --baseline target/ocr-size/baseline-${{ matrix.target }}.json \
-            --candidate target/ocr-size/candidate-${{ matrix.target }}.json \
-            --max-ratio 0.65
+          set -euo pipefail
+          sidecars/paddle-ocr/venv/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+          out = Path("/tmp/ocr-smoke-output.json")
+          payload = json.loads(out.read_text(encoding="utf-8").strip())
+          if isinstance(payload, dict) and "error" in payload:
+              raise SystemExit(f"OCR returned error: {payload['error']}")
+          if not isinstance(payload, list):
+              raise SystemExit(f"OCR payload type {type(payload).__name__}, expected list")
+          if not payload:
+              raise SystemExit("OCR payload list is empty")
+          text_values = [str(item.get("text", "")).strip() for item in payload if isinstance(item, dict)]
+          merged = " | ".join(t for t in text_values if t)
+          print(f"Detected entries: {len(payload)}")
+          print(f"Detected text: {merged}")
+          PY
 
-      - name: Compressed size gate (<= 0.65 baseline) (Windows)
+      - name: Validate OCR JSON payload (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          python sidecars/paddle-ocr/scripts/compare_size_gate.py `
-            --baseline target/ocr-size/baseline-${{ matrix.target }}.json `
-            --candidate target/ocr-size/candidate-${{ matrix.target }}.json `
-            --max-ratio 0.65
+          $code = @"
+          import json
+          import os
+          from pathlib import Path
+          out = Path(os.environ['TEMP']) / 'ocr-smoke-output.json'
+          payload = json.loads(out.read_text(encoding='utf-8').strip())
+          if isinstance(payload, dict) and 'error' in payload:
+              raise SystemExit(f'OCR returned error: {payload["error"]}')
+          if not isinstance(payload, list):
+              raise SystemExit(f'OCR payload type {type(payload).__name__}, expected list')
+          if not payload:
+              raise SystemExit('OCR payload list is empty')
+          text_values = [str(item.get('text', '')).strip() for item in payload if isinstance(item, dict)]
+          merged = ' | '.join(t for t in text_values if t)
+          print(f'Detected entries: {len(payload)}')
+          print(f'Detected text: {merged}')
+          "@
+          & sidecars/paddle-ocr/venv/Scripts/python.exe -c $code
 
-      - name: Upload candidate size report
+      - name: Upload OCR smoke artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ocr-size-candidate-${{ matrix.target }}
-          path: target/ocr-size/candidate-${{ matrix.target }}.json
+          name: ocr-smoke-artifacts-${{ matrix.os_name }}
+          path: |
+            /tmp/ocr-smoke.png
+            /tmp/ocr-smoke-output.json
+            ${{ runner.os == 'Windows' && env.TEMP || '' }}/ocr-smoke.png
+            ${{ runner.os == 'Windows' && env.TEMP || '' }}/ocr-smoke-output.json

@@ -39,9 +39,14 @@ jobs:
 
       - name: Build Capture Sidecar
         if: steps.cache-capture.outputs.cache-hit != 'true'
-        uses: ./.github/actions/build-capture-engine
+        uses: ./.github/actions/build-qt-capture
         with:
           target: ${{ matrix.target }}
+
+
+      - name: Package for artifact upload (Unix)
+        if: runner.os != 'Windows'
+        run: tar -cvzf capture-sidecar.tar.gz -C apps/desktop/binaries qt-capture-${{ matrix.target }}
 
       # - name: Build OCR Sidecar
       #   uses: ./.github/actions/build-ocr-engine
@@ -57,7 +62,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: qt-capture-${{ matrix.target }}
-          path: apps/desktop/binaries/qt-capture-${{ matrix.target }}/
+          path: |
+            capture-sidecar.tar.gz
+            apps/desktop/binaries/qt-capture-${{ matrix.target }}/
 
       # - name: Upload OCR Sidecar
       #   uses: actions/upload-artifact@v4
@@ -111,7 +118,6 @@ jobs:
             libgtk-3-dev \
             libayatana-appindicator3-dev \
             libayatana-appindicator3-1 \
-            libappindicator3-1 \
             librsvg2-dev \
             libasound2-dev \
             appstream \
@@ -131,27 +137,13 @@ jobs:
           name: qt-capture-${{ matrix.target }}
           path: apps/desktop/binaries/qt-capture-${{ matrix.target }}/
 
-      - name: Re-sign sidecars (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
+      - name: Unpack sidecar symlinks (Unix)
+        if: runner.os != 'Windows'
         run: |
-          set -euo pipefail
-          IDENTITY="-"
-          CAPTURE_APP="apps/desktop/binaries/qt-capture-${{ matrix.target }}/_internal/capture.app"
+          cd apps/desktop/binaries
+          tar -xvzf qt-capture-${{ matrix.target }}/capture-sidecar.tar.gz
+          rm qt-capture-${{ matrix.target }}/capture-sidecar.tar.gz
 
-          find "apps/desktop/binaries" -type f \( -name "*.dylib" -o -name "capture-engine" -o -name "whisper-stt" -o -name "ocr-engine" \) -print0 | while IFS= read -r -d '' f; do
-            codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$f"
-          done
-
-          if [ -d "$CAPTURE_APP" ]; then
-            # Sign nested frameworks explicitly first to avoid --deep ambiguity errors.
-            find "$CAPTURE_APP" -type d -name "*.framework" -print0 | while IFS= read -r -d '' fw; do
-              codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$fw"
-            done
-
-            # Finally sign the app bundle itself without --deep.
-            codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$CAPTURE_APP"
-          fi
 
       - name: Build Tauri Desktop
         env:
