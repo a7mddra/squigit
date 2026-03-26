@@ -9,7 +9,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { Mic, Square } from "lucide-react";
 import styles from "./ChatInput.module.css";
-import { Tooltip } from "@/components";
+import { Tooltip, Dialog } from "@/components";
+import { type DialogContent, getMissingPackageDialog } from "@/lib";
 
 interface VoiceButtonProps {
   onTranscript: (text: string, isFinal: boolean) => void;
@@ -29,6 +30,7 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
   disabled,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
+  const [errorDialog, setErrorDialog] = useState<DialogContent | null>(null);
 
   const onTranscriptRef = useRef(onTranscript);
   const unlistenRef = useRef<UnlistenFn | null>(null);
@@ -100,15 +102,21 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
           model: "ggml-tiny.en.bin",
           language: "en",
         });
-      } catch (err) {
-        console.error("Failed to start STT:", err);
+      } catch (err: any) {
+        const errorText = err instanceof Error ? err.message : String(err);
+        if (errorText.includes("ERR_MISSING_STT_PACKAGE")) {
+          setErrorDialog(getMissingPackageDialog("squigit-stt"));
+        } else {
+          console.error("Failed to start STT:", err);
+        }
         setIsRecording(false);
       }
     }
   }, [disabled, isRecording]);
 
   return (
-    <div className={styles.voiceContainer}>
+    <>
+      <div className={styles.voiceContainer}>
       <button
         className={`${styles.micButton} ${isRecording ? styles.recording : ""}`}
         onClick={toggleRecording}
@@ -131,5 +139,13 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
         above
       />
     </div>
+    {errorDialog && (
+      <Dialog
+        isOpen={!!errorDialog}
+        type={errorDialog}
+        onAction={() => setErrorDialog(null)}
+      />
+    )}
+  </>
   );
 };

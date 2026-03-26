@@ -72,10 +72,10 @@ set(SOURCES
     src/inference.cpp
 )
 
-add_executable(whisper-stt ${SOURCES})
+add_executable(squigit-stt ${SOURCES})
 
 # Include directories
-target_include_directories(whisper-stt PRIVATE
+target_include_directories(squigit-stt PRIVATE
     ${whisper_cpp_SOURCE_DIR}             # For whisper.h in v1.7.1 (it might be in root)
     ${whisper_cpp_SOURCE_DIR}/include     # For newer versions or if moved
     ${whisper_cpp_SOURCE_DIR}/ggml/include
@@ -84,24 +84,24 @@ target_include_directories(whisper-stt PRIVATE
 
 # Link libraries
 # Linking against the targets defined by FetchContent
-target_link_libraries(whisper-stt PRIVATE whisper nlohmann_json::nlohmann_json)
+target_link_libraries(squigit-stt PRIVATE whisper nlohmann_json::nlohmann_json)
 
 if(APPLE)
-    set_target_properties(whisper-stt PROPERTIES
+    set_target_properties(squigit-stt PROPERTIES
         BUILD_RPATH "@loader_path/_internal"
         INSTALL_RPATH "@loader_path/_internal"
     )
 elseif(UNIX)
-    set_target_properties(whisper-stt PROPERTIES
+    set_target_properties(squigit-stt PROPERTIES
         BUILD_RPATH "\$ORIGIN/_internal"
         INSTALL_RPATH "\$ORIGIN/_internal"
     )
 endif()
 
 if(UNIX AND NOT APPLE)
-    target_link_libraries(whisper-stt PRIVATE pthread dl)
+    target_link_libraries(squigit-stt PRIVATE pthread dl)
 endif()
 
 if(APPLE)
-    target_link_libraries(whisper-stt PRIVATE "-framework CoreAudio -framework AudioToolbox -framework CoreFoundation -framework Metal -framework Foundation")
+    target_link_libraries(squigit-stt PRIVATE "-framework CoreAudio -framework AudioToolbox -framework CoreFoundation -framework Metal -framework Foundation")
 endif()

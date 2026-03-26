@@ -8,6 +8,16 @@
 #include "inference.hpp"
 #include <nlohmann/json.hpp>
 
+#include <filesystem>
+#ifdef _WIN32
+#include <windows.h>
+#elif __APPLE__
+#include <mach-o/dyld.h>
+#else
+#include <unistd.h>
+#endif
+
+namespace fs = std::filesystem;
 using json = nlohmann::json;
 
 // Global state
@@ -15,6 +25,52 @@ std::unique_ptr<squigit::AudioCapture> audio_capture;
 std::unique_ptr<squigit::InferenceEngine> inference_engine;
 std::thread inference_thread;
 std::atomic<bool> is_processing{false};
+
+fs::path get_executable_dir() {
+#ifdef _WIN32
+    char path[MAX_PATH];
+    GetModuleFileNameA(NULL, path, MAX_PATH);
+    return fs::path(path).parent_path();
+#elif __APPLE__
+    char path[1024];
+    uint32_t size = sizeof(path);
+    if (_NSGetExecutablePath(path, &size) == 0) {
+        return fs::path(path).parent_path();
+    }
+    return fs::current_path();
+#else
+    char path[1024];
+    ssize_t count = readlink("/proc/self/exe", path, sizeof(path));
+    if (count > 0 && count < sizeof(path)) {
+        path[count] = '\0';
+        return fs::path(path).parent_path();
+    }
+    return fs::current_path();
+#endif
+}
+
+std::string resolve_model_path(const std::string& provided_model) {
+    fs::path p(provided_model);
+    if (p.is_absolute() && fs::exists(p)) return p.string();
+
+    std::vector<fs::path> search_paths = {
+        fs::current_path() / "models" / provided_model,
+        fs::current_path() / provided_model,
+        get_executable_dir() / "models" / provided_model,
+        get_executable_dir() / provided_model,
+        get_executable_dir().parent_path() / "share" / "squigit-stt" / "models" / provided_model,
+        fs::path("/usr/share/squigit-stt/models") / provided_model,
+        fs::path("/usr/local/share/squigit-stt/models") / provided_model,
+        fs::path("/opt/homebrew/share/squigit-stt/models") / provided_model,
+        fs::path("C:\\Program Files\\Squigit\\stt\\models") / provided_model
+    };
+
+    for (const auto& sp : search_paths) {
+        if (fs::exists(sp)) return sp.string();
+    }
+
+    return provided_model;
+}
 
 void send_json(const json &j) { std::cout << j.dump() << std::endl; }
 
@@ -118,10 +174,10 @@ int main() {
       std::string command = j["command"];
 
       if (command == "start") {
-        std::string model = j.value("model", "models/ggml-tiny.en.bin");
+        std::string model = j.value("model", "ggml-tiny.en.bin");
         std::string lang = j.value("language", "en");
         int device = j.value("device_index", -1);
-        start_engine(model, lang, device);
+        start_engine(resolve_model_path(model), lang, device);
       } else if (command == "stop") {
         stop_engine();
       } else if (command == "quit") {

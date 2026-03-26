@@ -1,0 +1,9 @@
+Package: squigit-stt
+Version: 0.1.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: a7mddra <a7mddra@github.com>
+Description: Standalone CLI STT engine for Squigit
+ A headless, offline speech to text whisper-based engine designed for Squigit.
+ No GUI overhead, pure CLI. Includes ggml-tiny.en.bin model.

@@ -128,3 +128,13 @@ export const getErrorDialog = (error: any): DialogContent => {
     actions: [{ label: "Close", variant: "primary", actionKey: "close" }],
   };
 };
+
+export const getMissingPackageDialog = (pkgName: string): DialogContent => ({
+  title: "Missing System Package",
+  message: `${pkgName} not found, you need to install ${pkgName} on your system`,
+  variant: "warning",
+  actions: [
+    { label: "Cancel", variant: "secondary", actionKey: "cancel" },
+    { label: "Install", variant: "primary", actionKey: "install" },
+  ],
+});

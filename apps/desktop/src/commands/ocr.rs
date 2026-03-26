@@ -265,8 +265,10 @@ pub async fn ocr_image(
         .map_err(|e| format!("Failed to get resource dir: {}", e))?;
     let (sidecar_path, runtime_dir) = resolve_sidecar_path(&resource_dir);
 
-    if !sidecar_path.exists() {
-        return Err(format!("OCR sidecar not found at: {:?}", sidecar_path));
+    // If it's a relative path ("squigit-ocr"), skip the .exists() check and let Command::new resolve it via PATH.
+    // If it's absolute, check if it exists.
+    if sidecar_path.is_absolute() && !sidecar_path.exists() {
+        return Err("ERR_MISSING_OCR_PACKAGE".to_string());
     }
 
     #[cfg(debug_assertions)]
@@ -350,9 +352,13 @@ pub async fn ocr_image(
         }
     }
 
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("Failed to spawn OCR sidecar: {}", e))?;
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err("ERR_MISSING_OCR_PACKAGE".to_string());
+        }
+        Err(e) => return Err(format!("Failed to spawn OCR sidecar: {}", e)),
+    };
 
     let stdout_pipe = child.stdout.take();
     let stderr_pipe = child.stderr.take();
@@ -499,87 +505,25 @@ pub async fn cancel_ocr_job(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn get_target_triple() -> &'static str {
-    #[cfg(target_os = "windows")]
-    {
-        "x86_64-pc-windows-msvc"
+
+
+fn resolve_sidecar_path(_resource_dir: &Path) -> (PathBuf, Option<PathBuf>) {
+    let system_cmd = if cfg!(target_os = "windows") { "squigit-ocr.exe" } else { "squigit-ocr" };
+    if which_cmd(system_cmd) {
+        return (PathBuf::from(system_cmd), None);
     }
-    #[cfg(target_os = "macos")]
-    {
-        "aarch64-apple-darwin"
-    }
-    #[cfg(target_os = "linux")]
-    {
-        "x86_64-unknown-linux-gnu"
-    }
+
+    (PathBuf::from(system_cmd), None)
 }
 
-fn get_sidecar_executable_name() -> &'static str {
-    #[cfg(target_os = "windows")]
-    {
-        "ocr-engine.exe"
-    }
-    #[cfg(target_os = "macos")]
-    {
-        "ocr-engine"
-    }
-    #[cfg(target_os = "linux")]
-    {
-        "ocr-engine"
-    }
-}
-
-fn get_fallback_sidecar_name() -> String {
-    #[cfg(target_os = "windows")]
-    {
-        "ocr-engine.exe".to_string()
-    }
-    #[cfg(target_os = "macos")]
-    {
-        "ocr-engine".to_string()
-    }
-    #[cfg(target_os = "linux")]
-    {
-        "ocr-engine-x86_64-unknown-linux-gnu".to_string()
-    }
-}
-
-fn get_runtime_dir_name() -> String {
-    format!("paddle-ocr-{}", get_target_triple())
-}
-
-fn resolve_sidecar_path(resource_dir: &Path) -> (PathBuf, Option<PathBuf>) {
-    let runtime_dir_name = get_runtime_dir_name();
-    let runtime_candidates = [
-        resource_dir.join("binaries").join(&runtime_dir_name),
-        resource_dir.join(&runtime_dir_name),
-        resource_dir
-            .join("resources")
-            .join("binaries")
-            .join(&runtime_dir_name),
-    ];
-
-    for runtime_dir in runtime_candidates {
-        let sidecar = runtime_dir.join(get_sidecar_executable_name());
-        if sidecar.exists() {
-            return (sidecar, Some(runtime_dir));
+fn which_cmd(cmd: &str) -> bool {
+    if let Ok(path) = std::env::var("PATH") {
+        for p in std::env::split_paths(&path) {
+            let exe = p.join(cmd);
+            if exe.exists() {
+                return true;
+            }
         }
     }
-
-    // Backward-compatible fallback for onefile/externalBin builds.
-    let fallback_name = get_fallback_sidecar_name();
-    let fallback_candidates = [
-        resource_dir.join("binaries").join(&fallback_name),
-        resource_dir.join(&fallback_name),
-    ];
-    for sidecar in fallback_candidates {
-        if sidecar.exists() {
-            return (sidecar, None);
-        }
-    }
-
-    (
-        resource_dir.join("binaries").join(fallback_name),
-        Some(resource_dir.join("binaries").join(runtime_dir_name)),
-    )
+    false
 }

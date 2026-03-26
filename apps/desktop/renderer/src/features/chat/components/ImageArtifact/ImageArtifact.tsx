@@ -29,6 +29,7 @@ import {
   AUTO_OCR_DISABLED_MODEL_ID,
   DEFAULT_OCR_MODEL_ID,
   getErrorDialog,
+  getMissingPackageDialog,
   OcrFrame,
   cancelOcrJob,
   saveOcrData,
@@ -378,7 +379,12 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
           return;
         }
 
-        setErrorDialog(getErrorDialog(errorText));
+        if (errorText.includes("ERR_MISSING_OCR_PACKAGE")) {
+          setErrorDialog(getMissingPackageDialog("squigit-ocr"));
+        } else {
+          setErrorDialog(getErrorDialog(errorText));
+        }
+        
         if (latestOcrModelRef.current === modelToUse) {
           onOcrModelChange("");
         }
