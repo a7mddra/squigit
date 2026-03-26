@@ -10,54 +10,54 @@ permissions:
   contents: read
 
 jobs:
-  # build-capture:
-  #   name: Build Capture Engine ${{ matrix.name }}
-  #   runs-on: ${{ matrix.os }}
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       include:
-  #         - os: ubuntu-22.04
-  #           name: Linux-x64
-  #           target: x86_64-unknown-linux-gnu
-  #         - os: windows-latest
-  #           name: Windows-x64
-  #           target: x86_64-pc-windows-msvc
-  #         - os: macos-latest
-  #           name: macOS-ARM
-  #           target: aarch64-apple-darwin
+  build-capture:
+    name: Build Capture Engine ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: Linux-x64
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            name: Windows-x64
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            name: macOS-ARM
+            target: aarch64-apple-darwin
 
-  #   steps:
-  #     - uses: actions/checkout@v3
+    steps:
+      - uses: actions/checkout@v3
 
-  #     - name: Cache Capture Engine
-  #       id: cache-capture
-  #       uses: actions/cache@v4
-  #       with:
-  #         path: apps/desktop/binaries/qt-capture-${{ matrix.target }}
-  #         key: capture-engine-${{ matrix.target }}-${{ hashFiles('.github/actions/build-capture-engine/**', 'sidecars/qt-capture/**', 'sidecars/capture/**', 'crates/**', 'xtask/**', 'Cargo.lock') }}
+      - name: Cache Capture Engine
+        id: cache-capture
+        uses: actions/cache@v4
+        with:
+          path: apps/desktop/binaries/qt-capture-${{ matrix.target }}
+          key: capture-engine-${{ matrix.target }}-${{ hashFiles('.github/actions/build-capture-engine/**', 'sidecars/qt-capture/**', 'sidecars/capture/**', 'crates/**', 'xtask/**', 'Cargo.lock') }}
 
-  #     - name: Build Capture Sidecar
-  #       if: steps.cache-capture.outputs.cache-hit != 'true'
-  #       uses: ./.github/actions/build-qt-capture
-  #       with:
-  #         target: ${{ matrix.target }}
+      - name: Build Capture Sidecar
+        if: steps.cache-capture.outputs.cache-hit != 'true'
+        uses: ./.github/actions/build-qt-capture
+        with:
+          target: ${{ matrix.target }}
 
-  #     - name: Package for artifact upload (Unix)
-  #       if: runner.os != 'Windows'
-  #       run: tar -cvzf capture-sidecar.tar.gz -C apps/desktop/binaries qt-capture-${{ matrix.target }}
+      - name: Package for artifact upload (Unix)
+        if: runner.os != 'Windows'
+        run: tar -cvzf capture-sidecar.tar.gz -C apps/desktop/binaries qt-capture-${{ matrix.target }}
 
-  #     - name: Upload Capture Sidecar
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: qt-capture-${{ matrix.target }}
-  #         path: |
-  #           capture-sidecar.tar.gz
-  #           apps/desktop/binaries/qt-capture-${{ matrix.target }}/
+      - name: Upload Capture Sidecar
+        uses: actions/upload-artifact@v4
+        with:
+          name: qt-capture-${{ matrix.target }}
+          path: |
+            capture-sidecar.tar.gz
+            apps/desktop/binaries/qt-capture-${{ matrix.target }}/
 
   build-tauri:
     name: Build Desktop ${{ matrix.name }}
-    # needs: build-capture
+    needs: build-capture
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -108,26 +108,23 @@ jobs:
           # Try the current package name first, then the legacy one.
           sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
 
-      # - name: Download Capture Sidecar
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: qt-capture-${{ matrix.target }}
-      #     path: apps/desktop/binaries/qt-capture-${{ matrix.target }}/
+      - name: Download Capture Sidecar
+        uses: actions/download-artifact@v3
+        with:
+          name: qt-capture-${{ matrix.target }}
+          path: apps/desktop/binaries/qt-capture-${{ matrix.target }}/
 
-      # - name: Unpack sidecar symlinks (Unix)
-      #   if: runner.os != 'Windows'
-      #   run: |
-      #     cd apps/desktop/binaries
-      #     tar -xvzf qt-capture-${{ matrix.target }}/capture-sidecar.tar.gz
-      #     rm qt-capture-${{ matrix.target }}/capture-sidecar.tar.gz
+      - name: Unpack sidecar symlinks (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd apps/desktop/binaries
+          tar -xvzf qt-capture-${{ matrix.target }}/capture-sidecar.tar.gz
+          rm qt-capture-${{ matrix.target }}/capture-sidecar.tar.gz
 
       - name: Build Tauri Desktop
         env:
-          # linuxdeploy and plugin binaries are AppImages; avoid FUSE runtime issues in CI.
           APPIMAGE_EXTRACT_AND_RUN: "1"
-          # Prevent linuxdeploy from failing during symbol stripping on CI runners.
           NO_STRIP: "true"
-          # Enable verbose tauri/tauri-bundler diagnostics from xtask.
           SQUIGIT_TAURI_DEBUG: "1"
         run: |
           echo "Build debug flags:"

@@ -46,7 +46,7 @@
   "bundle": {
     "active": true,
     "targets": ["appimage", "nsis", "dmg"],
-
+    "resources": ["binaries/qt-capture-*/**/*"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
