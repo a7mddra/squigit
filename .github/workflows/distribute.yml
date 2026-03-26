@@ -61,15 +61,15 @@ jobs:
         with:
           target: ${{ matrix.target }}
 
-      - name: Build OCR Sidecar
-        uses: ./.github/actions/build-ocr-engine
-        with:
-          python-version: "3.12"
+      # - name: Build OCR Sidecar
+      #   uses: ./.github/actions/build-ocr-engine
+      #   with:
+      #     python-version: "3.12"
 
-      - name: Build Whisper Sidecar
-        uses: ./.github/actions/build-whisper-engine
-        with:
-          python-version: "3.13"
+      # - name: Build Whisper Sidecar
+      #   uses: ./.github/actions/build-whisper-engine
+      #   with:
+      #     python-version: "3.13"
 
       - name: Re-sign sidecars (macOS)
         if: runner.os == 'macOS'
@@ -92,17 +92,17 @@ jobs:
           name: qt-capture-${{ matrix.target }}
           path: apps/desktop/binaries/qt-capture-${{ matrix.target }}/
 
-      - name: Upload OCR Sidecar
-        uses: actions/upload-artifact@v4
-        with:
-          name: paddle-ocr-${{ matrix.target }}
-          path: apps/desktop/binaries/paddle-ocr-${{ matrix.target }}/
+      # - name: Upload OCR Sidecar
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: paddle-ocr-${{ matrix.target }}
+      #     path: apps/desktop/binaries/paddle-ocr-${{ matrix.target }}/
 
-      - name: Upload Whisper Sidecar
-        uses: actions/upload-artifact@v4
-        with:
-          name: whisper-stt-${{ matrix.target }}
-          path: apps/desktop/binaries/whisper-stt-${{ matrix.target }}/
+      # - name: Upload Whisper Sidecar
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: whisper-stt-${{ matrix.target }}
+      #     path: apps/desktop/binaries/whisper-stt-${{ matrix.target }}/
 
       - name: Build Tauri Desktop
         env:
