@@ -44,6 +44,9 @@ pub fn capture() -> Result<()> {
         fs::remove_dir_all(&sidecar_dst)?;
     }
     fs::create_dir_all(&sidecar_dst)?;
+    
+    #[cfg(not(target_os = "linux"))]
+    let internal_dst = sidecar_dst.join("_internal");
 
     if !qt_internal_src.exists() {
         anyhow::bail!("Qt runtime not found at {}", qt_internal_src.display());

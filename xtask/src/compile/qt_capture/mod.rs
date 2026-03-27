@@ -4,8 +4,6 @@
 use anyhow::Result;
 use std::path::Path;
 use xtask::{project_root, qt_native_dir, run_cmd};
-#[cfg(target_os = "macos")]
-use xtask::copy_dir_all;
 
 pub fn build_all() -> Result<()> {
     println!("\nBuilding Capture Engine...");
