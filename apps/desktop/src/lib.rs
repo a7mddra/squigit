@@ -254,19 +254,7 @@ pub fn run() {
                             let _ = std::fs::create_dir_all(&target_icon_dir);
                             let target_icon = target_icon_dir.join("squigit.png");
                             
-                            let candidate_icons = [
-                                appdir_path.join("usr/share/icons/hicolor/512x512/apps/squigit.png"),
-                                appdir_path.join("usr/share/icons/hicolor/512x512/apps/Squigit.png"),
-                                appdir_path.join(".DirIcon"),
-                                appdir_path.join("squigit.png"),
-                                appdir_path.join("Squigit.png"),
-                            ];
-                            for candidate in candidate_icons {
-                                if candidate.exists() {
-                                    let _ = std::fs::copy(&candidate, &target_icon);
-                                    break;
-                                }
-                            }
+                            let _ = std::fs::write(&target_icon, include_bytes!("../icons/icon.png"));
                             
                             let target_desktop_dir = home_dir.join(".local/share/applications");
                             let _ = std::fs::create_dir_all(&target_desktop_dir);
