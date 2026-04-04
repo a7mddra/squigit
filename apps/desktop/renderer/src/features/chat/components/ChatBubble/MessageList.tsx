@@ -17,6 +17,7 @@ import styles from "./MessageList.module.css";
 interface MessageListProps {
   messages: Message[];
   pendingAssistantTurn?: PendingAssistantTurn | null;
+  hideThinkingProgress?: boolean;
   selectedModel: string;
   onAnswerNow?: () => void;
   onRetryMessage?: (messageId: string, modelId?: string) => void;
@@ -40,16 +41,20 @@ function isAnswerNowEligibleProgress(text: string | undefined): boolean {
 const MessageListComponent: React.FC<MessageListProps> = ({
   messages,
   pendingAssistantTurn,
+  hideThinkingProgress = false,
   selectedModel,
   onAnswerNow,
   onRetryMessage,
   onUndoMessage,
   onSystemAction,
 }) => {
+  const shouldShowThinkingProgress =
+    pendingAssistantTurn?.phase === "thinking" && !hideThinkingProgress;
   const hasRunningToolStep =
     pendingAssistantTurn?.toolSteps.some((step) => step.status === "running") ??
     false;
   const showAnswerNow =
+    shouldShowThinkingProgress &&
     !!onAnswerNow &&
     !!pendingAssistantTurn &&
     pendingAssistantTurn.phase === "thinking" &&
@@ -58,7 +63,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
   return (
     <div className={styles.container}>
-      {pendingAssistantTurn?.phase === "thinking" && (
+      {shouldShowThinkingProgress && (
         <div className={styles.progressRow}>
           <TextShimmer text={pendingAssistantTurn.progressText} />
           {showAnswerNow && (
@@ -125,6 +130,7 @@ export const MessageList = React.memo(
     return (
       prevProps.messages === nextProps.messages &&
       prevProps.pendingAssistantTurn === nextProps.pendingAssistantTurn &&
+      prevProps.hideThinkingProgress === nextProps.hideThinkingProgress &&
       prevProps.selectedModel === nextProps.selectedModel
     );
   },

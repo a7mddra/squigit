@@ -224,6 +224,10 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
     !isUser &&
     !!thoughtBadgeText &&
     (isPendingAssistant || displayText.trim().length > 0);
+  const isPendingStreaming =
+    isPendingAssistant &&
+    pendingTurn?.phase !== "complete" &&
+    pendingTurn?.phase !== "stopped";
   const showCitations =
     !isUser &&
     citations.length > 0 &&
@@ -494,7 +498,7 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
               </span>
             )}
 
-            {!isUser && shouldShowRetryButton && (
+            {!isUser && shouldShowRetryButton && !isPendingStreaming && (
               <button
                 onClick={onRetry}
                 title="Retry"
@@ -505,7 +509,7 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
               </button>
             )}
 
-            {shouldShowCopyButton && (
+            {shouldShowCopyButton && !isPendingStreaming && (
               <button
                 onClick={handleCopy}
                 title="Copy"

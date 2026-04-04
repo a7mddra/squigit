@@ -389,6 +389,7 @@ export const Chat: React.FC = () => {
                   <MessageList
                     messages={app.chat.messages}
                     pendingAssistantTurn={app.chat.pendingAssistantTurn}
+                    hideThinkingProgress={app.chat.isAnalyzing}
                     selectedModel={app.inputModel}
                     onAnswerNow={app.chat.handleAnswerNow}
                     onRetryMessage={app.chat.handleRetryMessage}
