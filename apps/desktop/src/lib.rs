@@ -99,12 +99,12 @@ pub fn run() {
             get_user_data,
             cache_avatar,
             // Gemini
-            commands::gemini::stream_gemini_chat_v2,
-            commands::gemini::generate_chat_title,
-            commands::gemini::generate_image_brief,
-            commands::gemini::compress_conversation,
-            commands::gemini::cancel_gemini_request,
-            commands::gemini::answer_now_gemini_request,
+            brain::gemini::stream_chat::stream_gemini_chat_v2,
+            brain::gemini::generation::generate_chat_title,
+            brain::gemini::generation::generate_image_brief,
+            brain::gemini::generation::compress_conversation,
+            brain::gemini::request_control::cancel_gemini_request,
+            brain::gemini::request_control::answer_now_gemini_request,
             // Window
             open_external_url,
             set_background_color,

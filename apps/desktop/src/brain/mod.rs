@@ -3,6 +3,8 @@
 
 //! Brain module - Cognitive core for prompt management and context construction.
 
+pub mod gemini;
 pub mod loader;
 pub mod memory;
 pub mod processor;
+pub mod tools;

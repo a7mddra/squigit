@@ -27,7 +27,7 @@ use tokio::time::{timeout, Duration};
 #[cfg(unix)]
 use std::io;
 
-use crate::commands::chat::resolve_attachment_path_internal;
+use crate::brain::gemini::attachment_paths::resolve_attachment_path_internal;
 use crate::services::models::ModelManager;
 use crate::state::{AppState, OcrJobHandle};
 

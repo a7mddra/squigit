@@ -3,6 +3,7 @@
 
 //! Chat storage Tauri commands.
 
+use crate::brain::gemini::attachment_paths::resolve_attachment_path_internal;
 use crate::services::search::{search_local_chats, ChatSearchResult};
 use crate::services::tone::detect_image_tone_from_bytes;
 use ops_chat_storage::{
@@ -20,48 +21,6 @@ fn get_active_storage() -> Result<ChatStorage, String> {
 
     let chats_dir = profile_store.get_chats_dir(&active_id);
     ChatStorage::with_base_dir(chats_dir).map_err(|e| e.to_string())
-}
-
-pub(crate) fn resolve_attachment_path_internal(path: &str) -> Result<std::path::PathBuf, String> {
-    use std::fs;
-    use std::path::PathBuf;
-
-    let incoming = PathBuf::from(path);
-    if incoming.is_absolute() {
-        if incoming.exists() {
-            return fs::canonicalize(&incoming).map_err(|e| e.to_string());
-        }
-        return Err(format!("Attachment not found: {}", path));
-    }
-
-    let storage = get_active_storage()?;
-
-    let from_base_dir = storage.base_dir().join(&incoming);
-    if from_base_dir.exists() {
-        return fs::canonicalize(&from_base_dir).map_err(|e| e.to_string());
-    }
-
-    // Legacy fallback: resolve objects/<prefix>/<hash>.<ext> by hash, regardless of extension.
-    if let Some(file_name) = incoming.file_name().and_then(|name| name.to_str()) {
-        if let Some((hash, _ext)) = file_name.split_once('.') {
-            if hash.len() >= 2 {
-                let prefix = &hash[..2];
-                let prefix_dir = storage.objects_dir().join(prefix);
-
-                if let Ok(entries) = fs::read_dir(prefix_dir) {
-                    for entry in entries.flatten() {
-                        let candidate = entry.path();
-                        let stem = candidate.file_stem().and_then(|s| s.to_str());
-                        if stem == Some(hash) {
-                            return fs::canonicalize(candidate).map_err(|e| e.to_string());
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Err(format!("Attachment not found: {}", path))
 }
 
 // =============================================================================
