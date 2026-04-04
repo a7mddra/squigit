@@ -6,8 +6,9 @@
 
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { Check, Copy, RotateCcw, Pencil, ChevronRight } from "lucide-react";
-import { CodeBlock, TextShimmer } from "@/components";
+import { CitationTip, CodeBlock, TextShimmer } from "@/components";
 import { useAppContext } from "@/providers/AppProvider";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -21,6 +22,7 @@ import {
   attachmentFromPath,
   AttachmentStrip,
   Message,
+  ToolStep,
 } from "@/features";
 import styles from "./ChatBubble.module.css";
 import mdStyles from "./BubbleMD.module.css";
@@ -42,6 +44,124 @@ function getBaseName(path: string): string {
   const lastSlash = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   return lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
 }
+
+const CITATION_PREVIEW_TOKENS = 28;
+
+function getCitationDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function toCitationPreview(summary: string): string {
+  const tokens = summary
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (tokens.length === 0) {
+    return "No summary available...";
+  }
+  return `${tokens.slice(0, CITATION_PREVIEW_TOKENS).join(" ")}...`;
+}
+
+function resolveCitationFavicon(
+  favicon: string | undefined,
+  domain: string,
+): string {
+  const fallback = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+  const candidate = favicon?.trim();
+  if (!candidate) {
+    return fallback;
+  }
+
+  if (
+    /^https?:\/\//i.test(candidate) ||
+    /^data:/i.test(candidate) ||
+    /^asset:/i.test(candidate) ||
+    /^tauri:/i.test(candidate)
+  ) {
+    return candidate;
+  }
+
+  try {
+    return convertFileSrc(candidate);
+  } catch {
+    return fallback;
+  }
+}
+
+function getToolStepThoughtSeconds(step: ToolStep): number {
+  if (
+    typeof step.startedAtMs === "number" &&
+    typeof step.endedAtMs === "number" &&
+    step.endedAtMs >= step.startedAtMs
+  ) {
+    return Math.max(1, Math.round((step.endedAtMs - step.startedAtMs) / 1000));
+  }
+
+  const match = step.message?.trim().match(/^Thought for (\d+)s$/i);
+  if (!match) return 0;
+  const value = Number.parseInt(match[1], 10);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function getCombinedThoughtSeconds(steps: ToolStep[]): number {
+  return steps.reduce((sum, step) => sum + getToolStepThoughtSeconds(step), 0);
+}
+
+const CitationChip: React.FC<{
+  citation: NonNullable<Message["citations"]>[number];
+}> = ({
+  citation,
+}) => {
+  const [showTip, setShowTip] = useState(false);
+  const anchorRef = useRef<HTMLAnchorElement>(null);
+
+  const domain = useMemo(() => getCitationDomain(citation.url), [citation.url]);
+  const faviconUrl = useMemo(
+    () => resolveCitationFavicon(citation.favicon, domain),
+    [citation.favicon, domain],
+  );
+  const preview = useMemo(
+    () => toCitationPreview(citation.summary || ""),
+    [citation.summary],
+  );
+
+  return (
+    <>
+      <a
+        ref={anchorRef}
+        href={citation.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={styles.citationChip}
+        onMouseEnter={() => setShowTip(true)}
+        onMouseLeave={() => setShowTip(false)}
+        onFocus={() => setShowTip(true)}
+        onBlur={() => setShowTip(false)}
+      >
+        <img
+          src={faviconUrl}
+          alt=""
+          className={styles.citationIcon}
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+        />
+        <span className={styles.citationTitle}>{citation.title || domain}</span>
+      </a>
+      <CitationTip
+        parentRef={anchorRef}
+        show={showTip}
+        headerUrl={citation.url}
+        headerIconUrl={faviconUrl}
+        body={preview}
+      />
+    </>
+  );
+};
 
 const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
   message,
@@ -72,6 +192,21 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
 
   const toolSteps = message.toolSteps || [];
   const citations = message.citations || [];
+  const thoughtBadgeText = useMemo(() => {
+    if (isUser || message.role !== "model") return null;
+
+    if (
+      typeof message.thoughtSeconds === "number" &&
+      Number.isFinite(message.thoughtSeconds) &&
+      message.thoughtSeconds > 0
+    ) {
+      return `Thought for ${Math.round(message.thoughtSeconds)}s`;
+    }
+
+    const combined = getCombinedThoughtSeconds(toolSteps);
+    if (combined <= 0) return null;
+    return `Thought for ${combined}s`;
+  }, [isUser, message.role, message.thoughtSeconds, toolSteps]);
 
   const displayText = useMemo(() => {
     return stripAttachmentMentions(message.text);
@@ -85,7 +220,29 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
   }, [displayText, isUser]);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(displayText).then(() => {
+    let copyText = displayText;
+    if (!isUser && citations.length > 0) {
+      const uniqueByUrl = new Map<string, (typeof citations)[number]>();
+      for (const citation of citations) {
+        if (!citation.url || uniqueByUrl.has(citation.url)) continue;
+        uniqueByUrl.set(citation.url, citation);
+      }
+
+      if (uniqueByUrl.size > 0) {
+        const sourceLines = Array.from(uniqueByUrl.values()).map((citation) => {
+          const title = (citation.title || getCitationDomain(citation.url))
+            .replace(/\r?\n/g, " ")
+            .trim();
+          return `- [${title}](${citation.url})`;
+        });
+        copyText =
+          displayText.trim().length > 0
+            ? `${displayText}\n\nSources:\n${sourceLines.join("\n")}`
+            : `Sources:\n${sourceLines.join("\n")}`;
+      }
+    }
+
+    navigator.clipboard.writeText(copyText).then(() => {
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
     });
@@ -237,6 +394,8 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
   const markdownToRender = isBotStreaming ? smoothText : displayText;
 
   const shouldDoubleNewlines = isUser && !isRichMarkdownUserMessage;
+  const showThoughtLabel =
+    !isUser && !!thoughtBadgeText && displayText.trim().length > 0;
 
   return (
     <>
@@ -255,6 +414,11 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
               isUser ? styles.userContent : styles.botContent
             } ${isUser && isRichMarkdownUserMessage ? styles.userRichContent : ""}`}
           >
+            {!isUser && showThoughtLabel && (
+              <div className={styles.thoughtLabelRow}>
+                <span className={styles.thoughtBadge}>{thoughtBadgeText}</span>
+              </div>
+            )}
             <div
               dir="auto"
               data-component="chat-bubble"
@@ -277,26 +441,6 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
                     onClick={app.openMediaViewer}
                     readOnly
                   />
-                </div>
-              )}
-              {!isUser && toolSteps.length > 0 && (
-                <div className={styles.toolTimeline}>
-                  {toolSteps.map((step) => (
-                    <div key={step.id} className={styles.toolRow}>
-                      <span
-                        className={`${styles.toolDot} ${
-                          step.status === "error"
-                            ? styles.toolDotError
-                            : step.status === "done"
-                              ? styles.toolDotDone
-                              : styles.toolDotRunning
-                        }`}
-                      />
-                      <span className={styles.toolLabel}>
-                        {step.message || `Called ${step.name}`}
-                      </span>
-                    </div>
-                  ))}
                 </div>
               )}
               <div
@@ -323,37 +467,12 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
               </div>
               {!isUser && citations.length > 0 && (
                 <div className={styles.citationFooter}>
-                  {citations.map((citation, index) => {
-                    let domain = citation.url;
-                    try {
-                      domain = new URL(citation.url).hostname.replace(/^www\./, "");
-                    } catch {
-                      // noop
-                    }
-                    const tooltip = `${citation.summary || "No summary available"}\n${citation.url}`;
-                    return (
-                      <a
-                        key={`${citation.url}-${index}`}
-                        href={citation.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={styles.citationChip}
-                        title={tooltip}
-                      >
-                        <img
-                          src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
-                          alt=""
-                          className={styles.citationIcon}
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                        <span className={styles.citationTitle}>
-                          {citation.title || domain}
-                        </span>
-                      </a>
-                    );
-                  })}
+                  {citations.map((citation, index) => (
+                    <CitationChip
+                      key={`${citation.url}-${index}`}
+                      citation={citation}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -422,6 +541,7 @@ export const ChatBubble = React.memo(
     return (
       prevProps.message.id === nextProps.message.id &&
       prevProps.message.text === nextProps.message.text &&
+      prevProps.message.thoughtSeconds === nextProps.message.thoughtSeconds &&
       prevProps.message.citations === nextProps.message.citations &&
       prevProps.message.toolSteps === nextProps.message.toolSteps &&
       prevProps.isStreamed === nextProps.isStreamed &&

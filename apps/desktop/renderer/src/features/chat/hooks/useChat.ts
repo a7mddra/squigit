@@ -112,6 +112,7 @@ export const useChat = ({
     handleDescribeEdits: engine.handleDescribeEdits,
     handleStreamComplete: engine.handleStreamComplete,
     handleStopGeneration: engine.handleStopGeneration,
+    handleAnswerNow: engine.handleAnswerNow,
     startSession: (
       key: string,
       modelId: string,

@@ -8,6 +8,7 @@ export interface Citation {
   title: string;
   url: string;
   summary: string;
+  favicon?: string;
 }
 
 export interface ToolStep {
@@ -16,6 +17,8 @@ export interface ToolStep {
   status: "running" | "done" | "error";
   args?: Record<string, unknown>;
   message?: string;
+  startedAtMs?: number;
+  endedAtMs?: number;
 }
 
 export interface Message {
@@ -24,6 +27,7 @@ export interface Message {
   text: string;
   image?: string;
   timestamp: number;
+  thoughtSeconds?: number;
   stopped?: boolean;
   alreadyStreamed?: boolean;
   citations?: Citation[];

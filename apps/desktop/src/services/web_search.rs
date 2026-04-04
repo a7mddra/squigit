@@ -1,7 +1,9 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 
-use futures_util::StreamExt;
+use futures_util::{future::join_all, StreamExt};
+use ops_chat_storage::ChatStorage;
+use ops_profile_store::ProfileStore;
 use rand::Rng;
 use regex::Regex;
 use reqwest::{header, redirect::Policy, StatusCode};
@@ -9,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv6Addr};
+use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
 use url::Url;
@@ -23,12 +27,17 @@ const MAX_SUMMARY_WORDS: usize = 50;
 const MAX_RETRIES: usize = 2;
 const REQUEST_TIMEOUT_SECS: u64 = 15;
 const CONNECT_TIMEOUT_SECS: u64 = 8;
+const FAVICON_TIMEOUT_SECS: u64 = 2;
+const FAVICON_CONNECT_TIMEOUT_SECS: u64 = 2;
+const MAX_FAVICON_BYTES: usize = 128 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CitationSource {
     pub title: String,
     pub url: String,
     pub summary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub favicon: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -758,8 +767,8 @@ fn parse_ddg_results(html: &str, max_results: usize) -> Vec<CitationSource> {
             .unwrap_or_default();
 
         let title = clean_html_fragment(title_raw);
-        sources.push(CitationSource {
-            title: if title.is_empty() {
+        sources.push(citation_source(
+            if title.is_empty() {
                 Url::parse(&canonical)
                     .ok()
                     .and_then(|u| u.host_str().map(|h| h.to_string()))
@@ -767,9 +776,9 @@ fn parse_ddg_results(html: &str, max_results: usize) -> Vec<CitationSource> {
             } else {
                 title
             },
-            url: canonical,
-            summary: compact_summary(&snippet, MAX_SUMMARY_WORDS),
-        });
+            canonical,
+            compact_summary(&snippet, MAX_SUMMARY_WORDS),
+        ));
     }
 
     sources
@@ -821,8 +830,8 @@ fn parse_mojeek_results(html: &str, max_results: usize) -> Vec<CitationSource> {
             .unwrap_or_default();
 
         let title = clean_html_fragment(title_raw);
-        sources.push(CitationSource {
-            title: if title.is_empty() {
+        sources.push(citation_source(
+            if title.is_empty() {
                 Url::parse(&canonical)
                     .ok()
                     .and_then(|u| u.host_str().map(|h| h.to_string()))
@@ -830,9 +839,9 @@ fn parse_mojeek_results(html: &str, max_results: usize) -> Vec<CitationSource> {
             } else {
                 title
             },
-            url: canonical,
-            summary: compact_summary(&snippet, MAX_SUMMARY_WORDS),
-        });
+            canonical,
+            compact_summary(&snippet, MAX_SUMMARY_WORDS),
+        ));
     }
 
     if !sources.is_empty() {
@@ -876,11 +885,7 @@ fn parse_mojeek_results(html: &str, max_results: usize) -> Vec<CitationSource> {
             continue;
         }
 
-        sources.push(CitationSource {
-            title,
-            url: canonical,
-            summary: String::new(),
-        });
+        sources.push(citation_source(title, canonical, String::new()));
     }
 
     sources
@@ -1068,11 +1073,8 @@ async fn run_url_fetch_once(
 
     let title = extract_title(&html, &canonical);
     let summary = compact_summary(&text, MAX_SUMMARY_WORDS);
-    let source = CitationSource {
-        title,
-        url: canonical.clone(),
-        summary: summary.clone(),
-    };
+    let mut sources = vec![citation_source(title, canonical.clone(), summary.clone())];
+    cache_favicons_for_sources(&mut sources).await;
 
     let context = format!(
         "[Fetched page: {}]\n- {}\n\n{}",
@@ -1090,13 +1092,26 @@ async fn run_url_fetch_once(
         query: None,
         requested_url: Some(canonical),
         context_markdown: context,
-        sources: vec![source],
+        sources,
         success: true,
         message: None,
     })
 }
 
-async fn with_retries<T, F, Fut>(mut op: F) -> Result<T, SearchError>
+fn emit_progress(
+    progress: &mut Option<&mut (dyn FnMut(String) + Send)>,
+    message: impl Into<String>,
+) {
+    if let Some(cb) = progress.as_deref_mut() {
+        cb(message.into());
+    }
+}
+
+async fn with_retries_with_progress<T, F, Fut>(
+    _label: &str,
+    mut op: F,
+    _progress: &mut Option<&mut (dyn FnMut(String) + Send)>,
+) -> Result<T, SearchError>
 where
     F: FnMut() -> Fut,
     Fut: std::future::Future<Output = Result<T, SearchError>>,
@@ -1128,6 +1143,189 @@ pub fn domain_from_url(url: &str) -> Option<String> {
         .ok()
         .and_then(|u| u.host_str().map(normalize_domain))
         .map(|d| d.trim_start_matches("www.").to_string())
+}
+
+fn favicon_for_url(url: &str) -> Option<String> {
+    domain_from_url(url)
+        .map(|domain| format!("https://www.google.com/s2/favicons?domain={}&sz=32", domain))
+}
+
+fn active_chat_storage() -> Option<ChatStorage> {
+    let profile_store = ProfileStore::new().ok()?;
+    let active_id = profile_store.get_active_profile_id().ok()??;
+    let chats_dir = profile_store.get_chats_dir(&active_id);
+    ChatStorage::with_base_dir(chats_dir).ok()
+}
+
+fn is_remote_http_url(value: &str) -> bool {
+    value.starts_with("http://") || value.starts_with("https://")
+}
+
+fn favicon_extension_from_content_type(content_type: &str) -> Option<&'static str> {
+    let normalized = content_type
+        .split(';')
+        .next()
+        .map(str::trim)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    match normalized.as_str() {
+        "image/png" => Some("png"),
+        "image/jpeg" => Some("jpg"),
+        "image/webp" => Some("webp"),
+        "image/svg+xml" => Some("svg"),
+        "image/x-icon" | "image/vnd.microsoft.icon" => Some("ico"),
+        _ => None,
+    }
+}
+
+fn favicon_extension_from_url(url: &str) -> Option<String> {
+    let parsed = Url::parse(url).ok()?;
+    let ext = Path::new(parsed.path())
+        .extension()
+        .and_then(|v| v.to_str())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())?
+        .to_ascii_lowercase();
+
+    if ext.len() > 8 || !ext.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+        return None;
+    }
+
+    Some(ext)
+}
+
+async fn fetch_and_store_favicon(
+    client: reqwest::Client,
+    storage: Arc<ChatStorage>,
+    favicon_url: String,
+) -> (String, Option<String>) {
+    let response = match client
+        .get(&favicon_url)
+        .header(header::ACCEPT, "image/*,*/*;q=0.8")
+        .send()
+        .await
+    {
+        Ok(resp) => resp,
+        Err(_) => return (favicon_url, None),
+    };
+
+    if !response.status().is_success() {
+        return (favicon_url, None);
+    }
+
+    let content_type = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.to_string());
+
+    if let Some(kind) = content_type.as_deref() {
+        let normalized = kind
+            .split(';')
+            .next()
+            .map(str::trim)
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if !normalized.starts_with("image/") && normalized != "application/octet-stream" {
+            return (favicon_url, None);
+        }
+    }
+
+    let bytes = match response.bytes().await {
+        Ok(body) => body,
+        Err(_) => return (favicon_url, None),
+    };
+
+    if bytes.is_empty() || bytes.len() > MAX_FAVICON_BYTES {
+        return (favicon_url, None);
+    }
+
+    let extension = content_type
+        .as_deref()
+        .and_then(favicon_extension_from_content_type)
+        .map(str::to_string)
+        .or_else(|| favicon_extension_from_url(&favicon_url))
+        .unwrap_or_else(|| "png".to_string());
+
+    match storage.store_file(bytes.as_ref(), &extension, None) {
+        Ok(stored) => (favicon_url, Some(stored.path)),
+        Err(_) => (favicon_url, None),
+    }
+}
+
+async fn cache_favicons_for_sources(sources: &mut [CitationSource]) {
+    if sources.is_empty() {
+        return;
+    }
+
+    let Some(storage) = active_chat_storage() else {
+        return;
+    };
+    let storage = Arc::new(storage);
+
+    let favicon_client = match reqwest::Client::builder()
+        .redirect(Policy::limited(MAX_REDIRECTS))
+        .timeout(Duration::from_secs(FAVICON_TIMEOUT_SECS))
+        .connect_timeout(Duration::from_secs(FAVICON_CONNECT_TIMEOUT_SECS))
+        .user_agent(user_agent())
+        .build()
+    {
+        Ok(client) => client,
+        Err(_) => return,
+    };
+
+    let mut unique_urls = Vec::<String>::new();
+    let mut seen_urls = HashSet::<String>::new();
+
+    for source in sources.iter() {
+        let Some(favicon_url) = source
+            .favicon
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| is_remote_http_url(v))
+        else {
+            continue;
+        };
+
+        if seen_urls.insert(favicon_url.to_string()) {
+            unique_urls.push(favicon_url.to_string());
+        }
+    }
+
+    if unique_urls.is_empty() {
+        return;
+    }
+
+    let tasks = unique_urls.into_iter().map(|favicon_url| {
+        fetch_and_store_favicon(favicon_client.clone(), Arc::clone(&storage), favicon_url)
+    });
+    let cached_favicon_paths = join_all(tasks).await.into_iter().collect::<HashMap<_, _>>();
+
+    for source in sources.iter_mut() {
+        let Some(favicon_url) = source
+            .favicon
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| is_remote_http_url(v))
+        else {
+            continue;
+        };
+
+        if let Some(Some(local_path)) = cached_favicon_paths.get(favicon_url) {
+            source.favicon = Some(local_path.clone());
+        }
+    }
+}
+
+fn citation_source(title: String, url: String, summary: String) -> CitationSource {
+    let favicon = favicon_for_url(&url);
+    CitationSource {
+        title,
+        url,
+        summary,
+        favicon,
+    }
 }
 
 fn is_safe_domain(domain: &str) -> bool {
@@ -1215,11 +1413,11 @@ pub fn local_safe_source_candidates(
         let Some(url) = make_safe_source_url(&site) else {
             continue;
         };
-        out.push(CitationSource {
-            title: site.name,
+        out.push(citation_source(
+            site.name,
             url,
-            summary: format!("Trusted {} source candidate.", category),
-        });
+            format!("Trusted {} source candidate.", category),
+        ));
     }
 
     out
@@ -1258,11 +1456,11 @@ pub fn filter_suggested_urls_to_safe_sources(
             continue;
         }
 
-        out.push(CitationSource {
-            title: domain.clone(),
-            url: canonical,
-            summary: "Gemini-assisted trusted source candidate.".to_string(),
-        });
+        out.push(citation_source(
+            domain.clone(),
+            canonical,
+            "Gemini-assisted trusted source candidate.".to_string(),
+        ));
     }
 
     out
@@ -1272,6 +1470,17 @@ pub async fn search_query(
     query: &str,
     max_results: Option<usize>,
 ) -> Result<WebSearchResult, String> {
+    search_query_with_progress(query, max_results, |_| {}).await
+}
+
+pub async fn search_query_with_progress<F>(
+    query: &str,
+    max_results: Option<usize>,
+    mut progress: F,
+) -> Result<WebSearchResult, String>
+where
+    F: FnMut(String) + Send,
+{
     let q = query.trim();
     if q.is_empty() {
         return Err("No query provided".to_string());
@@ -1283,14 +1492,35 @@ pub async fn search_query(
 
     let clients = TransportClients::build().map_err(|e| e.public_message())?;
     let mut last_error: Option<SearchError> = None;
+    let mut progress_ref: Option<&mut (dyn FnMut(String) + Send)> = Some(&mut progress);
 
-    for backend in [SearchBackend::DuckDuckGo, SearchBackend::Mojeek] {
-        match with_retries(|| run_backend_query_once(backend, q, limit, &clients)).await {
-            Ok(sources) => {
+    for backend in [SearchBackend::Mojeek, SearchBackend::DuckDuckGo] {
+        let backend_name = match backend {
+            SearchBackend::DuckDuckGo => "DuckDuckGo",
+            SearchBackend::Mojeek => "Mojeek",
+        };
+        emit_progress(
+            &mut progress_ref,
+            "Searching for relevant sources".to_string(),
+        );
+
+        match with_retries_with_progress(
+            backend_name,
+            || run_backend_query_once(backend, q, limit, &clients),
+            &mut progress_ref,
+        )
+        .await
+        {
+            Ok(mut sources) => {
+                cache_favicons_for_sources(&mut sources).await;
                 println!(
                     "[WebSearch] backend={} success results={}",
                     backend.as_str(),
                     sources.len()
+                );
+                emit_progress(
+                    &mut progress_ref,
+                    format!("{}: found {} results", backend_name, sources.len()),
                 );
                 return Ok(build_query_result(q, sources, None));
             }
@@ -1301,11 +1531,16 @@ pub async fn search_query(
                     error.kind.as_str(),
                     error.message
                 );
+                emit_progress(&mut progress_ref, "Trying another source".to_string());
                 last_error = Some(error);
             }
         }
     }
 
+    emit_progress(
+        &mut progress_ref,
+        "Search is unavailable right now.".to_string(),
+    );
     Err(last_error
         .map(|e| e.public_message())
         .unwrap_or_else(|| "[other] Search unavailable".to_string()))
@@ -1355,20 +1590,47 @@ pub async fn fetch_url_from_allowed(
     url: &str,
     allowed_sources: &HashMap<String, CitationSource>,
 ) -> Result<WebSearchResult, String> {
+    fetch_url_from_allowed_with_progress(url, allowed_sources, |_| {}).await
+}
+
+pub async fn fetch_url_from_allowed_with_progress<F>(
+    url: &str,
+    allowed_sources: &HashMap<String, CitationSource>,
+    mut progress: F,
+) -> Result<WebSearchResult, String>
+where
+    F: FnMut(String) + Send,
+{
     let canonical = canonicalize_url(url).map_err(|e| e.public_message())?;
     let source = allowed_sources.get(&canonical).ok_or_else(|| {
         "Blocked URL fetch: URL must come from a previous search result in this turn".to_string()
     })?;
 
     let clients = TransportClients::build().map_err(|e| e.public_message())?;
+    let mut progress_ref: Option<&mut (dyn FnMut(String) + Send)> = Some(&mut progress);
 
-    match with_retries(|| run_url_fetch_once(&canonical, &clients)).await {
+    emit_progress(
+        &mut progress_ref,
+        format!("Fetching page content: {}", canonical),
+    );
+
+    match with_retries_with_progress(
+        "Fetch",
+        || run_url_fetch_once(&canonical, &clients),
+        &mut progress_ref,
+    )
+    .await
+    {
         Ok(result) => Ok(result),
         Err(fetch_error) => {
             println!(
                 "[WebSearch] url_fetch_failed [{}]: {}",
                 fetch_error.kind.as_str(),
                 fetch_error.message
+            );
+            emit_progress(
+                &mut progress_ref,
+                "Couldn't open one source, trying another".to_string(),
             );
             Ok(build_degraded_url_result(&canonical, source, &fetch_error))
         }
@@ -1471,6 +1733,7 @@ mod tests {
                 title: "Example".to_string(),
                 url: "https://example.com:443/path#section".to_string(),
                 summary: "Summary".to_string(),
+                favicon: None,
             }],
         };
 

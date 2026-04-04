@@ -8,6 +8,7 @@ import React from "react";
 import { Message, Citation, ToolStep } from "../../chat.types";
 import { ChatBubble } from "./ChatBubble";
 import { TextShimmer } from "@/components";
+import { API_STATUS_TEXT, getProgressStatusText } from "@/lib";
 import styles from "./MessageList.module.css";
 
 interface MessageListProps {
@@ -26,6 +27,7 @@ interface MessageListProps {
   onTypingChange?: (isTyping: boolean) => void;
   onStopGeneration?: (truncatedText?: string) => void;
   onStopRequestedChange?: (requested: boolean) => void;
+  onAnswerNow?: () => void;
   onRetryMessage?: (messageId: string, modelId?: string) => void;
   onUndoMessage?: (messageId: string) => void;
   onSystemAction?: (actionId: string, value?: string) => void;
@@ -47,6 +49,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   onTypingChange,
   onStopGeneration,
   onStopRequestedChange,
+  onAnswerNow,
   onRetryMessage,
   onUndoMessage,
   onSystemAction,
@@ -57,19 +60,35 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
   const displayMessages =
     retryIndex !== -1 ? messages.slice(0, retryIndex + 1) : messages;
+  const isProgressVisible = (isGenerating || isAnalyzing || isSearching) && !streamingText;
+  const progressText = getProgressStatusText({
+    toolStatus,
+    isAnalyzing,
+    isRetrying: !!retryingMessageId,
+  });
+  const hasRunningToolStep = streamingToolSteps.some(
+    (step) => step.status === "running",
+  );
+  const hasPreStepSearchStatus =
+    !!toolStatus && streamingToolSteps.length === 0 && !!isSearching;
+  const showAnswerNow =
+    !!onAnswerNow && (hasRunningToolStep || hasPreStepSearchStatus);
 
   return (
     <div className={styles.container}>
-      {(isGenerating || isAnalyzing || isSearching) && !streamingText && (
-        <TextShimmer
-          text={
-            retryingMessageId
-              ? "Regenerating response..."
-              : isAnalyzing
-                ? "Analyzing your image"
-                : toolStatus || "Planning next moves"
-          }
-        />
+      {isProgressVisible && (
+        <div className={styles.progressRow}>
+          <TextShimmer text={progressText} />
+          {showAnswerNow && (
+            <button
+              type="button"
+              className={styles.answerNowButton}
+              onClick={onAnswerNow}
+            >
+              {API_STATUS_TEXT.ANSWER_NOW_BUTTON}
+            </button>
+          )}
+        </div>
       )}
       {streamingText && (
         <div className={styles.item}>

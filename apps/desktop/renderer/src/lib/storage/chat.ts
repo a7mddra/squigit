@@ -28,6 +28,7 @@ export interface ChatCitation {
   title: string;
   url: string;
   summary: string;
+  favicon?: string;
 }
 
 /** Tool timeline step metadata persisted with assistant messages. */
@@ -37,6 +38,8 @@ export interface ChatToolStep {
   status: string;
   args?: Record<string, unknown>;
   message?: string | null;
+  startedAtMs?: number;
+  endedAtMs?: number;
 }
 
 /** A single chat message (matches Rust ChatMessage). */

@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import styles from "./Tooltip.module.css";
+import styles from "./shared.module.css";
 
 const EDGE_PADDING = 8;
 

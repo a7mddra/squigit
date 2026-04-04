@@ -5,7 +5,7 @@
  */
 
 export type { Content } from "./gemini.types";
-export { cancelCurrentRequest } from "./cancel";
+export { cancelCurrentRequest, answerNowCurrentRequest } from "./cancel";
 export {
   initializeGemini,
   resetBrainContext,

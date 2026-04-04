@@ -1,0 +1,21 @@
+{
+  "functionDeclarations": [
+    {
+      "name": "web_search",
+      "description": "Search the web for fresh information or fetch text from a URL returned by a previous search result.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query for finding relevant web pages."
+          },
+          "url": {
+            "type": "string",
+            "description": "URL to fetch full readable content from. Must come from prior search results in this turn."
+          }
+        }
+      }
+    }
+  ]
+}

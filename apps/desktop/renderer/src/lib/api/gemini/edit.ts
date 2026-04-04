@@ -96,6 +96,8 @@ export const retryFromMessage = async (
       unlisten();
       if (geminiStore.currentUnlisten === unlisten)
         geminiStore.currentUnlisten = null;
+      if (geminiStore.currentChannelId === channelId)
+        geminiStore.currentChannelId = null;
 
       if (geminiStore.generationId !== myGenId) throw new Error("CANCELLED");
 
@@ -113,6 +115,8 @@ export const retryFromMessage = async (
       unlisten();
       if (geminiStore.currentUnlisten === unlisten)
         geminiStore.currentUnlisten = null;
+      if (geminiStore.currentChannelId === channelId)
+        geminiStore.currentChannelId = null;
       throw error;
     }
   }
@@ -183,6 +187,8 @@ export const retryFromMessage = async (
     unlisten();
     if (geminiStore.currentUnlisten === unlisten)
       geminiStore.currentUnlisten = null;
+    if (geminiStore.currentChannelId === channelId)
+      geminiStore.currentChannelId = null;
 
     if (geminiStore.generationId !== myGenId) throw new Error("CANCELLED");
 
@@ -193,6 +199,8 @@ export const retryFromMessage = async (
     unlisten();
     if (geminiStore.currentUnlisten === unlisten)
       geminiStore.currentUnlisten = null;
+    if (geminiStore.currentChannelId === channelId)
+      geminiStore.currentChannelId = null;
     throw error;
   }
 };

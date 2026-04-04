@@ -96,44 +96,17 @@
   padding-left: 10px;
 }
 
-.toolTimeline {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  margin-bottom: 0.75rem;
+.thoughtLabelRow {
+  width: 100%;
+  margin-bottom: 0.2rem;
+  padding-left: 10px;
 }
 
-.toolRow {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.84rem;
+.thoughtBadge {
+  font-size: 0.77rem;
+  line-height: 1.2;
   color: var(--c-raw-004);
-}
-
-.toolDot {
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 999px;
-  flex-shrink: 0;
-}
-
-.toolDotRunning {
-  background: color-mix(in srgb, var(--c-raw-037) 74%, transparent);
-}
-
-.toolDotDone {
-  background: color-mix(in srgb, var(--c-raw-011) 74%, transparent);
-}
-
-.toolDotError {
-  background: color-mix(in srgb, #f04d4d 72%, transparent);
-}
-
-.toolLabel {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  user-select: none;
 }
 
 .imageWrapper {
@@ -172,16 +145,18 @@
 
 .citationFooter {
   margin-top: 0.75rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 0.45rem;
 }
 
 .citationChip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.35rem;
-  max-width: 220px;
+  width: 100%;
+  min-width: 0;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
   border: 1px solid var(--c-raw-043);
@@ -189,11 +164,14 @@
   text-decoration: none;
   color: var(--c-raw-003);
   font-size: 0.78rem;
-  transition: background-color 0.16s ease;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease;
 }
 
 .citationChip:hover {
-  background: color-mix(in srgb, var(--c-raw-012) 85%, transparent);
+  background: color-mix(in srgb, var(--c-raw-012) 78%, transparent);
+  border-color: color-mix(in srgb, var(--c-raw-043) 80%, var(--c-raw-003) 20%);
 }
 
 .citationIcon {

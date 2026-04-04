@@ -6,11 +6,39 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
+#[derive(Clone)]
+struct GeminiRequestControl {
+    cancel_token: tokio_util::sync::CancellationToken,
+    answer_now: Arc<AtomicBool>,
+    answer_now_notify: Arc<tokio::sync::Notify>,
+}
+
+impl GeminiRequestControl {
+    fn new() -> Self {
+        Self {
+            cancel_token: tokio_util::sync::CancellationToken::new(),
+            answer_now: Arc::new(AtomicBool::new(false)),
+            answer_now_notify: Arc::new(tokio::sync::Notify::new()),
+        }
+    }
+
+    fn request_answer_now(&self) {
+        self.answer_now.store(true, Ordering::SeqCst);
+        self.answer_now_notify.notify_waiters();
+    }
+
+    fn is_answer_now_requested(&self) -> bool {
+        self.answer_now.load(Ordering::SeqCst)
+    }
+}
+
 lazy_static::lazy_static! {
-    pub static ref ACTIVE_REQUESTS: std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<String, tokio_util::sync::CancellationToken>>> = std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
+    static ref ACTIVE_REQUESTS: std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<String, GeminiRequestControl>>> = std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
 }
 
 #[tauri::command]
@@ -18,14 +46,29 @@ pub async fn cancel_gemini_request(channel_id: Option<String>) -> Result<(), Str
     let mut map = ACTIVE_REQUESTS.lock().await;
     if let Some(id) = channel_id {
         log::info!("Cancelling request for channel: {}", id);
-        if let Some(token) = map.remove(&id) {
-            token.cancel();
+        if let Some(control) = map.remove(&id) {
+            control.cancel_token.cancel();
         }
     } else {
         log::info!("Cancelling ALL Gemini requests");
-        for (_, token) in map.drain() {
-            token.cancel();
+        for (_, control) in map.drain() {
+            control.cancel_token.cancel();
         }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn answer_now_gemini_request(channel_id: String) -> Result<(), String> {
+    let map = ACTIVE_REQUESTS.lock().await;
+    if let Some(control) = map.get(&channel_id) {
+        log::info!("Answer-now requested for channel: {}", channel_id);
+        control.request_answer_now();
+    } else {
+        log::info!(
+            "Answer-now requested for unknown channel (likely completed): {}",
+            channel_id
+        );
     }
     Ok(())
 }
@@ -252,28 +295,6 @@ fn emit_event(app: &AppHandle, channel_id: &str, event: GeminiEvent) {
     let _ = app.emit(channel_id, event);
 }
 
-fn web_search_tool_declaration() -> serde_json::Value {
-    json!({
-        "functionDeclarations": [{
-            "name": "web_search",
-            "description": "Search the web for fresh information or fetch text from a URL returned by a previous search result.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Search query for finding relevant web pages."
-                    },
-                    "url": {
-                        "type": "string",
-                        "description": "URL to fetch full readable content from. Must come from prior search results in this turn."
-                    }
-                }
-            }
-        }]
-    })
-}
-
 struct StreamIterationResult {
     function_call: Option<GeminiFunctionCall>,
     function_call_thought_signature: Option<String>,
@@ -384,7 +405,7 @@ fn tool_step_id(iter: usize) -> String {
     format!("web-search-call-{}", iter + 1)
 }
 
-fn tool_status_text(function_call: &GeminiFunctionCall) -> String {
+fn tool_status_text(function_call: &GeminiFunctionCall) -> Option<String> {
     let query = function_call
         .args
         .get("query")
@@ -398,13 +419,13 @@ fn tool_status_text(function_call: &GeminiFunctionCall) -> String {
         .map(str::trim)
         .filter(|v| !v.is_empty());
 
-    if let Some(q) = query {
-        return format!("Searching the web for \"{}\"...", q);
+    if query.is_some() {
+        return Some("Searching for relevant sources".to_string());
     }
     if let Some(u) = url {
-        return format!("Fetching {}", u);
+        return Some(format!("Fetching {}", u));
     }
-    "Calling web search tool...".to_string()
+    None
 }
 
 fn build_system_instruction_with_search_policy(
@@ -607,6 +628,91 @@ fn wrap_query_fallback_result(
     result
 }
 
+enum ControlledAwaitOutcome<T> {
+    Completed(T),
+    Cancelled,
+    AnswerNow,
+}
+
+async fn await_with_request_control<T>(
+    future: impl std::future::Future<Output = T>,
+    control: &GeminiRequestControl,
+) -> ControlledAwaitOutcome<T> {
+    if control.cancel_token.is_cancelled() {
+        return ControlledAwaitOutcome::Cancelled;
+    }
+    if control.is_answer_now_requested() {
+        return ControlledAwaitOutcome::AnswerNow;
+    }
+
+    tokio::select! {
+        output = future => ControlledAwaitOutcome::Completed(output),
+        _ = control.cancel_token.cancelled() => ControlledAwaitOutcome::Cancelled,
+        _ = control.answer_now_notify.notified() => ControlledAwaitOutcome::AnswerNow,
+    }
+}
+
+fn collect_answer_now_sources(
+    allowed_sources: &HashMap<String, crate::services::web_search::CitationSource>,
+    max_sources: usize,
+) -> Vec<crate::services::web_search::CitationSource> {
+    let mut sources = allowed_sources.values().cloned().collect::<Vec<_>>();
+    sources.sort_by(|a, b| a.url.cmp(&b.url));
+    sources.truncate(max_sources);
+    sources
+}
+
+fn build_answer_now_context_markdown(
+    mode_label: &str,
+    sources: &[crate::services::web_search::CitationSource],
+) -> String {
+    if sources.is_empty() {
+        return format!(
+            "[{mode_label} interrupted by Answer Now]\n- No web sources were collected yet."
+        );
+    }
+
+    let mut context = format!("[{mode_label} interrupted by Answer Now]\n");
+    for source in sources {
+        context.push_str(&format!(
+            "- {} — {}\n  {}\n",
+            source.title,
+            source.url,
+            if source.summary.trim().is_empty() {
+                "(No snippet available)"
+            } else {
+                source.summary.trim()
+            }
+        ));
+    }
+    context.trim().to_string()
+}
+
+fn build_answer_now_partial_result(
+    query: Option<&str>,
+    requested_url: Option<&str>,
+    allowed_sources: &HashMap<String, crate::services::web_search::CitationSource>,
+) -> crate::services::web_search::WebSearchResult {
+    let mode = if requested_url.is_some() {
+        "url"
+    } else {
+        "query"
+    };
+    let sources = collect_answer_now_sources(allowed_sources, 6);
+    crate::services::web_search::WebSearchResult {
+        mode: mode.to_string(),
+        query: query.map(|v| v.to_string()),
+        requested_url: requested_url.map(|v| v.to_string()),
+        context_markdown: build_answer_now_context_markdown("Search", &sources),
+        sources,
+        success: true,
+        message: Some(
+            "Answer requested before search completed; returning collected sources so far."
+                .to_string(),
+        ),
+    }
+}
+
 /// Brain-aware chat command (v2)
 ///
 /// For initial turns (is_initial_turn=true):
@@ -656,15 +762,20 @@ pub async fn stream_gemini_chat_v2(
             model, api_key
         );
 
-        let cancel_token = tokio_util::sync::CancellationToken::new();
+        let request_control = GeminiRequestControl::new();
         {
             let mut map = ACTIVE_REQUESTS.lock().await;
-            map.insert(channel_id.clone(), cancel_token.clone());
+            map.insert(channel_id.clone(), request_control.clone());
         }
 
         let mut allow_tools = !is_initial_turn;
         let mut tool_calls = 0usize;
         let mut consecutive_tool_failures = 0usize;
+        let web_search_tool_declaration = if allow_tools {
+            Some(crate::brain::loader::load_web_search_tool_declaration()?)
+        } else {
+            None
+        };
         let mut allowed_sources =
             HashMap::<String, crate::services::web_search::CitationSource>::new();
         let mut attempted_urls = HashSet::<String>::new();
@@ -741,8 +852,22 @@ pub async fn stream_gemini_chat_v2(
         };
 
         for iter in 0..MAX_AGENT_ITERATIONS {
+            if allow_tools && request_control.is_answer_now_requested() {
+                allow_tools = false;
+                emit_event(
+                    &app,
+                    &channel_id,
+                    GeminiEvent::ToolStatus {
+                        message: "Wrapping up with what I have so far".to_string(),
+                    },
+                );
+            }
+
             let tools = if allow_tools {
-                Some(vec![web_search_tool_declaration()])
+                Some(vec![web_search_tool_declaration
+                    .as_ref()
+                    .ok_or_else(|| "Web search tool declaration not loaded".to_string())?
+                    .clone()])
             } else {
                 None
             };
@@ -782,7 +907,7 @@ pub async fn stream_gemini_chat_v2(
                 &url,
                 &request_body,
                 &channel_id,
-                &cancel_token,
+                &request_control.cancel_token,
             )
             .await?;
 
@@ -795,27 +920,21 @@ pub async fn stream_gemini_chat_v2(
             };
 
             if function_call.name != "web_search" {
-                emit_event(
-                    &app,
-                    &channel_id,
-                    GeminiEvent::ToolStatus {
-                        message: "Unsupported tool requested by model; continuing without tools."
-                            .to_string(),
-                    },
-                );
                 allow_tools = false;
                 continue;
             }
 
             let status_text = tool_status_text(&function_call);
             let call_id = tool_step_id(iter);
-            emit_event(
-                &app,
-                &channel_id,
-                GeminiEvent::ToolStatus {
-                    message: status_text.clone(),
-                },
-            );
+            if let Some(status_text_value) = status_text.as_ref() {
+                emit_event(
+                    &app,
+                    &channel_id,
+                    GeminiEvent::ToolStatus {
+                        message: status_text_value.clone(),
+                    },
+                );
+            }
             emit_event(
                 &app,
                 &channel_id,
@@ -823,7 +942,7 @@ pub async fn stream_gemini_chat_v2(
                     id: call_id.clone(),
                     name: "web_search".to_string(),
                     args: function_call.args.clone(),
-                    message: status_text,
+                    message: status_text.unwrap_or_default(),
                 },
             );
 
@@ -840,21 +959,41 @@ pub async fn stream_gemini_chat_v2(
                 .map(str::trim)
                 .filter(|v| !v.is_empty());
 
-            let tool_result = if let Some(q) = query {
-                match crate::services::web_search::search_query(q, Some(6)).await {
-                    Ok(result) => Ok(result),
-                    Err(search_error) => {
+            let tool_result = if request_control.is_answer_now_requested() {
+                Ok(build_answer_now_partial_result(
+                    query,
+                    requested_url,
+                    &allowed_sources,
+                ))
+            } else if let Some(q) = query {
+                match await_with_request_control(
+                    crate::services::web_search::search_query_with_progress(
+                        q,
+                        Some(6),
+                        |message| {
+                            emit_event(
+                                &app,
+                                &channel_id,
+                                GeminiEvent::ToolStatus { message },
+                            );
+                        },
+                    ),
+                    &request_control,
+                )
+                .await
+                {
+                    ControlledAwaitOutcome::Completed(Ok(result)) => Ok(result),
+                    ControlledAwaitOutcome::Completed(Err(search_error)) => {
                         println!("[WebSearch] Primary query failed: {}", search_error);
                         let mut final_error = search_error;
-                        let mut resolved: Option<crate::services::web_search::WebSearchResult> = None;
+                        let mut resolved: Option<crate::services::web_search::WebSearchResult> =
+                            None;
 
                         emit_event(
                             &app,
                             &channel_id,
                             GeminiEvent::ToolStatus {
-                                message:
-                                    "Primary search blocked. Trying trusted fallback sources..."
-                                        .to_string(),
+                                message: "Trying another reliable source".to_string(),
                             },
                         );
 
@@ -883,20 +1022,30 @@ pub async fn stream_gemini_chat_v2(
                                 &app,
                                 &channel_id,
                                 GeminiEvent::ToolStatus {
-                                    message: format!("Trying trusted source: {}", candidate.title),
+                                    message: "Trying another reliable source".to_string(),
                                 },
                             );
 
                             let mut allowed = HashMap::new();
                             allowed.insert(candidate.url.clone(), candidate.clone());
 
-                            match crate::services::web_search::fetch_url_from_allowed(
-                                &candidate.url,
-                                &allowed,
+                            match await_with_request_control(
+                                crate::services::web_search::fetch_url_from_allowed_with_progress(
+                                    &candidate.url,
+                                    &allowed,
+                                    |message| {
+                                        emit_event(
+                                            &app,
+                                            &channel_id,
+                                            GeminiEvent::ToolStatus { message },
+                                        );
+                                    },
+                                ),
+                                &request_control,
                             )
                             .await
                             {
-                                Ok(result) => {
+                                ControlledAwaitOutcome::Completed(Ok(result)) => {
                                     let fallback_message = format!(
                                         "Primary search failed; used trusted fallback source: {}.",
                                         candidate.title
@@ -908,12 +1057,23 @@ pub async fn stream_gemini_chat_v2(
                                     ));
                                     break;
                                 }
-                                Err(fetch_error) => {
+                                ControlledAwaitOutcome::Completed(Err(fetch_error)) => {
                                     println!(
                                         "[WebSearch] Local safe-source fallback failed: {}",
                                         fetch_error
                                     );
                                     final_error = fetch_error;
+                                }
+                                ControlledAwaitOutcome::Cancelled => {
+                                    return Err("CANCELLED".to_string());
+                                }
+                                ControlledAwaitOutcome::AnswerNow => {
+                                    resolved = Some(build_answer_now_partial_result(
+                                        Some(q),
+                                        None,
+                                        &allowed_sources,
+                                    ));
+                                    break;
                                 }
                             }
                         }
@@ -923,63 +1083,109 @@ pub async fn stream_gemini_chat_v2(
                                 &app,
                                 &channel_id,
                                 GeminiEvent::ToolStatus {
-                                    message:
-                                        "Trusted local fallback failed. Trying model-assisted safe sources..."
-                                            .to_string(),
+                                    message: "Trying another reliable source".to_string(),
                                 },
                             );
 
-                            let suggested_urls =
-                                suggest_fallback_urls(&client, &api_key, &model, q, 6).await;
-                            let filtered_candidates =
-                                crate::services::web_search::filter_suggested_urls_to_safe_sources(
+                            let suggested_urls = match await_with_request_control(
+                                suggest_fallback_urls(&client, &api_key, &model, q, 6),
+                                &request_control,
+                            )
+                            .await
+                            {
+                                ControlledAwaitOutcome::Completed(urls) => urls,
+                                ControlledAwaitOutcome::Cancelled => {
+                                    return Err("CANCELLED".to_string());
+                                }
+                                ControlledAwaitOutcome::AnswerNow => {
+                                    resolved = Some(build_answer_now_partial_result(
+                                        Some(q),
+                                        None,
+                                        &allowed_sources,
+                                    ));
+                                    Vec::new()
+                                }
+                            };
+
+                            if resolved.is_none() {
+                                let filtered_candidates = crate::services::web_search::filter_suggested_urls_to_safe_sources(
                                     &suggested_urls,
                                     &attempted_domains,
                                     3,
                                 );
-                            println!(
-                                "[WebSearch] Gemini suggested {} URLs, {} passed safe filtering",
-                                suggested_urls.len(),
-                                filtered_candidates.len()
-                            );
-
-                            for candidate in filtered_candidates {
-                                if attempted_urls.contains(&candidate.url) {
-                                    continue;
-                                }
-
-                                mark_attempted_url(
-                                    &candidate.url,
-                                    &mut attempted_urls,
-                                    &mut attempted_domains,
+                                println!(
+                                    "[WebSearch] Gemini suggested {} URLs, {} passed safe filtering",
+                                    suggested_urls.len(),
+                                    filtered_candidates.len()
                                 );
-                                let mut allowed = HashMap::new();
-                                allowed.insert(candidate.url.clone(), candidate.clone());
 
-                                match crate::services::web_search::fetch_url_from_allowed(
-                                    &candidate.url,
-                                    &allowed,
-                                )
-                                .await
-                                {
-                                    Ok(result) => {
-                                        let fallback_message = format!(
-                                            "Primary search failed; used model-assisted trusted fallback source: {}.",
-                                            candidate.title
-                                        );
-                                        resolved = Some(wrap_query_fallback_result(
-                                            q,
-                                            result,
-                                            &fallback_message,
-                                        ));
-                                        break;
+                                for candidate in filtered_candidates {
+                                    if attempted_urls.contains(&candidate.url) {
+                                        continue;
                                     }
-                                    Err(fetch_error) => {
-                                        println!(
-                                            "[WebSearch] Gemini-assisted fallback failed: {}",
-                                            fetch_error
-                                        );
-                                        final_error = fetch_error;
+
+                                    mark_attempted_url(
+                                        &candidate.url,
+                                        &mut attempted_urls,
+                                        &mut attempted_domains,
+                                    );
+                                    emit_event(
+                                        &app,
+                                        &channel_id,
+                                        GeminiEvent::ToolStatus {
+                                            message: "Trying another reliable source".to_string(),
+                                        },
+                                    );
+
+                                    let mut allowed = HashMap::new();
+                                    allowed.insert(candidate.url.clone(), candidate.clone());
+
+                                    match await_with_request_control(
+                                        crate::services::web_search::fetch_url_from_allowed_with_progress(
+                                            &candidate.url,
+                                            &allowed,
+                                            |message| {
+                                                emit_event(
+                                                    &app,
+                                                    &channel_id,
+                                                    GeminiEvent::ToolStatus { message },
+                                                );
+                                            },
+                                        ),
+                                        &request_control,
+                                    )
+                                    .await
+                                    {
+                                        ControlledAwaitOutcome::Completed(Ok(result)) => {
+                                            let fallback_message = format!(
+                                                "Primary search failed; used model-assisted trusted fallback source: {}.",
+                                                candidate.title
+                                            );
+                                            resolved = Some(wrap_query_fallback_result(
+                                                q,
+                                                result,
+                                                &fallback_message,
+                                            ));
+                                            break;
+                                        }
+                                        ControlledAwaitOutcome::Completed(Err(fetch_error)) => {
+                                            println!(
+                                                "[WebSearch] Gemini-assisted fallback failed: {}",
+                                                fetch_error
+                                            );
+                                            final_error = fetch_error;
+                                        }
+                                        ControlledAwaitOutcome::Cancelled => {
+                                            return Err("CANCELLED".to_string());
+                                        }
+                                        ControlledAwaitOutcome::AnswerNow => {
+                                            resolved = Some(build_answer_now_partial_result(
+                                                Some(q),
+                                                None,
+                                                &allowed_sources,
+                                            ));
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -992,10 +1198,43 @@ pub async fn stream_gemini_chat_v2(
                             )
                         })
                     }
+                    ControlledAwaitOutcome::Cancelled => return Err("CANCELLED".to_string()),
+                    ControlledAwaitOutcome::AnswerNow => {
+                        Ok(build_answer_now_partial_result(
+                            Some(q),
+                            None,
+                            &allowed_sources,
+                        ))
+                    }
                 }
             } else if let Some(u) = requested_url {
                 mark_attempted_url(u, &mut attempted_urls, &mut attempted_domains);
-                crate::services::web_search::fetch_url_from_allowed(u, &allowed_sources).await
+                match await_with_request_control(
+                    crate::services::web_search::fetch_url_from_allowed_with_progress(
+                        u,
+                        &allowed_sources,
+                        |message| {
+                            emit_event(
+                                &app,
+                                &channel_id,
+                                GeminiEvent::ToolStatus { message },
+                            );
+                        },
+                    ),
+                    &request_control,
+                )
+                .await
+                {
+                    ControlledAwaitOutcome::Completed(result) => result,
+                    ControlledAwaitOutcome::Cancelled => return Err("CANCELLED".to_string()),
+                    ControlledAwaitOutcome::AnswerNow => {
+                        Ok(build_answer_now_partial_result(
+                            None,
+                            Some(u),
+                            &allowed_sources,
+                        ))
+                    }
+                }
             } else {
                 Err("Tool call requires either `query` or `url`.".to_string())
             };
@@ -1011,9 +1250,8 @@ pub async fn stream_gemini_chat_v2(
                     consecutive_tool_failures = 0;
                     let done_message = result
                         .message
-                        .as_ref()
-                        .map(|m| format!("Search complete. {}", m))
-                        .unwrap_or_else(|| "Search complete.".to_string());
+                        .clone()
+                        .unwrap_or_else(|| "Web search step completed.".to_string());
                     (
                         serde_json::to_value(&result).unwrap_or_else(|_| {
                             json!({
@@ -1037,7 +1275,7 @@ pub async fn stream_gemini_chat_v2(
                             "message": error_message
                         }),
                         "error".to_string(),
-                        "Search failed.".to_string(),
+                        "Web search step failed.".to_string(),
                     )
                 }
             };
@@ -1054,6 +1292,17 @@ pub async fn stream_gemini_chat_v2(
                 },
             );
 
+            if request_control.is_answer_now_requested() {
+                allow_tools = false;
+                emit_event(
+                    &app,
+                    &channel_id,
+                    GeminiEvent::ToolStatus {
+                        message: "Wrapping up with what I have so far".to_string(),
+                    },
+                );
+            }
+
             tool_calls += 1;
             if tool_calls >= MAX_TOOL_CALLS_PER_TURN {
                 allow_tools = false;
@@ -1061,8 +1310,7 @@ pub async fn stream_gemini_chat_v2(
                     &app,
                     &channel_id,
                     GeminiEvent::ToolStatus {
-                        message: "Tool call limit reached — answering from knowledge only."
-                            .to_string(),
+                        message: "Wrapping up with what I have so far".to_string(),
                     },
                 );
             }
@@ -1073,7 +1321,7 @@ pub async fn stream_gemini_chat_v2(
                     &channel_id,
                     GeminiEvent::ToolStatus {
                         message:
-                            "Web search temporarily unavailable — answering from knowledge only."
+                            "Search is unavailable right now, continuing with available context"
                                 .to_string(),
                     },
                 );

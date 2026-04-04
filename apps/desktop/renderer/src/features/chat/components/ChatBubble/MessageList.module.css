@@ -13,3 +13,27 @@
 .item {
   margin-bottom: 0;
 }
+
+.progressRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.answerNowButton {
+  border: none;
+  background: transparent;
+  color: var(--c-raw-004);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.2rem 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.answerNowButton:hover {
+  color: var(--c-raw-003);
+}

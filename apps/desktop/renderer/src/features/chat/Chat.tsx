@@ -366,6 +366,7 @@ export const Chat: React.FC = () => {
                     app.chat.handleStopGeneration(truncatedText)
                   }
                   onStopRequestedChange={setStopRequested}
+                  onAnswerNow={app.chat.handleAnswerNow}
                   onRetryMessage={app.chat.handleRetryMessage}
                   onUndoMessage={handleRequestUndoMessage}
                   onSystemAction={app.handleSystemAction}

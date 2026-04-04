@@ -1,0 +1,80 @@
+/**
+ * @license
+ * Copyright 2026 a7mddra
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+.tooltip {
+  position: fixed;
+  background-color: var(--c-raw-012);
+  color: var(--c-raw-050);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  font-weight: 500;
+  z-index: 9999;
+  border: 1px solid var(--c-raw-043);
+}
+
+.citationTip {
+  position: fixed;
+  background-color: var(--c-raw-012);
+  color: var(--c-raw-050);
+  border: 1px solid var(--c-raw-043);
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  padding: 0.6rem;
+  width: min(280px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.citationHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.citationHeaderIcon {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.citationHeaderUrl {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--c-raw-004);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.citationBody {
+  font-size: 0.78rem;
+  line-height: 1.42;
+  color: var(--c-raw-050);
+  white-space: normal;
+  word-break: break-word;
+}
+
+.arrow {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background-color: var(--c-raw-012);
+  border: 1px solid var(--c-raw-043);
+  border-top: none;
+  border-left: none;
+  transform: translateX(-50%) rotate(45deg);
+  bottom: -5px;
+  left: 50%;
+}

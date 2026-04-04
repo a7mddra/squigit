@@ -11,10 +11,13 @@ import {
   sendMessage as apiSendMessage,
   retryFromMessage as apiRetryFromMessage,
   cancelCurrentRequest,
+  answerNowCurrentRequest,
   replaceLastAssistantHistory,
   restoreSession as apiRestoreSession,
   getImageDescription,
   setImageDescription,
+  API_STATUS_TEXT,
+  mapToolStatusText,
   ModelType,
 } from "@/lib";
 
@@ -75,6 +78,29 @@ export const useGeminiEngine = (config: {
     setStreamingCitations([]);
   };
 
+  const getThoughtSecondsFromToolSteps = (steps: ToolStep[]): number | undefined => {
+    const seconds = steps.reduce((sum, step) => {
+      if (
+        typeof step.startedAtMs === "number" &&
+        typeof step.endedAtMs === "number" &&
+        step.endedAtMs >= step.startedAtMs
+      ) {
+        return sum + Math.max(1, Math.round((step.endedAtMs - step.startedAtMs) / 1000));
+      }
+      const match = step.message?.trim().match(/^Thought for (\d+)s$/i);
+      if (!match) return sum;
+      const parsed = Number.parseInt(match[1], 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) return sum;
+      return sum + parsed;
+    }, 0);
+
+    return seconds > 0 ? seconds : undefined;
+  };
+
+  const getElapsedThoughtSeconds = (startedAtMs: number): number => {
+    return Math.max(1, Math.round((Date.now() - startedAtMs) / 1000));
+  };
+
   const createToolEventHandler = (onResetText?: () => void) => {
     let steps: ToolStep[] = [];
     let citations: Citation[] = [];
@@ -97,12 +123,17 @@ export const useGeminiEngine = (config: {
             title?: string;
             url?: string;
             summary?: string;
+            favicon?: string;
           };
           if (!src.url || !src.title) return null;
           return {
             title: String(src.title),
             url: String(src.url),
             summary: String(src.summary || ""),
+            favicon:
+              typeof src.favicon === "string" && src.favicon.trim().length > 0
+                ? src.favicon
+                : undefined,
           } as Citation;
         })
         .filter((v): v is Citation => !!v);
@@ -117,17 +148,24 @@ export const useGeminiEngine = (config: {
       }
 
       if (event.type === "tool_status") {
-        setToolStatus(event.message || null);
+        const mappedStatus = mapToolStatusText(event.message);
+        if (mappedStatus.type === "set") {
+          setToolStatus(mappedStatus.text);
+        } else if (mappedStatus.type === "clear") {
+          setToolStatus(null);
+        }
         return;
       }
 
       if (event.type === "tool_start") {
+        const startedAtMs = Date.now();
         const next: ToolStep = {
           id: String(event.id || `tool-${Date.now()}`),
           name: String(event.name || "tool"),
           status: "running",
           args: event.args || {},
           message: event.message || "",
+          startedAtMs,
         };
         steps = [...steps, next];
         setStreamingToolSteps([...steps]);
@@ -136,15 +174,36 @@ export const useGeminiEngine = (config: {
 
       if (event.type === "tool_end") {
         const id = String(event.id || "");
-        steps = steps.map((step) =>
-          step.id === id
-            ? {
-                ...step,
-                status: event.status === "error" ? "error" : "done",
-                message: event.message || step.message,
-              }
-            : step,
-        );
+        const endedAtMs = Date.now();
+        let matched = false;
+        steps = steps.map((step) => {
+          if (step.id !== id) return step;
+          matched = true;
+          const startedAtMs = step.startedAtMs || endedAtMs;
+          return {
+            ...step,
+            status: event.status === "error" ? "error" : "done",
+            endedAtMs,
+            message: `Thought for ${Math.max(
+              1,
+              Math.round((endedAtMs - startedAtMs) / 1000),
+            )}s`,
+          };
+        });
+        if (!matched) {
+          steps = [
+            ...steps,
+            {
+              id: id || `tool-${endedAtMs}`,
+              name: String(event.name || "tool"),
+              status: event.status === "error" ? "error" : "done",
+              args: {},
+              startedAtMs: endedAtMs,
+              endedAtMs,
+              message: "Thought for 1s",
+            },
+          ];
+        }
         setStreamingToolSteps([...steps]);
 
         const parsed = parseCitationsFromResult(event.result);
@@ -211,6 +270,7 @@ export const useGeminiEngine = (config: {
     resetToolStreamingState();
     setIsStreaming(true);
     setIsAiTyping(true);
+    const requestStartedAtMs = Date.now();
 
     try {
       let fullResponse = "";
@@ -267,6 +327,7 @@ export const useGeminiEngine = (config: {
         role: "model",
         text: fullResponse,
         timestamp: Date.now(),
+        thoughtSeconds: getElapsedThoughtSeconds(requestStartedAtMs),
         alreadyStreamed: true,
         toolSteps: toolTracker.snapshot().steps,
         citations: toolTracker.snapshot().citations,
@@ -361,6 +422,7 @@ export const useGeminiEngine = (config: {
     resetToolStreamingState();
     setIsStreaming(true);
     setIsAiTyping(true);
+    const requestStartedAtMs = Date.now();
 
     try {
       let fullResponse = "";
@@ -390,6 +452,7 @@ export const useGeminiEngine = (config: {
         role: "model",
         text: fullResponse,
         timestamp: Date.now(),
+        thoughtSeconds: getElapsedThoughtSeconds(requestStartedAtMs),
         alreadyStreamed: true,
         toolSteps: toolTracker.snapshot().steps,
         citations: toolTracker.snapshot().citations,
@@ -439,6 +502,7 @@ export const useGeminiEngine = (config: {
     setMessages((prev: Message[]) => [...prev, lastSentMessage]);
     const targetChatId = config.chatId;
     resetToolStreamingState();
+    const requestStartedAtMs = Date.now();
 
     try {
       let fullResponse = "";
@@ -466,6 +530,7 @@ export const useGeminiEngine = (config: {
         role: "model",
         text: responseText,
         timestamp: Date.now(),
+        thoughtSeconds: getElapsedThoughtSeconds(requestStartedAtMs),
         alreadyStreamed: true,
         toolSteps: toolTracker.snapshot().steps,
         citations: toolTracker.snapshot().citations,
@@ -517,6 +582,7 @@ export const useGeminiEngine = (config: {
         role: "model",
         text: streamingText,
         timestamp: Date.now(),
+        thoughtSeconds: getThoughtSecondsFromToolSteps(streamingToolSteps),
         citations: streamingCitations,
         toolSteps: streamingToolSteps,
       };
@@ -556,6 +622,7 @@ export const useGeminiEngine = (config: {
     setIsLoading(true);
     isRequestCancelledRef.current = false;
     resetToolStreamingState();
+    const requestStartedAtMs = Date.now();
 
     try {
       let fullResponse = "";
@@ -583,6 +650,7 @@ export const useGeminiEngine = (config: {
         role: "model",
         text: responseText,
         timestamp: Date.now(),
+        thoughtSeconds: getElapsedThoughtSeconds(requestStartedAtMs),
         alreadyStreamed: true,
         toolSteps: toolTracker.snapshot().steps,
         citations: toolTracker.snapshot().citations,
@@ -637,6 +705,7 @@ export const useGeminiEngine = (config: {
     setRetryingMessageId(messageId); // Keep for "Analyzing" shimmer if needed
     isRequestCancelledRef.current = false;
     resetToolStreamingState();
+    const requestStartedAtMs = Date.now();
 
     const newResponseId = Date.now().toString();
 
@@ -690,6 +759,7 @@ export const useGeminiEngine = (config: {
         role: "model",
         text: responseText,
         timestamp: Date.now(),
+        thoughtSeconds: getElapsedThoughtSeconds(requestStartedAtMs),
         alreadyStreamed: true,
         toolSteps: toolTracker.snapshot().steps,
         citations: toolTracker.snapshot().citations,
@@ -814,6 +884,7 @@ export const useGeminiEngine = (config: {
           role: "model",
           text: truncatedText,
           timestamp: Date.now(),
+          thoughtSeconds: getThoughtSecondsFromToolSteps(streamingToolSteps),
           stopped: true,
           alreadyStreamed: true,
           citations: streamingCitations,
@@ -878,6 +949,11 @@ export const useGeminiEngine = (config: {
     resetToolStreamingState();
   };
 
+  const handleAnswerNow = async () => {
+    await answerNowCurrentRequest();
+    setToolStatus(API_STATUS_TEXT.WRAPPING_UP);
+  };
+
   const handleStreamComplete = () => {
     if (streamingText && firstResponseId) {
       const botMsg: Message = {
@@ -885,6 +961,7 @@ export const useGeminiEngine = (config: {
         role: "model",
         text: streamingText,
         timestamp: Date.now(),
+        thoughtSeconds: getThoughtSecondsFromToolSteps(streamingToolSteps),
         alreadyStreamed: true,
         citations: streamingCitations,
         toolSteps: streamingToolSteps,
@@ -917,6 +994,7 @@ export const useGeminiEngine = (config: {
     handleUndoMessage,
     handleDescribeEdits,
     handleStopGeneration,
+    handleAnswerNow,
     handleStreamComplete,
     cleanupAbortController,
   };

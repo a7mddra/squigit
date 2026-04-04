@@ -99,6 +99,8 @@ export const startNewThreadStream = async (
     unlisten();
     if (geminiStore.currentUnlisten === unlisten)
       geminiStore.currentUnlisten = null;
+    if (geminiStore.currentChannelId === channelId)
+      geminiStore.currentChannelId = null;
     geminiStore.currentAbortController = null;
 
     if (geminiStore.generationId !== myGenId) throw new Error("CANCELLED");
@@ -119,6 +121,8 @@ export const startNewThreadStream = async (
     unlisten();
     if (geminiStore.currentUnlisten === unlisten)
       geminiStore.currentUnlisten = null;
+    if (geminiStore.currentChannelId === channelId)
+      geminiStore.currentChannelId = null;
     geminiStore.currentAbortController = null;
     if (error instanceof Error && error.message === "CANCELLED") throw error;
     console.error("Backend stream error:", error);

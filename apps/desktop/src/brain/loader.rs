@@ -123,6 +123,13 @@ pub fn load_image_brief_prompt() -> Result<String, String> {
     Ok(config.describe_image)
 }
 
+/// Load the web search tool declaration from embedded JSON
+pub fn load_web_search_tool_declaration() -> Result<serde_json::Value, String> {
+    let json_content = include_str!("prompts/core/web_search_tool.json");
+    serde_json::from_str(json_content)
+        .map_err(|e| format!("Failed to parse web_search_tool.json: {}", e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,5 +158,18 @@ mod tests {
             result,
             format!("Hello User, welcome to {}!", crate::constants::APP_NAME)
         );
+    }
+
+    #[test]
+    fn test_load_web_search_tool_declaration() {
+        let declaration =
+            load_web_search_tool_declaration().expect("Failed to load web search tool declaration");
+        let name = declaration
+            .get("functionDeclarations")
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|v| v.get("name"))
+            .and_then(|v| v.as_str());
+        assert_eq!(name, Some("web_search"));
     }
 }

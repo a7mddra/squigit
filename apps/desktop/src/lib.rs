@@ -20,10 +20,9 @@ use commands::capture::{spawn_capture, spawn_capture_to_input};
 use commands::chat::{
     append_chat_message, create_chat, delete_chat, detect_image_tone, get_image_path,
     get_imgbb_url, get_ocr_data, get_ocr_frame, init_ocr_frame, list_chats, load_chat,
-    overwrite_chat_messages,
-    read_attachment_text, resolve_attachment_path, reveal_in_file_manager, save_imgbb_url,
-    save_ocr_data, search_chats, store_file_from_path, store_image_bytes, store_image_from_path,
-    update_chat_metadata,
+    overwrite_chat_messages, read_attachment_text, resolve_attachment_path, reveal_in_file_manager,
+    save_imgbb_url, save_ocr_data, search_chats, store_file_from_path, store_image_bytes,
+    store_image_from_path, update_chat_metadata,
 };
 use commands::clipboard::{
     copy_image_from_path_to_clipboard, copy_image_to_clipboard, read_clipboard_image,
@@ -41,8 +40,8 @@ use commands::profile::{
     list_profiles, set_active_profile,
 };
 use commands::security::{check_file_exists, encrypt_and_save, has_agreed_flag, set_agreed_flag};
-use commands::system::{run_sidecar_version, get_linux_package_manager};
 use commands::speech::SpeechState;
+use commands::system::{get_linux_package_manager, run_sidecar_version};
 use commands::window::{
     close_window, get_always_on_top, maximize_window, minimize_window, open_external_url,
     reload_window, set_always_on_top, set_background_color, show_window,
@@ -105,6 +104,7 @@ pub fn run() {
             commands::gemini::generate_image_brief,
             commands::gemini::compress_conversation,
             commands::gemini::cancel_gemini_request,
+            commands::gemini::answer_now_gemini_request,
             // Window
             open_external_url,
             set_background_color,
@@ -240,25 +240,25 @@ pub fn run() {
                     let appimage_path = std::path::PathBuf::from(appimage_path);
                     if let Some(home_dir) = dirs::home_dir() {
                         let applications_dir = home_dir.join("Applications");
-                        
+
                         if !appimage_path.starts_with(&applications_dir) && !appimage_path.starts_with("/usr") && !appimage_path.starts_with("/opt") {
                             log::info!("AppImage running from temporary location: {}. Migrating...", appimage_path.display());
-                            
+
                             let _ = std::fs::create_dir_all(&applications_dir);
                             let target_appimage = applications_dir.join("Squigit.AppImage");
-                            
+
                             if std::fs::rename(&appimage_path, &target_appimage).is_err()
                                 && std::fs::copy(&appimage_path, &target_appimage).is_ok()
                             {
                                 let _ = std::fs::remove_file(&appimage_path);
                             }
-                            
+
                             let target_icon_dir = home_dir.join(".local/share/icons/hicolor/512x512/apps");
                             let _ = std::fs::create_dir_all(&target_icon_dir);
                             let target_icon = target_icon_dir.join("squigit.png");
-                            
+
                             let _ = std::fs::write(&target_icon, include_bytes!("../icons/icon.png"));
-                            
+
                             let target_desktop_dir = home_dir.join(".local/share/applications");
                             let _ = std::fs::create_dir_all(&target_desktop_dir);
                             let target_desktop = target_desktop_dir.join("squigit.desktop");
@@ -274,11 +274,11 @@ Categories=Utility;"#,
                                 target_appimage.display()
                             );
                             let _ = std::fs::write(&target_desktop, desktop_content);
-                            
+
                             let _ = std::process::Command::new("update-desktop-database")
                                 .arg(home_dir.join(".local/share/applications"))
                                 .status();
-                            
+
                             log::info!("AppImage permanently installed to ~/Applications.");
                         }
                     }

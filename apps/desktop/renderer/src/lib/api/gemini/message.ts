@@ -84,6 +84,8 @@ export const sendMessage = async (
     unlisten();
     if (geminiStore.currentUnlisten === unlisten)
       geminiStore.currentUnlisten = null;
+    if (geminiStore.currentChannelId === channelId)
+      geminiStore.currentChannelId = null;
 
     if (geminiStore.generationId !== myGenId) throw new Error("CANCELLED");
 
@@ -100,6 +102,8 @@ export const sendMessage = async (
     unlisten();
     if (geminiStore.currentUnlisten === unlisten)
       geminiStore.currentUnlisten = null;
+    if (geminiStore.currentChannelId === channelId)
+      geminiStore.currentChannelId = null;
     if (error instanceof Error && error.message === "CANCELLED") throw error;
     console.error("SendMessage error:", error);
     throw error;
