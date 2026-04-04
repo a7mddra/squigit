@@ -9,7 +9,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useAppContext } from "@/providers/AppProvider";
 import { useInlineMenu } from "@/hooks";
-import { InlineMenu, LoadingSpinner, Dialog } from "@/components";
+import { InlineMenu, LoadingSpinner, Dialog, TextShimmer } from "@/components";
+import { API_STATUS_TEXT, getProgressStatusText } from "@/lib";
 import {
   buildAttachmentMention,
   parseAttachmentPaths,
@@ -283,6 +284,25 @@ export const Chat: React.FC = () => {
     };
   }, [app.chatHistory.activeSessionId, app.clearSearchReveal, revealTarget]);
 
+  const isImageProgressVisible =
+    !!app.system.startupImage &&
+    app.chat.messages.length === 0 &&
+    !app.chat.streamingText &&
+    (app.chat.isAnalyzing || app.chat.isSearching);
+  const imageProgressText = getProgressStatusText({
+    toolStatus: app.chat.toolStatus,
+    isAnalyzing: app.chat.isAnalyzing,
+    isRetrying: !!app.chat.retryingMessageId,
+  });
+  const hasRunningToolStep = app.chat.streamingToolSteps.some(
+    (step) => step.status === "running",
+  );
+  const hasPreStepSearchStatus =
+    !!app.chat.toolStatus &&
+    app.chat.streamingToolSteps.length === 0 &&
+    app.chat.isSearching;
+  const showAnswerNow = hasRunningToolStep || hasPreStepSearchStatus;
+
   return (
     <div className={styles.chatContainer}>
       <div ref={headerRef} className={styles.headerContainer}>
@@ -348,29 +368,44 @@ export const Chat: React.FC = () => {
                   <LoadingSpinner />
                 </div>
               ) : (
-                <MessageList
-                  messages={app.chat.messages}
-                  streamingText={app.chat.streamingText}
-                  isGenerating={app.chat.isGenerating}
-                  retryingMessageId={app.chat.retryingMessageId}
-                  stopRequested={stopRequested}
-                  selectedModel={app.inputModel}
-                  isAnalyzing={app.chat.isAnalyzing}
-                  isSearching={app.chat.isSearching}
-                  toolStatus={app.chat.toolStatus}
-                  streamingToolSteps={app.chat.streamingToolSteps}
-                  streamingCitations={app.chat.streamingCitations}
-                  onStreamComplete={app.chat.handleStreamComplete}
-                  onTypingChange={app.chat.setIsAiTyping}
-                  onStopGeneration={(truncatedText) =>
-                    app.chat.handleStopGeneration(truncatedText)
-                  }
-                  onStopRequestedChange={setStopRequested}
-                  onAnswerNow={app.chat.handleAnswerNow}
-                  onRetryMessage={app.chat.handleRetryMessage}
-                  onUndoMessage={handleRequestUndoMessage}
-                  onSystemAction={app.handleSystemAction}
-                />
+                <>
+                  {isImageProgressVisible && (
+                    <div className={styles.imageProgressRow}>
+                      <TextShimmer
+                        text={imageProgressText}
+                        compact={true}
+                        className={styles.imageProgressShimmer}
+                      />
+                      {showAnswerNow && (
+                        <button
+                          type="button"
+                          className={styles.answerNowButton}
+                          onClick={app.chat.handleAnswerNow}
+                        >
+                          {API_STATUS_TEXT.ANSWER_NOW_BUTTON}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <MessageList
+                    messages={app.chat.messages}
+                    streamingText={app.chat.streamingText}
+                    retryingMessageId={app.chat.retryingMessageId}
+                    stopRequested={stopRequested}
+                    selectedModel={app.inputModel}
+                    streamingToolSteps={app.chat.streamingToolSteps}
+                    streamingCitations={app.chat.streamingCitations}
+                    onStreamComplete={app.chat.handleStreamComplete}
+                    onTypingChange={app.chat.setIsAiTyping}
+                    onStopGeneration={(truncatedText) =>
+                      app.chat.handleStopGeneration(truncatedText)
+                    }
+                    onStopRequestedChange={setStopRequested}
+                    onRetryMessage={app.chat.handleRetryMessage}
+                    onUndoMessage={handleRequestUndoMessage}
+                    onSystemAction={app.handleSystemAction}
+                  />
+                </>
               )}
             </div>
           </main>

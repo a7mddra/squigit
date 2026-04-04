@@ -140,6 +140,35 @@
   padding-top: 0.75rem;
 }
 
+.imageProgressRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.imageProgressShimmer {
+  flex: 1;
+  min-width: 0;
+}
+
+.answerNowButton {
+  border: none;
+  background: transparent;
+  color: var(--c-raw-004);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.2rem 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.answerNowButton:hover {
+  color: var(--c-raw-003);
+}
+
 .revealFlash {
   animation: "revealFlashPulse" 1.2s ease-out;
   box-shadow:

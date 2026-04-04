@@ -9,11 +9,25 @@ import styles from "./TextShimmer.module.css";
 
 interface TextShimmerProps {
   text: string;
+  compact?: boolean;
+  className?: string;
 }
 
-export const TextShimmer: React.FC<TextShimmerProps> = ({ text }) => {
+export const TextShimmer: React.FC<TextShimmerProps> = ({
+  text,
+  compact = false,
+  className,
+}) => {
+  const containerClassName = [
+    styles.container,
+    compact ? styles.compact : "",
+    className || "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className={styles.container} aria-hidden="true">
+    <div className={containerClassName} aria-hidden="true">
       <span className={styles.shimmerText}>{text}</span>
     </div>
   );

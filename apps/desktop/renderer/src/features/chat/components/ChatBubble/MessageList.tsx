@@ -7,27 +7,20 @@
 import React from "react";
 import { Message, Citation, ToolStep } from "../../chat.types";
 import { ChatBubble } from "./ChatBubble";
-import { TextShimmer } from "@/components";
-import { API_STATUS_TEXT, getProgressStatusText } from "@/lib";
 import styles from "./MessageList.module.css";
 
 interface MessageListProps {
   messages: Message[];
   streamingText: string;
-  isGenerating: boolean;
   retryingMessageId?: string | null;
   stopRequested: boolean;
   selectedModel: string;
-  isAnalyzing: boolean;
-  isSearching?: boolean;
-  toolStatus?: string | null;
   streamingToolSteps?: ToolStep[];
   streamingCitations?: Citation[];
   onStreamComplete?: () => void;
   onTypingChange?: (isTyping: boolean) => void;
   onStopGeneration?: (truncatedText?: string) => void;
   onStopRequestedChange?: (requested: boolean) => void;
-  onAnswerNow?: () => void;
   onRetryMessage?: (messageId: string, modelId?: string) => void;
   onUndoMessage?: (messageId: string) => void;
   onSystemAction?: (actionId: string, value?: string) => void;
@@ -36,20 +29,15 @@ interface MessageListProps {
 const MessageListComponent: React.FC<MessageListProps> = ({
   messages,
   streamingText,
-  isGenerating,
   retryingMessageId,
   stopRequested,
   selectedModel,
-  isAnalyzing,
-  isSearching,
-  toolStatus,
   streamingToolSteps = [],
   streamingCitations = [],
   onStreamComplete,
   onTypingChange,
   onStopGeneration,
   onStopRequestedChange,
-  onAnswerNow,
   onRetryMessage,
   onUndoMessage,
   onSystemAction,
@@ -60,36 +48,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
   const displayMessages =
     retryIndex !== -1 ? messages.slice(0, retryIndex + 1) : messages;
-  const isProgressVisible = (isGenerating || isAnalyzing || isSearching) && !streamingText;
-  const progressText = getProgressStatusText({
-    toolStatus,
-    isAnalyzing,
-    isRetrying: !!retryingMessageId,
-  });
-  const hasRunningToolStep = streamingToolSteps.some(
-    (step) => step.status === "running",
-  );
-  const hasPreStepSearchStatus =
-    !!toolStatus && streamingToolSteps.length === 0 && !!isSearching;
-  const showAnswerNow =
-    !!onAnswerNow && (hasRunningToolStep || hasPreStepSearchStatus);
 
   return (
     <div className={styles.container}>
-      {isProgressVisible && (
-        <div className={styles.progressRow}>
-          <TextShimmer text={progressText} />
-          {showAnswerNow && (
-            <button
-              type="button"
-              className={styles.answerNowButton}
-              onClick={onAnswerNow}
-            >
-              {API_STATUS_TEXT.ANSWER_NOW_BUTTON}
-            </button>
-          )}
-        </div>
-      )}
       {streamingText && (
         <div className={styles.item}>
           <ChatBubble
@@ -161,13 +122,9 @@ export const MessageList = React.memo(
     return (
       prevProps.messages === nextProps.messages &&
       prevProps.streamingText === nextProps.streamingText &&
-      prevProps.isGenerating === nextProps.isGenerating &&
       prevProps.retryingMessageId === nextProps.retryingMessageId &&
       prevProps.stopRequested === nextProps.stopRequested &&
       prevProps.selectedModel === nextProps.selectedModel &&
-      prevProps.isAnalyzing === nextProps.isAnalyzing &&
-      prevProps.isSearching === nextProps.isSearching &&
-      prevProps.toolStatus === nextProps.toolStatus &&
       prevProps.streamingToolSteps === nextProps.streamingToolSteps &&
       prevProps.streamingCitations === nextProps.streamingCitations
     );
