@@ -9,7 +9,7 @@
 .wrapper {
   position: relative;
   width: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .strip {
@@ -19,7 +19,8 @@
   padding: 4px;
   padding-bottom: 64px;
   padding-top: 14px;
-  padding-left: 4px;
+  padding-left: 8px;
+  padding-right: 8px;
   margin-bottom: -46px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -83,6 +84,7 @@
   box-shadow: 0 0 0 1px var(--c-raw-010);
   overflow: visible;
   transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .thumbWrapper:focus-visible {
@@ -153,33 +155,57 @@
 /* ─── Remove button ──────────────────────────────────────────────────────── */
 
 .removeBtn {
+  --remove-badge-bg: var(--c-raw-012);
+  --remove-badge-fg: var(--c-raw-003);
+  --remove-badge-border: color-mix(in srgb, var(--c-raw-004) 76%, transparent);
+  --remove-badge-hover-bg: color-mix(
+    in srgb,
+    var(--c-raw-012) 84%,
+    var(--c-raw-003) 16%
+  );
+  --remove-badge-hover-border: color-mix(
+    in srgb,
+    var(--c-raw-004) 92%,
+    transparent
+  );
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 18px;
-  height: 18px;
+  top: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--c-raw-008);
-  border: 1px solid var(--c-raw-036);
+  background-color: var(--remove-badge-bg);
+  border: 1px solid var(--remove-badge-border);
   border-radius: 50%;
-  color: var(--c-raw-003);
+  color: var(--remove-badge-fg);
   cursor: pointer;
-  z-index: 99990;
+  z-index: 2;
   opacity: 0;
+  transform: translate(30%, -30%) translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform, opacity, background-color;
   transition:
     opacity 0.15s ease,
-    background-color 0.15s ease;
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .thumbWrapper:hover .removeBtn {
   opacity: 1;
 }
 
+.thumbWrapper:focus-within .removeBtn {
+  opacity: 1;
+}
+
 .removeBtn:hover {
-  color: var(--c-raw-036);
+  background-color: var(--remove-badge-hover-bg);
+  border-color: var(--remove-badge-hover-border);
+  color: var(--remove-badge-fg);
 }
 
 .cancelIcon {

@@ -37,6 +37,8 @@ export const MediaOverlay: React.FC<MediaOverlayProps> = ({
     y: number;
     hasSelection: boolean;
   } | null>(null);
+  const isChatOpenedImage =
+    item?.kind === "image" && item?.openedFromChat === true;
 
   const activePath = useMemo(
     () => item?.sourcePath || item?.path || "",
@@ -98,6 +100,8 @@ export const MediaOverlay: React.FC<MediaOverlayProps> = ({
           filePath={item.path}
           name={item.name}
           isGallery={item.isGallery === true}
+          galleryItems={item.galleryItems}
+          initialIndex={item.galleryIndex}
         />
       );
     }
@@ -126,7 +130,7 @@ export const MediaOverlay: React.FC<MediaOverlayProps> = ({
             onReveal={handleReveal}
             onCopyPath={handleCopyPath}
             onRevealInChat={
-              item?.isGallery && item.galleryChatId
+              item?.isGallery && item.galleryChatId && !isChatOpenedImage
                 ? handleRevealInChat
                 : undefined
             }
@@ -134,9 +138,11 @@ export const MediaOverlay: React.FC<MediaOverlayProps> = ({
         }
       >
         <div className={styles.viewerRoot}>
-          <div className={styles.viewerHeader}>
-            <h3 className={styles.viewerTitle}>{item?.name || "Viewer"}</h3>
-          </div>
+          {!isChatOpenedImage && (
+            <div className={styles.viewerHeader}>
+              <h3 className={styles.viewerTitle}>{item?.name || "Viewer"}</h3>
+            </div>
+          )}
           <div className={styles.viewerBody}>{renderViewer()}</div>
         </div>
       </WidgetOverlay>

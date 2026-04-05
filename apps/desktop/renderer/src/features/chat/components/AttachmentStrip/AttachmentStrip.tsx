@@ -257,9 +257,17 @@ export const AttachmentStrip: React.FC<AttachmentStripProps> = ({
   const [scrollState, setScrollState] =
     useState<ScrollState>(INITIAL_SCROLL_STATE);
 
+  const renderAttachments = useMemo(
+    () =>
+      readOnly
+        ? attachments.filter((attachment) => attachment.type !== "image")
+        : attachments,
+    [attachments, readOnly],
+  );
+
   const displayAttachments = useMemo(() => {
     let unnamedImageIndex = 0;
-    return attachments.map((attachment) => {
+    return renderAttachments.map((attachment) => {
       if (!shouldUseGeneratedImageName(attachment)) {
         return attachment;
       }
@@ -269,7 +277,7 @@ export const AttachmentStrip: React.FC<AttachmentStripProps> = ({
         name: `image-${unnamedImageIndex}.${attachment.extension}`,
       };
     });
-  }, [attachments]);
+  }, [renderAttachments]);
 
   const updateScroll = useCallback(() => {
     const el = stripRef.current;
@@ -303,7 +311,7 @@ export const AttachmentStrip: React.FC<AttachmentStripProps> = ({
   // Measure synchronously after DOM mutations so the thumb is visible on first render.
   useLayoutEffect(() => {
     updateScroll();
-  }, [updateScroll, attachments]);
+  }, [updateScroll, displayAttachments]);
 
   // Wire up resize + wheel listeners.
   useEffect(() => {
@@ -355,7 +363,7 @@ export const AttachmentStrip: React.FC<AttachmentStripProps> = ({
     [onRemove],
   );
 
-  if (attachments.length === 0) return null;
+  if (displayAttachments.length === 0) return null;
 
   return (
     <div className={styles.wrapper}>

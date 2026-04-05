@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Check, Copy, RotateCcw, Pencil, ChevronRight } from "lucide-react";
 import { CitationTip, CodeBlock } from "@/components";
 import { useAppContext } from "@/providers/AppProvider";
@@ -26,6 +26,7 @@ import {
 } from "@/features";
 import styles from "./ChatBubble.module.css";
 import mdStyles from "./BubbleMD.module.css";
+import { ImageCollage } from "./ImageCollage";
 
 interface ChatBubbleProps {
   message: Message;
@@ -186,6 +187,14 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
       return attachmentFromPath(path, undefined, originalName, sourcePath);
     });
   }, [app.getAttachmentSourcePath, message.text]);
+  const imageAttachments = useMemo(
+    () => attachments.filter((attachment) => attachment.type === "image"),
+    [attachments],
+  );
+  const fileAttachments = useMemo(
+    () => attachments.filter((attachment) => attachment.type !== "image"),
+    [attachments],
+  );
 
   const toolSteps = pendingTurn?.toolSteps || message.toolSteps || [];
   const citations = pendingTurn?.visibleCitations || message.citations || [];
@@ -234,12 +243,36 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
     (!isPendingAssistant ||
       pendingTurn?.phase === "complete" ||
       pendingTurn?.phase === "stopped");
+  const hasDisplayText = displayText.trim().length > 0;
+  const hasImageAttachments = imageAttachments.length > 0;
+  const hasFileAttachments = fileAttachments.length > 0;
+  const hasPendingShellContent = isPendingAssistant && !hasDisplayText;
+  const isImageOnlyEmptyCaption =
+    hasImageAttachments &&
+    !hasDisplayText &&
+    !hasFileAttachments &&
+    !showCitations &&
+    !hasPendingShellContent;
+  const shouldRenderBubble = !isImageOnlyEmptyCaption;
   const shouldDoubleNewlines = isUser && !isRichMarkdownUserMessage;
-  const canCopy = !copyDisabled && displayText.trim().length > 0;
+  const canCopy = !copyDisabled && hasDisplayText;
   const shouldShowRetryButton = !isUser && message.role !== "system" && !!onRetry;
   const shouldShowCopyButton = message.role !== "system";
-  const isPendingEmpty = isPendingAssistant && displayText.trim().length === 0;
+  const isPendingEmpty = isPendingAssistant && !hasDisplayText;
   const animateCitations = isPendingAssistant;
+
+  const handleImageClick = useCallback(
+    (attachment: (typeof imageAttachments)[number], index: number) => {
+      void app.openMediaViewer(attachment, {
+        isGallery: true,
+        chatId: app.chatHistory.activeSessionId || undefined,
+        galleryAttachments: imageAttachments,
+        initialIndex: index,
+        openedFromChat: true,
+      });
+    },
+    [app, imageAttachments],
+  );
 
   const handleCopy = () => {
     if (!canCopy) return;
@@ -394,77 +427,96 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
           )}
 
           <div
-            dir="auto"
+            className={styles.messageAnchor}
             data-component="chat-bubble"
             data-message-index={message.id}
             data-message-role={isUser ? "user" : "assistant"}
-            className={`${styles.bubble} ${
-              isUser ? styles.userBubble : styles.botBubble
-            } ${
-              isUser && isRichMarkdownUserMessage ? styles.userRichBubble : ""
-            } ${isPendingAssistant ? styles.pendingBubbleShell : ""} ${
-              isPendingEmpty ? styles.pendingBubbleEmpty : ""
-            } ${
-              pendingTurn?.phase === "streaming" || pendingTurn?.phase === "finalizing"
-                ? styles.livePendingBubble
-                : ""
-            }`}
           >
-            {attachments.length > 0 && (
-              <div
-                style={{
-                  marginBottom: displayText.length > 0 ? "8px" : "0",
-                }}
-              >
-                <AttachmentStrip
-                  attachments={attachments}
-                  onClick={app.openMediaViewer}
-                  readOnly
-                />
-              </div>
+            {hasImageAttachments && (
+              <ImageCollage
+                images={imageAttachments}
+                onImageClick={handleImageClick}
+                className={`${styles.imageCollage} ${
+                  isUser ? styles.imageCollageUserFrame : styles.imageCollageBotFrame
+                } ${
+                  shouldRenderBubble ? styles.imageCollageWithBubble : ""
+                }`}
+              />
             )}
 
-            <div
-              className={`${styles.markdownFrame} ${
-                isPendingAssistant ? styles.pendingMarkdownFrame : ""
-              }`}
-            >
+            {shouldRenderBubble && (
               <div
-                className={
-                  isUser
-                    ? `${mdStyles.markdownContent} ${mdStyles.userMarkdownContent}`
-                    : mdStyles.markdownContent
-                }
-              >
-                <ReactMarkdown
-                  remarkPlugins={[
-                    remarkGfm,
-                    remarkMath,
-                    remarkDisableIndentedCode,
-                  ]}
-                  rehypePlugins={[rehypeKatex, rehypeRaw]}
-                  components={markdownComponents}
-                >
-                  {preprocessMarkdown(displayText, {
-                    doubleNewlines: shouldDoubleNewlines,
-                  })}
-                </ReactMarkdown>
-              </div>
-            </div>
-
-            {showCitations && (
-              <div
-                className={`${styles.citationFooter} ${
-                  animateCitations ? styles.citationFooterReveal : ""
+                dir="auto"
+                className={`${styles.bubble} ${
+                  isUser ? styles.userBubble : styles.botBubble
+                } ${
+                  isUser && isRichMarkdownUserMessage ? styles.userRichBubble : ""
+                } ${isPendingAssistant ? styles.pendingBubbleShell : ""} ${
+                  isPendingEmpty ? styles.pendingBubbleEmpty : ""
+                } ${
+                  pendingTurn?.phase === "streaming" ||
+                  pendingTurn?.phase === "finalizing"
+                    ? styles.livePendingBubble
+                    : ""
                 }`}
               >
-                {citations.map((citation, index) => (
-                  <CitationChip
-                    key={`${citation.url}-${index}`}
-                    citation={citation}
-                    animate={animateCitations}
-                  />
-                ))}
+                {hasFileAttachments && (
+                  <div
+                    style={{
+                      marginBottom: hasDisplayText ? "8px" : "0",
+                    }}
+                  >
+                    <AttachmentStrip
+                      attachments={fileAttachments}
+                      onClick={app.openMediaViewer}
+                      readOnly
+                    />
+                  </div>
+                )}
+
+                <div
+                  className={`${styles.markdownFrame} ${
+                    isPendingAssistant ? styles.pendingMarkdownFrame : ""
+                  }`}
+                >
+                  <div
+                    className={
+                      isUser
+                        ? `${mdStyles.markdownContent} ${mdStyles.userMarkdownContent}`
+                        : mdStyles.markdownContent
+                    }
+                  >
+                    <ReactMarkdown
+                      remarkPlugins={[
+                        remarkGfm,
+                        remarkMath,
+                        remarkDisableIndentedCode,
+                      ]}
+                      rehypePlugins={[rehypeKatex, rehypeRaw]}
+                      components={markdownComponents}
+                    >
+                      {preprocessMarkdown(displayText, {
+                        doubleNewlines: shouldDoubleNewlines,
+                      })}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+
+                {showCitations && (
+                  <div
+                    className={`${styles.citationFooter} ${
+                      animateCitations ? styles.citationFooterReveal : ""
+                    }`}
+                  >
+                    {citations.map((citation, index) => (
+                      <CitationChip
+                        key={`${citation.url}-${index}`}
+                        citation={citation}
+                        animate={animateCitations}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

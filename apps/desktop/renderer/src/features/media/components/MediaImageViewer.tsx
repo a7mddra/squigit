@@ -4,31 +4,81 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useMemo, useRef, useState } from "react";
-import { Minus, Plus, RotateCcw } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Minus, Plus, RotateCcw } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import type { MediaGalleryItem } from "../media.types";
 import styles from "./MediaImageViewer.module.css";
 
 interface MediaImageViewerProps {
   filePath: string;
   name: string;
   isGallery?: boolean;
+  galleryItems?: MediaGalleryItem[];
+  initialIndex?: number;
 }
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.2;
 
+interface ResolvedGalleryItem extends MediaGalleryItem {
+  src: string;
+}
+
+const resolveMediaSource = (path: string) =>
+  /^(?:https?:\/\/|data:)/iu.test(path) ? path : convertFileSrc(path);
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
+const getWrappedIndex = (index: number, total: number) =>
+  ((index % total) + total) % total;
+
 export const MediaImageViewer: React.FC<MediaImageViewerProps> = ({
   filePath,
   name,
   isGallery = false,
+  galleryItems,
+  initialIndex,
 }) => {
-  const src = useMemo(() => convertFileSrc(filePath), [filePath]);
+  const resolvedGalleryItems = useMemo<ResolvedGalleryItem[]>(() => {
+    const sourceItems =
+      galleryItems && galleryItems.length > 0
+        ? galleryItems
+        : [
+            {
+              path: filePath,
+              name,
+              extension: "",
+            },
+          ];
+
+    return sourceItems.map((item) => ({
+      ...item,
+      src: resolveMediaSource(item.path),
+    }));
+  }, [filePath, galleryItems, name]);
+
+  const [activeIndex, setActiveIndex] = useState(() =>
+    clamp(
+      typeof initialIndex === "number" ? initialIndex : 0,
+      0,
+      Math.max(0, resolvedGalleryItems.length - 1),
+    ),
+  );
 
   const [zoom, setZoom] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const canUseGalleryNavigation =
+    (isGallery || resolvedGalleryItems.length > 1) &&
+    resolvedGalleryItems.length > 1;
+
+  const activeItem = resolvedGalleryItems[activeIndex];
+  const src = activeItem?.src || resolveMediaSource(filePath);
+  const activeName = activeItem?.name || name;
 
   const dragRef = useRef<{
     active: boolean;
@@ -44,18 +94,93 @@ export const MediaImageViewer: React.FC<MediaImageViewerProps> = ({
     scrollTop: 0,
   });
 
-  const clampZoom = (value: number) =>
-    Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+  useEffect(() => {
+    const nextIndex = clamp(
+      typeof initialIndex === "number" ? initialIndex : 0,
+      0,
+      Math.max(0, resolvedGalleryItems.length - 1),
+    );
+    setActiveIndex(nextIndex);
+  }, [filePath, initialIndex, resolvedGalleryItems.length]);
 
-  const updateZoom = (next: number) => {
-    setZoom(clampZoom(next));
-  };
+  useEffect(() => {
+    setZoom(1);
+    setIsDragging(false);
+    dragRef.current.active = false;
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = 0;
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [src]);
+
+  const goToIndex = useCallback(
+    (nextIndex: number) => {
+      if (!canUseGalleryNavigation) return;
+      setActiveIndex((prevIndex) => {
+        const current = clamp(
+          prevIndex,
+          0,
+          Math.max(0, resolvedGalleryItems.length - 1),
+        );
+        if (nextIndex === current) return current;
+        return getWrappedIndex(nextIndex, resolvedGalleryItems.length);
+      });
+    },
+    [canUseGalleryNavigation, resolvedGalleryItems.length],
+  );
+
+  const goToPrevious = useCallback(() => {
+    if (!canUseGalleryNavigation) return;
+    setActiveIndex((prevIndex) =>
+      getWrappedIndex(prevIndex - 1, resolvedGalleryItems.length),
+    );
+  }, [canUseGalleryNavigation, resolvedGalleryItems.length]);
+
+  const goToNext = useCallback(() => {
+    if (!canUseGalleryNavigation) return;
+    setActiveIndex((prevIndex) =>
+      getWrappedIndex(prevIndex + 1, resolvedGalleryItems.length),
+    );
+  }, [canUseGalleryNavigation, resolvedGalleryItems.length]);
+
+  useEffect(() => {
+    if (!canUseGalleryNavigation) return;
+
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isTypingTarget =
+        !!target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+      if (isTypingTarget) return;
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        goToPrevious();
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        goToNext();
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, [canUseGalleryNavigation, goToNext, goToPrevious]);
 
   const clearSelection = () => {
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0) {
       selection.removeAllRanges();
     }
+  };
+
+  const clampZoom = (value: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+
+  const updateZoom = (next: number) => {
+    setZoom(clampZoom(next));
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -95,7 +220,7 @@ export const MediaImageViewer: React.FC<MediaImageViewerProps> = ({
     if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
     const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
-    updateZoom(zoom + delta);
+    setZoom((prev) => clampZoom(prev + delta));
   };
 
   const handleDragStart = (e: React.DragEvent<HTMLElement>) => {
@@ -112,7 +237,7 @@ export const MediaImageViewer: React.FC<MediaImageViewerProps> = ({
   return (
     <div
       className={styles.imageViewerRoot}
-      data-gallery={isGallery ? "true" : "false"}
+      data-gallery={canUseGalleryNavigation ? "true" : "false"}
     >
       <div className={styles.imageTools}>
         <button
@@ -140,33 +265,84 @@ export const MediaImageViewer: React.FC<MediaImageViewerProps> = ({
           <Plus size={14} />
         </button>
         <span className={styles.zoomLabel}>{Math.round(zoom * 100)}%</span>
+        {canUseGalleryNavigation && (
+          <span className={styles.galleryCounter}>
+            {activeIndex + 1} / {resolvedGalleryItems.length}
+          </span>
+        )}
       </div>
 
-      <div
-        ref={scrollRef}
-        className={styles.imageScrollArea}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        onWheel={handleWheel}
-        onDragStart={handleDragStart}
-        onKeyDown={handleKeyDown}
-        tabIndex={0}
-        style={{ cursor: isDragging ? "grabbing" : "grab" }}
-      >
+      <div className={styles.viewerStage}>
         <div
-          className={styles.imageTransformLayer}
-          style={{ transform: `scale(${zoom})` }}
+          ref={scrollRef}
+          className={styles.imageScrollArea}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onWheel={handleWheel}
+          onDragStart={handleDragStart}
+          onKeyDown={handleKeyDown}
+          tabIndex={0}
+          style={{ cursor: isDragging ? "grabbing" : "grab" }}
         >
-          <img
-            src={src}
-            alt={name}
-            className={styles.previewImage}
-            draggable={false}
-          />
+          <div
+            className={styles.imageTransformLayer}
+            style={{ transform: `scale(${zoom})` }}
+          >
+            <img
+              src={src}
+              alt={activeName}
+              className={styles.previewImage}
+              draggable={false}
+            />
+          </div>
         </div>
+        {canUseGalleryNavigation && (
+          <>
+            <button
+              type="button"
+              className={`${styles.navButton} ${styles.navButtonLeft}`}
+              onClick={goToPrevious}
+              aria-label="Previous image"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              type="button"
+              className={`${styles.navButton} ${styles.navButtonRight}`}
+              onClick={goToNext}
+              aria-label="Next image"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </>
+        )}
       </div>
+
+      {canUseGalleryNavigation && (
+        <div className={styles.thumbnailStrip} role="tablist" aria-label="Gallery thumbnails">
+          {resolvedGalleryItems.map((item, index) => (
+            <button
+              key={`${item.path}-${index}`}
+              type="button"
+              className={`${styles.thumbnailButton} ${
+                index === activeIndex ? styles.thumbnailButtonActive : ""
+              }`}
+              onClick={() => goToIndex(index)}
+              aria-label={`Open image ${index + 1}`}
+              aria-current={index === activeIndex ? "true" : undefined}
+            >
+              <img
+                src={item.src}
+                alt={item.name || `Image ${index + 1}`}
+                className={styles.thumbnailImage}
+                draggable={false}
+              />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

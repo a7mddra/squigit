@@ -43,6 +43,19 @@
   margin-left: 4px;
 }
 
+.galleryCounter {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--c-raw-004);
+}
+
+.viewerStage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
 .imageScrollArea {
   width: 100%;
   flex: 1;
@@ -118,4 +131,75 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-user-drag: none;
+}
+
+.navButton {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-raw-008) 70%, transparent);
+  color: var(--c-raw-036);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.navButtonLeft {
+  left: 10px;
+}
+
+.navButtonRight {
+  right: 10px;
+}
+
+.thumbnailStrip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 0 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-raw-058) transparent;
+}
+
+.thumbnailStrip::-webkit-scrollbar {
+  height: 6px;
+}
+
+.thumbnailStrip::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.thumbnailStrip::-webkit-scrollbar-thumb {
+  background: var(--c-raw-058);
+  border-radius: 3px;
+}
+
+.thumbnailButton {
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--c-raw-041);
+  border-radius: 8px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  flex: 0 0 auto;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.thumbnailButtonActive {
+  border-color: var(--c-raw-036);
+}
+
+.thumbnailImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }

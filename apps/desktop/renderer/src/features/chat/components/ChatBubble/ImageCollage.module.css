@@ -1,0 +1,99 @@
+/**
+ * @license
+ * Copyright 2026 a7mddra
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+.root {
+  --frame-size: 3px;
+  --inner-radius: calc(1rem - var(--frame-size));
+  width: min(100%, 30rem);
+  max-width: 100%;
+  border-radius: 1rem;
+  overflow: hidden;
+  padding: var(--frame-size);
+  gap: var(--frame-size);
+  background-color: var(--image-collage-frame-color, var(--c-raw-012));
+}
+
+.tileButton {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: var(--c-raw-012);
+  overflow: hidden;
+  cursor: pointer;
+  display: block;
+}
+
+.tileButton:focus-visible {
+  outline: 2px solid var(--c-raw-004);
+  outline-offset: -2px;
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.singleTile {
+  border-radius: var(--inner-radius);
+}
+
+.singleImage {
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
+}
+
+.twoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  aspect-ratio: 2 / 1;
+}
+
+.threeGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  aspect-ratio: 3 / 2;
+}
+
+.largeTile {
+  grid-row: 1 / span 2;
+}
+
+.leftTile {
+  border-radius: var(--inner-radius) 0 0 var(--inner-radius);
+}
+
+.rightTile {
+  border-radius: 0 var(--inner-radius) var(--inner-radius) 0;
+}
+
+.rightTopTile {
+  border-radius: 0 var(--inner-radius) 0 0;
+}
+
+.rightBottomTile {
+  border-radius: 0 0 var(--inner-radius) 0;
+}
+
+.moreOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  color: #ffffff;
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}

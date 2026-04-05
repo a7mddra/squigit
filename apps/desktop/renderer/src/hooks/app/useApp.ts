@@ -41,6 +41,7 @@ import {
   useChatTitle,
   isImageExtension,
   type Attachment,
+  type MediaGalleryItem,
   type MediaViewerItem,
 } from "@/features";
 
@@ -107,6 +108,9 @@ type SearchRevealTarget = {
 type MediaViewerOpenOptions = {
   isGallery?: boolean;
   chatId?: string;
+  galleryAttachments?: Attachment[];
+  initialIndex?: number;
+  openedFromChat?: boolean;
 };
 
 const UNSUPPORTED_PREVIEW_EXTENSIONS = new Set([
@@ -598,16 +602,80 @@ export const useApp = () => {
       }
 
       if (attachment.type === "image" || isImageExtension(extension)) {
+        const galleryAttachments =
+          options?.galleryAttachments?.filter(
+            (entry) =>
+              entry.type === "image" || isImageExtension(entry.extension),
+          ) ?? [];
+        let galleryItems: MediaGalleryItem[] | undefined;
+        let galleryIndex: number | undefined;
+
+        if (galleryAttachments.length > 0) {
+          const resolvedGallery = await Promise.all(
+            galleryAttachments.map(async (galleryAttachment) => {
+              const gallerySourcePath =
+                galleryAttachment.sourcePath ||
+                getAttachmentSourcePath(galleryAttachment.path) ||
+                undefined;
+
+              let galleryResolvedPath = galleryAttachment.path;
+              try {
+                galleryResolvedPath = await invoke<string>(
+                  "resolve_attachment_path",
+                  {
+                    path: galleryAttachment.path,
+                  },
+                );
+              } catch (error) {
+                console.warn("[media] Could not resolve gallery path:", error);
+              }
+
+              return {
+                path: galleryResolvedPath,
+                sourcePath: gallerySourcePath,
+                name: galleryAttachment.name,
+                extension: galleryAttachment.extension.toLowerCase(),
+              };
+            }),
+          );
+
+          if (resolvedGallery.length > 0) {
+            galleryItems = resolvedGallery;
+            const fallbackIndex = galleryAttachments.findIndex(
+              (entry) => entry.id === attachment.id || entry.path === attachment.path,
+            );
+            const initialIndex =
+              typeof options?.initialIndex === "number"
+                ? options.initialIndex
+                : fallbackIndex >= 0
+                  ? fallbackIndex
+                  : 0;
+            galleryIndex = Math.max(
+              0,
+              Math.min(initialIndex, resolvedGallery.length - 1),
+            );
+          }
+        }
+
+        const activeGalleryItem =
+          galleryItems && typeof galleryIndex === "number"
+            ? galleryItems[galleryIndex]
+            : undefined;
+
         setMediaViewer({
           isOpen: true,
           item: {
             kind: "image",
-            path: resolvedPath,
-            sourcePath,
-            name: attachment.name,
-            extension,
-            isGallery: options?.isGallery === true,
+            path: activeGalleryItem?.path || resolvedPath,
+            sourcePath: activeGalleryItem?.sourcePath || sourcePath,
+            name: activeGalleryItem?.name || attachment.name,
+            extension: activeGalleryItem?.extension || extension,
+            isGallery:
+              options?.isGallery === true || (galleryItems?.length ?? 0) > 1,
             galleryChatId: options?.chatId,
+            galleryItems,
+            galleryIndex,
+            openedFromChat: options?.openedFromChat === true,
           },
         });
         return;

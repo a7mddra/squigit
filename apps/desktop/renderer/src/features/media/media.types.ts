@@ -6,6 +6,13 @@
 
 export type MediaViewerKind = "image" | "pdf" | "text";
 
+export interface MediaGalleryItem {
+  path: string;
+  sourcePath?: string;
+  name: string;
+  extension: string;
+}
+
 export interface MediaViewerItem {
   kind: MediaViewerKind;
   path: string;
@@ -15,4 +22,7 @@ export interface MediaViewerItem {
   textContent?: string;
   isGallery?: boolean;
   galleryChatId?: string;
+  galleryItems?: MediaGalleryItem[];
+  galleryIndex?: number;
+  openedFromChat?: boolean;
 }
