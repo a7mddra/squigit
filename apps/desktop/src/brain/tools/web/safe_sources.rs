@@ -30,7 +30,7 @@ struct SafeSourceSite {
 
 lazy_static::lazy_static! {
     static ref SAFE_SOURCES_DATA: Vec<SafeSourcesCategory> = {
-        let json_content = include_str!("../../knowledge/safe_sources.json");
+        let json_content = include_str!("../../assets/knowledge/safe_sources.json");
         serde_json::from_str::<SafeSourcesCatalog>(json_content)
             .map(|catalog| catalog.safe_sources)
             .unwrap_or_default()

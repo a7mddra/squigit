@@ -3,7 +3,7 @@
 
 //! Chat storage Tauri commands.
 
-use crate::brain::gemini::attachment_paths::resolve_attachment_path_internal;
+use crate::brain::provider::gemini::attachments::paths::resolve_attachment_path_internal;
 use crate::services::search::{search_local_chats, ChatSearchResult};
 use crate::services::tone::detect_image_tone_from_bytes;
 use ops_chat_storage::{

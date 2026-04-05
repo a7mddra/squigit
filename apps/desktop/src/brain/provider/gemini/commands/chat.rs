@@ -5,19 +5,21 @@ use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use tauri::AppHandle;
 
-use super::attachments::build_interleaved_parts;
-use super::fallback::suggest_fallback_urls;
-use super::request_control::{register_request, remove_request, GeminiRequestControl};
-use super::search_helpers::{
+use crate::brain::provider::gemini::agent::request_control::{
+    register_request, remove_request, GeminiRequestControl,
+};
+use crate::brain::provider::gemini::agent::tool_orchestrator::{
     await_with_request_control, build_answer_now_partial_result,
     build_system_instruction_with_search_policy, mark_attempted_url, merge_allowed_sources,
     tool_status_text, tool_step_id, track_attempted_sources, wrap_query_fallback_result,
     ControlledAwaitOutcome,
 };
-use super::streaming::{emit_event, stream_request_iteration};
-use super::types::{
+use crate::brain::provider::gemini::attachments::build_interleaved_parts;
+use crate::brain::provider::gemini::transport::streaming::{emit_event, stream_request_iteration};
+use crate::brain::provider::gemini::transport::types::{
     GeminiContent, GeminiEvent, GeminiFileData, GeminiFunctionResponse, GeminiPart, GeminiRequest,
 };
+use crate::brain::tools::web::suggest_fallback_urls;
 
 /// Brain-aware chat command (v2)
 ///
@@ -76,22 +78,22 @@ pub async fn stream_gemini_chat_v2(
         let mut tool_calls = 0usize;
         let mut consecutive_tool_failures = 0usize;
         let web_search_tool_declaration = if allow_tools {
-            Some(crate::brain::loader::load_web_search_tool_declaration()?)
+            Some(crate::brain::context::loader::load_web_search_tool_declaration()?)
         } else {
             None
         };
-        let mut allowed_sources = HashMap::<String, crate::brain::tools::duckduckgo::CitationSource>::new();
+        let mut allowed_sources = HashMap::<String, crate::brain::tools::web::CitationSource>::new();
         let mut attempted_urls = HashSet::<String>::new();
         let mut attempted_domains = HashSet::<String>::new();
 
         // Build conversation contents once; then append tool call/response turns as needed.
         let mut contents: Vec<GeminiContent> = if is_initial_turn {
-            let system_prompt = crate::brain::processor::build_initial_system_prompt()?;
+            let system_prompt = crate::brain::context::builder::build_initial_system_prompt()?;
             let mut parts = vec![];
 
             if let Some(path) = image_path.clone() {
                 let file_ref =
-                    crate::brain::gemini::files::ensure_file_uploaded(&api_key, &path, &state.gemini_file_cache)
+                    crate::brain::provider::gemini::attachments::ensure_file_uploaded(&api_key, &path, &state.gemini_file_cache)
                         .await?;
                 parts.push(GeminiPart {
                     file_data: Some(GeminiFileData {
@@ -136,7 +138,7 @@ pub async fn stream_gemini_chat_v2(
             let history = history_log.unwrap_or_default();
             let summary = rolling_summary.clone().unwrap_or_default();
             let context_prompt =
-                crate::brain::processor::build_turn_context(&img_desc, &first_msg, &history, &summary);
+                crate::brain::context::builder::build_turn_context(&img_desc, &first_msg, &history, &summary);
 
             let mut parts = vec![GeminiPart {
                 text: Some(context_prompt),
@@ -270,7 +272,7 @@ pub async fn stream_gemini_chat_v2(
                 ))
             } else if let Some(q) = query {
                 match await_with_request_control(
-                    crate::brain::tools::duckduckgo::search_query_with_progress(q, Some(6), |message| {
+                    crate::brain::tools::web::search_query_with_progress(q, Some(6), |message| {
                         emit_event(&app, &channel_id, GeminiEvent::ToolStatus { message });
                     }),
                     &request_control,
@@ -281,7 +283,7 @@ pub async fn stream_gemini_chat_v2(
                     ControlledAwaitOutcome::Completed(Err(search_error)) => {
                         println!("[WebSearch] Primary query failed: {}", search_error);
                         let mut final_error = search_error;
-                        let mut resolved: Option<crate::brain::tools::duckduckgo::WebSearchResult> = None;
+                        let mut resolved: Option<crate::brain::tools::web::WebSearchResult> = None;
 
                         emit_event(
                             &app,
@@ -291,7 +293,7 @@ pub async fn stream_gemini_chat_v2(
                             },
                         );
 
-                        let local_candidates = crate::brain::tools::duckduckgo::local_safe_source_candidates(
+                        let local_candidates = crate::brain::tools::web::local_safe_source_candidates(
                             q,
                             &attempted_domains,
                             3,
@@ -323,7 +325,7 @@ pub async fn stream_gemini_chat_v2(
                             allowed.insert(candidate.url.clone(), candidate.clone());
 
                             match await_with_request_control(
-                                crate::brain::tools::duckduckgo::fetch_url_from_allowed_with_progress(
+                                crate::brain::tools::web::fetch_url_from_allowed_with_progress(
                                     &candidate.url,
                                     &allowed,
                                     |message| {
@@ -401,7 +403,7 @@ pub async fn stream_gemini_chat_v2(
                             };
 
                             if resolved.is_none() {
-                                let filtered_candidates = crate::brain::tools::duckduckgo::filter_suggested_urls_to_safe_sources(
+                                let filtered_candidates = crate::brain::tools::web::filter_suggested_urls_to_safe_sources(
                                     &suggested_urls,
                                     &attempted_domains,
                                     3,
@@ -434,7 +436,7 @@ pub async fn stream_gemini_chat_v2(
                                     allowed.insert(candidate.url.clone(), candidate.clone());
 
                                     match await_with_request_control(
-                                        crate::brain::tools::duckduckgo::fetch_url_from_allowed_with_progress(
+                                        crate::brain::tools::web::fetch_url_from_allowed_with_progress(
                                             &candidate.url,
                                             &allowed,
                                             |message| {
@@ -503,7 +505,7 @@ pub async fn stream_gemini_chat_v2(
             } else if let Some(u) = requested_url {
                 mark_attempted_url(u, &mut attempted_urls, &mut attempted_domains);
                 match await_with_request_control(
-                    crate::brain::tools::duckduckgo::fetch_url_from_allowed_with_progress(
+                    crate::brain::tools::web::fetch_url_from_allowed_with_progress(
                         u,
                         &allowed_sources,
                         |message| {

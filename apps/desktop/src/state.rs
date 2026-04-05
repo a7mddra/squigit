@@ -16,7 +16,7 @@ pub struct AppState {
     pub ocr_job: Arc<tokio::sync::Mutex<Option<OcrJobHandle>>>,
     pub gemini_file_cache: Arc<
         tokio::sync::Mutex<
-            std::collections::HashMap<String, crate::brain::gemini::files::GeminiFileRef>,
+            std::collections::HashMap<String, crate::brain::provider::gemini::attachments::GeminiFileRef>,
         >,
     >,
 }

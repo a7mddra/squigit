@@ -4,7 +4,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::request_control::GeminiRequestControl;
-use super::types::GeminiFunctionCall;
+use crate::brain::provider::gemini::transport::types::GeminiFunctionCall;
 
 pub(crate) fn tool_step_id(iter: usize) -> String {
     format!("web-search-call-{}", iter + 1)
@@ -40,7 +40,7 @@ pub(crate) fn build_system_instruction_with_search_policy(
     tools_enabled: bool,
 ) -> Result<String, String> {
     let mut instruction =
-        crate::brain::processor::build_system_instruction(user_name, user_email, image_brief)?;
+        crate::brain::context::builder::build_system_instruction(user_name, user_email, image_brief)?;
 
     if tools_enabled {
         instruction.push_str(
@@ -58,22 +58,22 @@ pub(crate) fn build_system_instruction_with_search_policy(
 }
 
 pub(crate) fn merge_allowed_sources(
-    allowed_sources: &mut HashMap<String, crate::brain::tools::duckduckgo::CitationSource>,
-    result: &crate::brain::tools::duckduckgo::WebSearchResult,
+    allowed_sources: &mut HashMap<String, crate::brain::tools::web::CitationSource>,
+    result: &crate::brain::tools::web::WebSearchResult,
 ) {
-    for (url, source) in crate::brain::tools::duckduckgo::collect_allowed_sources(result) {
+    for (url, source) in crate::brain::tools::web::collect_allowed_sources(result) {
         allowed_sources.insert(url, source);
     }
 }
 
 pub(crate) fn track_attempted_sources(
-    sources: &[crate::brain::tools::duckduckgo::CitationSource],
+    sources: &[crate::brain::tools::web::CitationSource],
     attempted_urls: &mut HashSet<String>,
     attempted_domains: &mut HashSet<String>,
 ) {
     for source in sources {
         attempted_urls.insert(source.url.clone());
-        if let Some(domain) = crate::brain::tools::duckduckgo::domain_from_url(&source.url) {
+        if let Some(domain) = crate::brain::tools::web::domain_from_url(&source.url) {
             attempted_domains.insert(domain);
         }
     }
@@ -85,16 +85,16 @@ pub(crate) fn mark_attempted_url(
     attempted_domains: &mut HashSet<String>,
 ) {
     attempted_urls.insert(raw_url.to_string());
-    if let Some(domain) = crate::brain::tools::duckduckgo::domain_from_url(raw_url) {
+    if let Some(domain) = crate::brain::tools::web::domain_from_url(raw_url) {
         attempted_domains.insert(domain);
     }
 }
 
 pub(crate) fn wrap_query_fallback_result(
     query: &str,
-    mut result: crate::brain::tools::duckduckgo::WebSearchResult,
+    mut result: crate::brain::tools::web::WebSearchResult,
     fallback_message: &str,
-) -> crate::brain::tools::duckduckgo::WebSearchResult {
+) -> crate::brain::tools::web::WebSearchResult {
     result.mode = "query".to_string();
     result.query = Some(query.trim().to_string());
     result.requested_url = None;
@@ -129,9 +129,9 @@ pub(crate) async fn await_with_request_control<T>(
 }
 
 fn collect_answer_now_sources(
-    allowed_sources: &HashMap<String, crate::brain::tools::duckduckgo::CitationSource>,
+    allowed_sources: &HashMap<String, crate::brain::tools::web::CitationSource>,
     max_sources: usize,
-) -> Vec<crate::brain::tools::duckduckgo::CitationSource> {
+) -> Vec<crate::brain::tools::web::CitationSource> {
     let mut sources = allowed_sources.values().cloned().collect::<Vec<_>>();
     sources.sort_by(|a, b| a.url.cmp(&b.url));
     sources.truncate(max_sources);
@@ -140,7 +140,7 @@ fn collect_answer_now_sources(
 
 fn build_answer_now_context_markdown(
     mode_label: &str,
-    sources: &[crate::brain::tools::duckduckgo::CitationSource],
+    sources: &[crate::brain::tools::web::CitationSource],
 ) -> String {
     if sources.is_empty() {
         return format!(
@@ -167,15 +167,15 @@ fn build_answer_now_context_markdown(
 pub(crate) fn build_answer_now_partial_result(
     query: Option<&str>,
     requested_url: Option<&str>,
-    allowed_sources: &HashMap<String, crate::brain::tools::duckduckgo::CitationSource>,
-) -> crate::brain::tools::duckduckgo::WebSearchResult {
+    allowed_sources: &HashMap<String, crate::brain::tools::web::CitationSource>,
+) -> crate::brain::tools::web::WebSearchResult {
     let mode = if requested_url.is_some() {
         "url"
     } else {
         "query"
     };
     let sources = collect_answer_now_sources(allowed_sources, 6);
-    crate::brain::tools::duckduckgo::WebSearchResult {
+    crate::brain::tools::web::WebSearchResult {
         mode: mode.to_string(),
         query: query.map(|v| v.to_string()),
         requested_url: requested_url.map(|v| v.to_string()),

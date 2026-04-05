@@ -1,7 +1,9 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 
-use super::types::{GeminiContent, GeminiFileData, GeminiPart, GeminiRequest, GeminiResponseChunk};
+use crate::brain::provider::gemini::transport::types::{
+    GeminiContent, GeminiFileData, GeminiPart, GeminiRequest, GeminiResponseChunk,
+};
 use serde::Deserialize;
 
 const MAX_ATTACHMENT_MEMORY_ITEMS: usize = 6;
@@ -115,7 +117,7 @@ pub async fn build_attachment_memory_context(
             .to_string();
 
         let resolved =
-            match crate::brain::gemini::attachment_paths::resolve_attachment_path_internal(
+            match crate::brain::provider::gemini::attachments::paths::resolve_attachment_path_internal(
                 &raw_path,
             ) {
                 Ok(path) => path,
@@ -147,7 +149,7 @@ pub async fn build_attachment_memory_context(
 
         let mut summary = if extension == "docx" {
             let resolved_path = resolved.to_string_lossy().to_string();
-            match crate::brain::gemini::files::extract_docx_text_for_prompt(&resolved_path).await {
+            match crate::brain::provider::gemini::attachments::extract_docx_text_for_prompt(&resolved_path).await {
                 Ok(text) => normalize_for_memory(&text, MAX_ATTACHMENT_SNIPPET_CHARS),
                 Err(_) => String::new(),
             }
@@ -182,7 +184,7 @@ pub async fn generate_chat_title(
     model: String,
     prompt_context: String,
 ) -> Result<String, String> {
-    use crate::brain::processor::get_title_prompt;
+    use crate::brain::context::builder::get_title_prompt;
     println!("Generating Title using model: {}", model);
 
     let client = reqwest::Client::new();
@@ -275,7 +277,7 @@ pub async fn generate_image_brief(
     api_key: String,
     image_path: String,
 ) -> Result<String, String> {
-    use crate::brain::processor::get_image_brief_prompt;
+    use crate::brain::context::builder::get_image_brief_prompt;
 
     let brief_prompt = get_image_brief_prompt()?;
     let lite_model = crate::constants::DEFAULT_MODEL;
@@ -289,7 +291,7 @@ pub async fn generate_image_brief(
     );
 
     // Upload image via Files API (reuses cache)
-    let file_ref = crate::brain::gemini::files::ensure_file_uploaded(
+    let file_ref = crate::brain::provider::gemini::attachments::ensure_file_uploaded(
         &api_key,
         &image_path,
         &state.gemini_file_cache,
@@ -378,7 +380,7 @@ pub async fn compress_conversation(
     history_to_compress: String,
 ) -> Result<String, String> {
     let summary_prompt =
-        crate::brain::memory::build_summary_prompt(&image_brief, &history_to_compress);
+        crate::brain::context::compactor::build_summary_prompt(&image_brief, &history_to_compress);
     let lite_model = crate::constants::DEFAULT_MODEL;
 
     println!(

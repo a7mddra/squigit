@@ -3,7 +3,7 @@
 
 //! Processor module - Builds API payloads for initial and subsequent turns.
 
-use crate::brain::loader::{
+use crate::brain::context::loader::{
     interpolate, load_frame, load_image_brief_prompt, load_scenes, load_soul, load_system,
     load_title_prompt,
 };
