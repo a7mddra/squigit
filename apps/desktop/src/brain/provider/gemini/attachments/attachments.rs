@@ -6,7 +6,7 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::types::{GeminiFileData, GeminiPart};
+use crate::brain::provider::gemini::transport::types::{GeminiFileData, GeminiPart};
 
 fn is_attachment_link_path(path: &str) -> bool {
     let value = path.trim();
@@ -46,10 +46,10 @@ fn is_attachment_link_path(path: &str) -> bool {
 pub(crate) async fn build_interleaved_parts(
     text: &str,
     api_key: &str,
-    cache: &Arc<tokio::sync::Mutex<HashMap<String, crate::brain::gemini::files::GeminiFileRef>>>,
+    cache: &Arc<tokio::sync::Mutex<HashMap<String, crate::brain::provider::gemini::attachments::GeminiFileRef>>>,
 ) -> Result<Vec<GeminiPart>, String> {
     enum PreparedAttachment {
-        Uploaded(crate::brain::gemini::files::GeminiFileRef),
+        Uploaded(crate::brain::provider::gemini::attachments::GeminiFileRef),
         InlineText(String),
     }
 
@@ -115,13 +115,13 @@ pub(crate) async fn build_interleaved_parts(
     unique_paths.dedup();
 
     let prepare_futures = unique_paths.iter().map(|p| async {
-        if crate::brain::gemini::files::is_docx_path(p) {
+        if crate::brain::provider::gemini::attachments::is_docx_path(p) {
             let extracted_text =
-                crate::brain::gemini::files::extract_docx_text_for_prompt(p).await?;
+                crate::brain::provider::gemini::attachments::extract_docx_text_for_prompt(p).await?;
             Ok::<PreparedAttachment, String>(PreparedAttachment::InlineText(extracted_text))
         } else {
             let file_ref =
-                crate::brain::gemini::files::ensure_file_uploaded(api_key, p, cache).await?;
+                crate::brain::provider::gemini::attachments::ensure_file_uploaded(api_key, p, cache).await?;
             Ok::<PreparedAttachment, String>(PreparedAttachment::Uploaded(file_ref))
         }
     });

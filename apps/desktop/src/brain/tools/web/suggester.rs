@@ -1,12 +1,31 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 
+use serde::Deserialize;
 use std::collections::HashSet;
 use std::time::Duration;
 
-use super::types::{GeminiContent, GeminiPart, GeminiRequest, GeminiResponseChunk};
+#[derive(Debug, Deserialize)]
+struct SuggestResponseChunk {
+    candidates: Option<Vec<SuggestResponseCandidate>>,
+}
 
-fn extract_text_from_non_stream_chunk(chunk: &GeminiResponseChunk) -> Option<String> {
+#[derive(Debug, Deserialize)]
+struct SuggestResponseCandidate {
+    content: Option<SuggestResponseContent>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SuggestResponseContent {
+    parts: Option<Vec<SuggestResponsePart>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SuggestResponsePart {
+    text: Option<String>,
+}
+
+fn extract_text_from_non_stream_chunk(chunk: &SuggestResponseChunk) -> Option<String> {
     chunk.candidates.as_ref().and_then(|candidates| {
         candidates.first().and_then(|first| {
             first.content.as_ref().and_then(|content| {
@@ -89,19 +108,14 @@ pub(crate) async fn suggest_fallback_urls(
          Return ONLY a JSON array of URLs. No markdown, no explanation."
     );
 
-    let request_body = GeminiRequest {
-        system_instruction: None,
-        contents: vec![GeminiContent {
-            role: "user".to_string(),
-            parts: vec![GeminiPart {
-                text: Some(prompt),
-                ..Default::default()
-            }],
-        }],
-        generation_config: None,
-        tools: None,
-        tool_config: None,
-    };
+    let request_body = serde_json::json!({
+        "contents": [{
+            "role": "user",
+            "parts": [{
+                "text": prompt
+            }]
+        }]
+    });
 
     let response = match tokio::time::timeout(
         Duration::from_secs(8),
@@ -124,7 +138,7 @@ pub(crate) async fn suggest_fallback_urls(
         Err(_) => return Vec::new(),
     };
 
-    let chunk: GeminiResponseChunk = match serde_json::from_str(&body) {
+    let chunk: SuggestResponseChunk = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(_) => return Vec::new(),
     };

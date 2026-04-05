@@ -5,9 +5,10 @@ mod constants;
 mod favicon;
 mod fetch;
 mod html;
-mod query_engine;
+mod query;
 mod retry;
 mod safe_sources;
+mod suggester;
 mod transport;
 mod types;
 mod url_utils;
@@ -16,10 +17,11 @@ pub use fetch::{
     collect_allowed_sources, fetch_url_from_allowed, fetch_url_from_allowed_with_progress,
 };
 pub use html::build_query_result;
-pub use query_engine::{search_query, search_query_with_progress};
+pub use query::{search_query, search_query_with_progress};
 pub use safe_sources::{filter_suggested_urls_to_safe_sources, local_safe_source_candidates};
 pub use types::{CitationSource, WebSearchResult};
 pub use url_utils::domain_from_url;
+pub(crate) use suggester::suggest_fallback_urls;
 
 #[cfg(test)]
 mod tests {

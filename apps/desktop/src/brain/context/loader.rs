@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Soul identity configuration from soul.yml
+/// Soul identity configuration from squigit_soul.yml
 #[derive(Debug, Deserialize)]
 pub struct SoulIdentity {
     pub name: String,
@@ -14,7 +14,7 @@ pub struct SoulIdentity {
     pub description: String,
 }
 
-/// Core instructions from soul.yml
+/// Core instructions from squigit_soul.yml
 #[derive(Debug, Deserialize)]
 pub struct CoreInstructions {
     pub be_helpful: String,
@@ -62,27 +62,29 @@ pub struct Scene {
 
 /// Load the soul configuration from embedded YAML
 pub fn load_soul() -> Result<SoulConfig, String> {
-    let yaml_content = include_str!("prompts/core/soul.yml");
-    serde_yaml::from_str(yaml_content).map_err(|e| format!("Failed to parse soul.yml: {}", e))
+    let yaml_content = include_str!("../assets/core/squigit_soul.yml");
+    serde_yaml::from_str(yaml_content)
+        .map_err(|e| format!("Failed to parse squigit_soul.yml: {}", e))
 }
 
 /// Load the title prompt from embedded YAML
 pub fn load_title_prompt() -> Result<String, String> {
-    let yaml_content = include_str!("prompts/core/title.yml");
+    let yaml_content = include_str!("../assets/helpers/thread_title.yml");
     let config: TitleConfig = serde_yaml::from_str(yaml_content)
-        .map_err(|e| format!("Failed to parse title.yml: {}", e))?;
+        .map_err(|e| format!("Failed to parse thread_title.yml: {}", e))?;
     Ok(config.generate_title)
 }
 
 /// Load scenes from embedded JSON
 pub fn load_scenes() -> Result<Vec<Scene>, String> {
-    let json_content = include_str!("knowledge/scenes.json");
-    serde_json::from_str(json_content).map_err(|e| format!("Failed to parse scenes.json: {}", e))
+    let json_content = include_str!("../assets/knowledge/known_scenes.json");
+    serde_json::from_str(json_content)
+        .map_err(|e| format!("Failed to parse known_scenes.json: {}", e))
 }
 
 /// Load the context frame template from embedded MD
 pub fn load_frame() -> String {
-    include_str!("prompts/frame.md").to_string()
+    include_str!("../assets/core/context_window.md").to_string()
 }
 
 /// Interpolate variables in a template string
@@ -111,13 +113,14 @@ pub struct ImageBriefConfig {
 
 /// Load the system runtime configuration from embedded YAML
 pub fn load_system() -> Result<SystemConfig, String> {
-    let yaml_content = include_str!("prompts/core/system.yml");
-    serde_yaml::from_str(yaml_content).map_err(|e| format!("Failed to parse system.yml: {}", e))
+    let yaml_content = include_str!("../assets/core/system_prompt.yml");
+    serde_yaml::from_str(yaml_content)
+        .map_err(|e| format!("Failed to parse system_prompt.yml: {}", e))
 }
 
 /// Load the image brief prompt from embedded YAML
 pub fn load_image_brief_prompt() -> Result<String, String> {
-    let yaml_content = include_str!("prompts/core/image_brief.yml");
+    let yaml_content = include_str!("../assets/helpers/image_brief.yml");
     let config: ImageBriefConfig = serde_yaml::from_str(yaml_content)
         .map_err(|e| format!("Failed to parse image_brief.yml: {}", e))?;
     Ok(config.describe_image)
@@ -125,9 +128,9 @@ pub fn load_image_brief_prompt() -> Result<String, String> {
 
 /// Load the web search tool declaration from embedded JSON
 pub fn load_web_search_tool_declaration() -> Result<serde_json::Value, String> {
-    let json_content = include_str!("prompts/core/web_search_tool.json");
+    let json_content = include_str!("../assets/helpers/web_search.json");
     serde_json::from_str(json_content)
-        .map_err(|e| format!("Failed to parse web_search_tool.json: {}", e))
+        .map_err(|e| format!("Failed to parse web_search.json: {}", e))
 }
 
 #[cfg(test)]
