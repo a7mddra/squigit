@@ -48,6 +48,8 @@ pub(crate) struct GeminiRequest {
     #[serde(rename = "systemInstruction", skip_serializing_if = "Option::is_none")]
     pub(crate) system_instruction: Option<GeminiContent>,
     pub(crate) contents: Vec<GeminiContent>,
+    #[serde(rename = "generationConfig", skip_serializing_if = "Option::is_none")]
+    pub(crate) generation_config: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) tools: Option<Vec<serde_json::Value>>,
     #[serde(rename = "toolConfig", skip_serializing_if = "Option::is_none")]

@@ -13,6 +13,9 @@ pub(crate) mod stream_chat;
 mod streaming;
 mod types;
 
-pub use generation::{compress_conversation, generate_chat_title, generate_image_brief};
+pub use generation::{
+    build_attachment_memory_context, compress_conversation, generate_chat_title,
+    generate_image_brief,
+};
 pub use request_control::{answer_now_gemini_request, cancel_gemini_request};
 pub use stream_chat::stream_gemini_chat_v2;

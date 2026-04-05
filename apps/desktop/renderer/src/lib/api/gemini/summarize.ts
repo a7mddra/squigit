@@ -17,6 +17,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { geminiStore } from "./store";
+import { normalizeMessageForHistory } from "./attachmentMemory";
 
 /** How many messages (user+assistant pairs) to keep verbatim. */
 const VERBATIM_WINDOW_SIZE = 6;
@@ -55,7 +56,10 @@ export function buildContextWindow(): {
     verbatimMessages.length === 0
       ? "(No previous messages)"
       : verbatimMessages
-          .map(({ role, content }) => `**${role}**: ${content}`)
+          .map(
+            ({ role, content }) =>
+              `**${role}**: ${normalizeMessageForHistory(content)}`,
+          )
           .join("\n\n");
 
   const rollingSummary = geminiStore.conversationSummary || "";
@@ -95,7 +99,9 @@ export function maybeCompressHistory(chatId: string | null): void {
 
   // Format the turns to compress
   const historyText = toCompress
-    .map(({ role, content }) => `**${role}**: ${content}`)
+    .map(
+      ({ role, content }) => `**${role}**: ${normalizeMessageForHistory(content)}`,
+    )
     .join("\n\n");
 
   console.log(

@@ -12,6 +12,7 @@ import { cancelCurrentRequest } from "./cancel";
 import { createStreamWatchdog } from "./streamWatchdog";
 import { setUserFirstMsg, addToHistory } from "./context";
 import { buildContextWindow, maybeCompressHistory } from "./summarize";
+import { buildRichUserHistoryContent } from "./attachmentMemory";
 
 export const sendMessage = async (
   text: string,
@@ -28,8 +29,9 @@ export const sendMessage = async (
   }
 
   const myGenId = geminiStore.generationId;
-  setUserFirstMsg(text);
-  addToHistory("User", text);
+  const userHistoryText = await buildRichUserHistoryContent(text);
+  setUserFirstMsg(userHistoryText);
+  addToHistory("User", userHistoryText);
 
   const channelId = `gemini-stream-${Date.now()}`;
   geminiStore.currentChannelId = channelId;

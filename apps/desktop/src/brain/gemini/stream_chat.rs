@@ -60,6 +60,7 @@ pub async fn stream_gemini_chat_v2(
 ) -> Result<(), String> {
     const MAX_TOOL_CALLS_PER_TURN: usize = 3;
     const MAX_AGENT_ITERATIONS: usize = 8;
+    const MAX_OUTPUT_TOKENS: usize = 2048;
 
     let result = async {
         let client = reqwest::Client::new();
@@ -188,6 +189,9 @@ pub async fn stream_gemini_chat_v2(
             let request_body = GeminiRequest {
                 system_instruction,
                 contents: contents.clone(),
+                generation_config: Some(json!({
+                    "maxOutputTokens": MAX_OUTPUT_TOKENS
+                })),
                 tools,
                 tool_config: if allow_tools {
                     Some(json!({

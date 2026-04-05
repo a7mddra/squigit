@@ -8,6 +8,41 @@ use std::sync::Arc;
 
 use super::types::{GeminiFileData, GeminiPart};
 
+fn is_attachment_link_path(path: &str) -> bool {
+    let value = path.trim();
+    if value.is_empty() {
+        return false;
+    }
+
+    let lower = value.to_ascii_lowercase();
+    if lower.starts_with("http://")
+        || lower.starts_with("https://")
+        || lower.starts_with("mailto:")
+        || lower.starts_with("tel:")
+    {
+        return false;
+    }
+
+    if value.starts_with('/') || value.starts_with("\\\\") {
+        return true;
+    }
+
+    let bytes = value.as_bytes();
+    if bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && (bytes[2] == b'\\' || bytes[2] == b'/')
+    {
+        return true;
+    }
+
+    value.starts_with("objects/")
+        || value.starts_with("./objects/")
+        || value.starts_with("../objects/")
+        || value.starts_with("tmp/")
+        || value.starts_with("/tmp/")
+}
+
 pub(crate) async fn build_interleaved_parts(
     text: &str,
     api_key: &str,
@@ -18,7 +53,14 @@ pub(crate) async fn build_interleaved_parts(
         InlineText(String),
     }
 
-    let re = Regex::new(r"\{\{([^}]+)\}\}").map_err(|e| format!("Regex Error: {}", e))?;
+    let re = Regex::new(
+        r"(?x)
+        (\{\{(?P<legacy_path>[^}]+)\}\})
+        |
+        (\[(?P<link_label>[^\]\n]+)\]\((?P<link_path>[^)\n]+)\))
+    ",
+    )
+    .map_err(|e| format!("Regex Error: {}", e))?;
 
     let mut text_chunks = Vec::new();
     let mut last_end = 0;
@@ -26,15 +68,32 @@ pub(crate) async fn build_interleaved_parts(
 
     for cap in re.captures_iter(text) {
         let full_match = cap.get(0).unwrap();
-        let path = cap.get(1).unwrap().as_str().to_string();
 
         let before = &text[last_end..full_match.start()];
         if !before.trim().is_empty() {
             text_chunks.push((false, before.to_string()));
         }
 
-        file_paths.push(path.clone());
-        text_chunks.push((true, path));
+        let maybe_path = if let Some(legacy) = cap.name("legacy_path") {
+            Some(legacy.as_str().trim().to_string())
+        } else if let Some(link_path) = cap.name("link_path") {
+            let path = link_path.as_str().trim();
+            if is_attachment_link_path(path) {
+                Some(path.to_string())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(path) = maybe_path {
+            file_paths.push(path.clone());
+            text_chunks.push((true, path));
+        } else {
+            // Keep non-attachment markdown links as plain text chunks.
+            text_chunks.push((false, full_match.as_str().to_string()));
+        }
 
         last_end = full_match.end();
     }

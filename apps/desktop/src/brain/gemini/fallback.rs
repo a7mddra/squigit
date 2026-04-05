@@ -98,6 +98,7 @@ pub(crate) async fn suggest_fallback_urls(
                 ..Default::default()
             }],
         }],
+        generation_config: None,
         tools: None,
         tool_config: None,
     };

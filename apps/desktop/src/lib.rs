@@ -102,6 +102,7 @@ pub fn run() {
             brain::gemini::stream_chat::stream_gemini_chat_v2,
             brain::gemini::generation::generate_chat_title,
             brain::gemini::generation::generate_image_brief,
+            brain::gemini::generation::build_attachment_memory_context,
             brain::gemini::generation::compress_conversation,
             brain::gemini::request_control::cancel_gemini_request,
             brain::gemini::request_control::answer_now_gemini_request,

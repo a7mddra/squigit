@@ -12,6 +12,7 @@ import { cancelCurrentRequest } from "./cancel";
 import { createStreamWatchdog } from "./streamWatchdog";
 import { setImageDescription, setImageBrief, addToHistory } from "./context";
 import { buildContextWindow } from "./summarize";
+import { normalizeMessageForHistory } from "./attachmentMemory";
 
 export const retryFromMessage = async (
   messageIndex: number,
@@ -145,7 +146,7 @@ export const retryFromMessage = async (
 
   geminiStore.conversationHistory = messagesBefore.map((m) => ({
     role: m.role === "user" ? "User" : "Assistant",
-    content: m.text,
+    content: normalizeMessageForHistory(m.text),
   }));
   // No more slice(-6) — summarize.ts handles windowing
 

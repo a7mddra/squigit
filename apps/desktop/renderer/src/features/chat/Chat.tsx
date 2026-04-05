@@ -150,7 +150,7 @@ export const Chat: React.FC = () => {
     let finalInput = inputValue;
     if (app.attachments.length > 0) {
       const mentions = app.attachments
-        .map((a) => buildAttachmentMention(a.path))
+        .map((a) => buildAttachmentMention(a.path, a.name))
         .join("\n");
       finalInput = `${inputValue}\n\n${mentions}`.trim();
     }
