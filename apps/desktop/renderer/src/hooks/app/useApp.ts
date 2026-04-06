@@ -36,14 +36,22 @@ import {
 } from "@/hooks";
 import {
   useAttachments,
+  type Citation,
   useChat,
   useChatHistory,
   useChatTitle,
   isImageExtension,
   type Attachment,
+  type Message,
   type MediaGalleryItem,
   type MediaViewerItem,
+  type ToolStep,
 } from "@/features";
+import type {
+  AttachmentAnalysisCounts,
+  ChatCitation,
+  ChatToolStep,
+} from "@/lib";
 
 import { useAppDialogs } from "./useAppDialogs";
 import { useAppDrafts } from "./useAppDrafts";
@@ -176,6 +184,63 @@ function persistAttachmentSourceMap(map: Map<string, string>) {
   }
 }
 
+function getAttachmentAnalysisCounts(
+  items: Attachment[],
+): AttachmentAnalysisCounts | null {
+  if (items.length === 0) {
+    return null;
+  }
+
+  const imageCount = items.filter((attachment) => attachment.type === "image")
+    .length;
+  const fileCount = items.length - imageCount;
+
+  return imageCount > 0 || fileCount > 0 ? { imageCount, fileCount } : null;
+}
+
+function normalizeStoredCitations(citations: ChatCitation[] | undefined): Citation[] {
+  return Array.isArray(citations) ? citations : [];
+}
+
+function normalizeStoredToolSteps(
+  toolSteps: ChatToolStep[] | undefined,
+): ToolStep[] {
+  if (!Array.isArray(toolSteps)) {
+    return [];
+  }
+
+  return toolSteps.map((step) => ({
+    ...step,
+    status:
+      step.status === "running" ||
+      step.status === "done" ||
+      step.status === "error"
+        ? step.status
+        : typeof step.endedAtMs === "number"
+          ? "done"
+          : "running",
+    message: step.message ?? undefined,
+  }));
+}
+
+function mapStoredMessage(message: {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  citations?: ChatCitation[];
+  tool_steps?: ChatToolStep[];
+}): Message {
+  return {
+    id: "",
+    role: message.role === "user" ? "user" : "model",
+    text: message.content,
+    timestamp: new Date(message.timestamp).getTime(),
+    alreadyStreamed: true,
+    citations: normalizeStoredCitations(message.citations),
+    toolSteps: normalizeStoredToolSteps(message.tool_steps),
+  };
+}
+
 export const useApp = () => {
   const system = useSystemSync();
   const auth = useAuth();
@@ -212,6 +277,8 @@ export const useApp = () => {
   const attachments = useAttachments();
   const contextMenuState = useAppContextMenu();
   const ocr = useAppOcr(chatHistory.activeSessionId);
+  const [pendingPromptAttachmentAnalysis, setPendingPromptAttachmentAnalysis] =
+    useState<AttachmentAnalysisCounts | null>(null);
   const attachmentSourceMapRef = useRef<Map<string, string>>(
     readAttachmentSourceMap(),
   );
@@ -535,6 +602,22 @@ export const useApp = () => {
     return null;
   }, []);
 
+  const trackPendingPromptAttachmentAnalysis = useCallback(
+    (nextAttachments: Attachment[]) => {
+      setPendingPromptAttachmentAnalysis(
+        getAttachmentAnalysisCounts(nextAttachments),
+      );
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const pendingTurn = chat.pendingAssistantTurn;
+    if (!pendingTurn || pendingTurn.phase !== "thinking") {
+      setPendingPromptAttachmentAnalysis(null);
+    }
+  }, [chat.pendingAssistantTurn]);
+
   const [mediaViewer, setMediaViewer] = useState<{
     isOpen: boolean;
     item: MediaViewerItem | null;
@@ -816,14 +899,9 @@ export const useApp = () => {
         );
         system.setSessionOcrLanguage(system.ocrEnabled ? chatOcrModel : "");
 
-        const messages = chatData.messages.map((m, idx) => ({
+        const messages = chatData.messages.map((message, idx) => ({
+          ...mapStoredMessage(message),
           id: idx.toString(),
-          role: (m.role === "user" ? "user" : "model") as "user" | "model",
-          text: m.content,
-          timestamp: new Date(m.timestamp).getTime(),
-          alreadyStreamed: true,
-          citations: m.citations || [],
-          toolSteps: m.tool_steps || [],
         }));
 
         chat.restoreState(
@@ -1172,6 +1250,7 @@ export const useApp = () => {
     imageInput: drafts.imageInput,
     inputModel: drafts.inputModel,
     attachments: attachments.attachments,
+    pendingPromptAttachmentAnalysis,
     setInputModel: drafts.setInputModel,
     pendingUpdate,
     showUpdate,
@@ -1203,6 +1282,7 @@ export const useApp = () => {
     setInput: drafts.setInput,
     setImageInput: drafts.setImageInput,
     setAttachments: attachments.setAttachments,
+    trackPendingPromptAttachmentAnalysis,
     addAttachmentFromPath: attachments.addFromPath,
     clearAttachments: attachments.clearAttachments,
     setShowUpdate,

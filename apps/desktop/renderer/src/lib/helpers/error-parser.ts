@@ -36,7 +36,7 @@ const normalizeErrorMessage = (error: any): string => {
   }
 };
 
-export const parseGeminiError = (error: any): ParsedError => {
+const getGeminiErrorSearchText = (error: any): string => {
   const errString =
     typeof error === "string"
       ? error
@@ -49,17 +49,75 @@ export const parseGeminiError = (error: any): ParsedError => {
         })();
   const message = normalizeErrorMessage(error);
 
-  const searchStr = (errString + " " + message).toLowerCase();
+  return `${errString} ${message}`.toLowerCase();
+};
 
-  if (
+export const isGeminiHighDemandError = (error: any): boolean => {
+  const searchStr = getGeminiErrorSearchText(error);
+
+  return (
     searchStr.includes("503") ||
     searchStr.includes("overloaded") ||
-    searchStr.includes("unavailable")
+    searchStr.includes("unavailable") ||
+    searchStr.includes("high demand") ||
+    searchStr.includes("currently experiencing high demand") ||
+    searchStr.includes("streaming stalled with no events for 120s") ||
+    (searchStr.includes("streaming stalled") &&
+      searchStr.includes("no events for 120s"))
+  );
+};
+
+export const getGeminiHighDemandMessage = (): string => {
+  return "The model is under high demand right now. Please wait a bit and try again.";
+};
+
+export const getGeminiHighDemandExhaustedMessage = (
+  attempts: number,
+): string => {
+  return `The model is under high demand right now. I retried automatically ${attempts} times, but it is still busy. Please wait a bit and try again.`;
+};
+
+export const getFriendlyGeminiErrorMessage = (
+  error: any,
+  fallback = "An error occurred while connecting to Gemini.",
+): string => {
+  const message = normalizeErrorMessage(error);
+  const searchStr = getGeminiErrorSearchText(error);
+
+  if (isGeminiHighDemandError(error)) {
+    return getGeminiHighDemandMessage();
+  }
+
+  if (
+    searchStr.includes("429") ||
+    searchStr.includes("quota") ||
+    searchStr.includes("limit") ||
+    searchStr.includes("resource_exhausted")
   ) {
+    return "You've reached your current Gemini usage limit. Please wait a bit, check your quota, or switch API keys.";
+  }
+
+  if (
+    searchStr.includes("network") ||
+    searchStr.includes("internet") ||
+    searchStr.includes("fetch") ||
+    searchStr.includes("failed to fetch") ||
+    searchStr.includes("load failed")
+  ) {
+    return "Unable to reach the AI service right now. Please check your internet connection and try again.";
+  }
+
+  return message || fallback;
+};
+
+export const parseGeminiError = (error: any): ParsedError => {
+  const message = normalizeErrorMessage(error);
+  const searchStr = getGeminiErrorSearchText(error);
+
+  if (isGeminiHighDemandError(error)) {
     return {
       title: "Model Busy",
-      message:
-        "The AI model is currently overloaded with requests. Please try again in a few moments.",
+      message: getGeminiHighDemandMessage(),
       code: "503",
       actionType: "RETRY_ONLY",
     };

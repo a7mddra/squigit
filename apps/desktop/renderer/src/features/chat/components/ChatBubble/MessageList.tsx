@@ -11,7 +11,13 @@ import {
 } from "../../chat.types";
 import { ChatBubble } from "./ChatBubble";
 import { TextShimmer } from "@/components";
-import { API_STATUS_TEXT } from "@/lib";
+import {
+  API_STATUS_TEXT,
+  ATTACHMENT_ANALYSIS_STATUS_DELAY_MS,
+  getAttachmentAnalysisStatusText,
+  isAnswerNowSuppressedProgressText,
+} from "@/lib";
+import type { AttachmentAnalysisCounts } from "@/lib";
 import styles from "./MessageList.module.css";
 
 const THINKING_LABEL = "Thinking";
@@ -19,6 +25,7 @@ const THINKING_LABEL = "Thinking";
 interface MessageListProps {
   messages: Message[];
   pendingAssistantTurn?: PendingAssistantTurn | null;
+  pendingPromptAttachmentAnalysis?: AttachmentAnalysisCounts | null;
   hideThinkingProgress?: boolean;
   selectedModel: string;
   onAnswerNow?: () => void;
@@ -51,6 +58,7 @@ function getVisibleProgressText(text: string | undefined): string | null {
 const MessageListComponent: React.FC<MessageListProps> = ({
   messages,
   pendingAssistantTurn,
+  pendingPromptAttachmentAnalysis,
   hideThinkingProgress = false,
   selectedModel,
   onAnswerNow,
@@ -58,11 +66,95 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   onUndoMessage,
   onSystemAction,
 }) => {
+  const [delayedAttachmentStatus, setDelayedAttachmentStatus] = React.useState<{
+    turnId: string;
+    text: string;
+  } | null>(null);
+  const realProgressTurnIdRef = React.useRef<string | null>(null);
   const shouldShowThinkingLabel =
     pendingAssistantTurn?.phase === "thinking" && !hideThinkingProgress;
-  const visibleProgressText =
-    shouldShowThinkingLabel
-      ? getVisibleProgressText(pendingAssistantTurn?.progressText)
+  const directProgressText = shouldShowThinkingLabel
+    ? getVisibleProgressText(pendingAssistantTurn?.progressText)
+    : null;
+  const delayedAttachmentProgressText = getAttachmentAnalysisStatusText(
+    pendingPromptAttachmentAnalysis,
+  );
+
+  React.useEffect(() => {
+    const turnId = pendingAssistantTurn?.id ?? null;
+    const realProgressText = getVisibleProgressText(
+      pendingAssistantTurn?.progressText,
+    );
+
+    if (!turnId || !shouldShowThinkingLabel) {
+      realProgressTurnIdRef.current = null;
+      setDelayedAttachmentStatus(null);
+      return;
+    }
+
+    if (realProgressText) {
+      realProgressTurnIdRef.current = turnId;
+      setDelayedAttachmentStatus((previous) =>
+        previous?.turnId === turnId ? null : previous,
+      );
+      return;
+    }
+
+    if (realProgressTurnIdRef.current !== turnId) {
+      setDelayedAttachmentStatus((previous) =>
+        previous?.turnId === turnId ? previous : null,
+      );
+    }
+  }, [
+    pendingAssistantTurn?.id,
+    pendingAssistantTurn?.phase,
+    pendingAssistantTurn?.progressText,
+    shouldShowThinkingLabel,
+  ]);
+
+  React.useEffect(() => {
+    const turnId = pendingAssistantTurn?.id;
+
+    if (
+      !turnId ||
+      !shouldShowThinkingLabel ||
+      !!directProgressText ||
+      !delayedAttachmentProgressText ||
+      realProgressTurnIdRef.current === turnId ||
+      delayedAttachmentStatus?.turnId === turnId
+    ) {
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      setDelayedAttachmentStatus((previous) => {
+        if (previous?.turnId === turnId) {
+          return previous;
+        }
+
+        return {
+          turnId,
+          text: delayedAttachmentProgressText,
+        };
+      });
+    }, ATTACHMENT_ANALYSIS_STATUS_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [
+    delayedAttachmentProgressText,
+    delayedAttachmentStatus?.turnId,
+    directProgressText,
+    pendingAssistantTurn?.id,
+    shouldShowThinkingLabel,
+  ]);
+
+  const visibleProgressText = directProgressText
+    ? directProgressText
+    : shouldShowThinkingLabel &&
+        delayedAttachmentStatus?.turnId === pendingAssistantTurn?.id
+      ? delayedAttachmentStatus.text
       : null;
   const hasRunningToolStep =
     pendingAssistantTurn?.toolSteps.some((step) => step.status === "running") ??
@@ -72,6 +164,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     !!onAnswerNow &&
     !!pendingAssistantTurn &&
     pendingAssistantTurn.phase === "thinking" &&
+    !isAnswerNowSuppressedProgressText(visibleProgressText) &&
     (hasRunningToolStep ||
       isAnswerNowEligibleProgress(pendingAssistantTurn.progressText));
 
@@ -160,6 +253,8 @@ export const MessageList = React.memo(
     return (
       prevProps.messages === nextProps.messages &&
       prevProps.pendingAssistantTurn === nextProps.pendingAssistantTurn &&
+      prevProps.pendingPromptAttachmentAnalysis ===
+        nextProps.pendingPromptAttachmentAnalysis &&
       prevProps.hideThinkingProgress === nextProps.hideThinkingProgress &&
       prevProps.selectedModel === nextProps.selectedModel
     );

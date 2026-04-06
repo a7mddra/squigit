@@ -10,7 +10,12 @@ import { listen } from "@tauri-apps/api/event";
 import { useAppContext } from "@/providers/AppProvider";
 import { useInlineMenu } from "@/hooks";
 import { InlineMenu, LoadingSpinner, Dialog, TextShimmer } from "@/components";
-import { API_STATUS_TEXT } from "@/lib";
+import {
+  API_STATUS_TEXT,
+  ATTACHMENT_ANALYSIS_STATUS_DELAY_MS,
+  getAttachmentAnalysisStatusText,
+  isAnswerNowSuppressedProgressText,
+} from "@/lib";
 import {
   buildAttachmentMention,
   parseAttachmentPaths,
@@ -45,11 +50,17 @@ export const Chat: React.FC = () => {
   const [pendingUndoMessageId, setPendingUndoMessageId] = useState<
     string | null
   >(null);
+  const [delayedImageAttachmentStatus, setDelayedImageAttachmentStatus] =
+    useState<{
+      turnId: string;
+      text: string;
+    } | null>(null);
 
   // Refs
   const headerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(false);
+  const imageProgressTurnIdRef = useRef<string | null>(null);
 
   // Hooks
   const error = app.chat.error || app.system.systemError;
@@ -162,6 +173,10 @@ export const Chat: React.FC = () => {
         .join("\n");
       finalInput = `${inputValue}\n\n${mentions}`.trim();
     }
+    if (!finalInput.trim() || app.chat.isLoading) {
+      return;
+    }
+    app.trackPendingPromptAttachmentAnalysis(app.attachments);
     app.chat.handleSend(finalInput, app.inputModel);
     setInputValue("");
     app.clearAttachments();
@@ -170,6 +185,7 @@ export const Chat: React.FC = () => {
     app.chat,
     app.clearAttachments,
     app.inputModel,
+    app.trackPendingPromptAttachmentAnalysis,
     inputValue,
   ]);
 
@@ -184,6 +200,48 @@ export const Chat: React.FC = () => {
   const handleRequestUndoMessage = useCallback((messageId: string) => {
     setPendingUndoMessageId(messageId);
   }, []);
+
+  const getRetryAttachments = useCallback(
+    (messageId: string) => {
+      const targetIndex = app.chat.messages.findIndex(
+        (message) => message.id === messageId,
+      );
+      if (targetIndex === -1) {
+        return [];
+      }
+
+      if (targetIndex === 0 && app.system.startupImage) {
+        return [
+          attachmentFromPath(
+            app.system.startupImage.path,
+            app.system.startupImage.imageId,
+          ),
+        ];
+      }
+
+      const sourceUserMessage = app.chat.messages
+        .slice(0, targetIndex)
+        .reverse()
+        .find((message) => message.role === "user");
+
+      if (!sourceUserMessage) {
+        return [];
+      }
+
+      return parseAttachmentPaths(sourceUserMessage.text).map((path) =>
+        attachmentFromPath(path),
+      );
+    },
+    [app.chat.messages, app.system.startupImage],
+  );
+
+  const handleRetryMessage = useCallback(
+    (messageId: string, modelId?: string) => {
+      app.trackPendingPromptAttachmentAnalysis(getRetryAttachments(messageId));
+      app.chat.handleRetryMessage(messageId, modelId);
+    },
+    [app, getRetryAttachments],
+  );
 
   const handleUndoDialogAction = useCallback(
     (actionKey: string) => {
@@ -297,6 +355,78 @@ export const Chat: React.FC = () => {
     !app.chat.streamingText &&
     app.chat.isAnalyzing;
   const imageProgressText = getVisibleImageProgressText(app.chat.toolStatus);
+  const delayedImageAttachmentProgressText = getAttachmentAnalysisStatusText(
+    app.pendingPromptAttachmentAnalysis,
+  );
+
+  useEffect(() => {
+    const turnId = app.chat.pendingAssistantTurn?.id ?? null;
+
+    if (!turnId || !isImageProgressVisible) {
+      imageProgressTurnIdRef.current = null;
+      setDelayedImageAttachmentStatus(null);
+      return;
+    }
+
+    if (imageProgressText) {
+      imageProgressTurnIdRef.current = turnId;
+      setDelayedImageAttachmentStatus((previous) =>
+        previous?.turnId === turnId ? null : previous,
+      );
+      return;
+    }
+
+    if (imageProgressTurnIdRef.current !== turnId) {
+      setDelayedImageAttachmentStatus((previous) =>
+        previous?.turnId === turnId ? previous : null,
+      );
+    }
+  }, [app.chat.pendingAssistantTurn?.id, imageProgressText, isImageProgressVisible]);
+
+  useEffect(() => {
+    const turnId = app.chat.pendingAssistantTurn?.id;
+
+    if (
+      !turnId ||
+      !isImageProgressVisible ||
+      !!imageProgressText ||
+      !delayedImageAttachmentProgressText ||
+      imageProgressTurnIdRef.current === turnId ||
+      delayedImageAttachmentStatus?.turnId === turnId
+    ) {
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      setDelayedImageAttachmentStatus((previous) => {
+        if (previous?.turnId === turnId) {
+          return previous;
+        }
+
+        return {
+          turnId,
+          text: delayedImageAttachmentProgressText,
+        };
+      });
+    }, ATTACHMENT_ANALYSIS_STATUS_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [
+    app.chat.pendingAssistantTurn?.id,
+    delayedImageAttachmentProgressText,
+    delayedImageAttachmentStatus?.turnId,
+    imageProgressText,
+    isImageProgressVisible,
+  ]);
+
+  const visibleImageProgressText = imageProgressText
+    ? imageProgressText
+    : isImageProgressVisible &&
+        delayedImageAttachmentStatus?.turnId === app.chat.pendingAssistantTurn?.id
+      ? delayedImageAttachmentStatus?.text ?? null
+      : null;
   const hasRunningToolStep = app.chat.streamingToolSteps.some(
     (step) => step.status === "running",
   );
@@ -304,7 +434,9 @@ export const Chat: React.FC = () => {
     !!app.chat.toolStatus &&
     app.chat.streamingToolSteps.length === 0 &&
     app.chat.isSearching;
-  const showAnswerNow = hasRunningToolStep || hasPreStepSearchStatus;
+  const showAnswerNow =
+    !isAnswerNowSuppressedProgressText(visibleImageProgressText) &&
+    (hasRunningToolStep || hasPreStepSearchStatus);
 
   return (
     <div className={styles.chatContainer}>
@@ -397,13 +529,13 @@ export const Chat: React.FC = () => {
                         )}
                       </div>
 
-                      {imageProgressText && (
+                      {visibleImageProgressText && (
                         <p
-                          key={imageProgressText}
+                          key={visibleImageProgressText}
                           className={styles.imageProgressText}
                           aria-live="polite"
                         >
-                          {imageProgressText}
+                          {visibleImageProgressText}
                         </p>
                       )}
                     </div>
@@ -411,10 +543,13 @@ export const Chat: React.FC = () => {
                   <MessageList
                     messages={app.chat.messages}
                     pendingAssistantTurn={app.chat.pendingAssistantTurn}
+                    pendingPromptAttachmentAnalysis={
+                      app.pendingPromptAttachmentAnalysis
+                    }
                     hideThinkingProgress={app.chat.isAnalyzing}
                     selectedModel={app.inputModel}
                     onAnswerNow={app.chat.handleAnswerNow}
-                    onRetryMessage={app.chat.handleRetryMessage}
+                    onRetryMessage={handleRetryMessage}
                     onUndoMessage={handleRequestUndoMessage}
                     onSystemAction={app.handleSystemAction}
                   />

@@ -29,6 +29,12 @@ import {
   getImageDescription,
   setImageDescription,
   API_STATUS_TEXT,
+  HIGH_DEMAND_RETRY_ATTEMPTS,
+  HIGH_DEMAND_RETRY_DELAYS_MS,
+  getHighDemandRetryStatusText,
+  getFriendlyGeminiErrorMessage,
+  getGeminiHighDemandExhaustedMessage,
+  isGeminiHighDemandError,
   mapToolStatusText,
   ModelType,
 } from "@/lib";
@@ -153,6 +159,10 @@ export const useGeminiEngine = (config: {
     return Math.max(1, Math.round((Date.now() - startedAtMs) / 1000));
   };
 
+  const isRequestAborted = (signal?: AbortSignal): boolean => {
+    return Boolean(signal?.aborted) || isRequestCancelledRef.current;
+  };
+
   const getDefaultProgressText = (
     requestKind: PendingAssistantRequestKind,
   ): string => {
@@ -193,7 +203,7 @@ export const useGeminiEngine = (config: {
   const updatePendingAssistantTurn = (
     updater: (turn: PendingAssistantTurn) => PendingAssistantTurn,
   ) => {
-    setPendingAssistantTurn((previous) => {
+    setPendingAssistantTurn((previous: PendingAssistantTurn | null) => {
       if (!previous) return previous;
       return updater(previous);
     });
@@ -230,6 +240,96 @@ export const useGeminiEngine = (config: {
       visibleCitations: [],
       stopped: false,
     }));
+  };
+
+  const showRetryLoopProgress = (text: string) => {
+    resetPendingRawText();
+    setStreamingToolSteps([]);
+    setStreamingCitations([]);
+    setToolStatus(text);
+    updatePendingAssistantTurn((turn) => ({
+      ...turn,
+      progressText: text,
+      toolSteps: [],
+      pendingCitations: [],
+      visibleCitations: [],
+    }));
+  };
+
+  const waitForRetryDelay = async (
+    delayMs: number,
+    signal?: AbortSignal,
+  ): Promise<void> => {
+    const startedAtMs = Date.now();
+
+    await new Promise<void>((resolve, reject) => {
+      let timerId: number | null = null;
+
+      const tick = () => {
+        if (isRequestAborted(signal)) {
+          if (timerId !== null) {
+            window.clearTimeout(timerId);
+          }
+          reject(new Error("CANCELLED"));
+          return;
+        }
+
+        if (Date.now() - startedAtMs >= delayMs) {
+          resolve();
+          return;
+        }
+
+        timerId = window.setTimeout(tick, 150);
+      };
+
+      tick();
+    });
+  };
+
+  const shouldRetryHighDemandError = (
+    error: unknown,
+    signal?: AbortSignal,
+  ): boolean => {
+    if (isRequestAborted(signal) || !isGeminiHighDemandError(error)) {
+      return false;
+    }
+
+    const pendingText = pendingAssistantTurnRef.current?.rawText.trim() ?? "";
+    return pendingText.length === 0;
+  };
+
+  const runWithHighDemandRetries = async <T,>(
+    run: () => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> => {
+    let retriesUsed = 0;
+
+    while (true) {
+      try {
+        return await run();
+      } catch (error: any) {
+        if (error?.message === "CANCELLED" || isRequestAborted(signal)) {
+          throw new Error("CANCELLED");
+        }
+
+        if (!shouldRetryHighDemandError(error, signal)) {
+          throw error;
+        }
+
+        if (retriesUsed >= HIGH_DEMAND_RETRY_ATTEMPTS) {
+          throw new Error(
+            getGeminiHighDemandExhaustedMessage(HIGH_DEMAND_RETRY_ATTEMPTS),
+          );
+        }
+
+        retriesUsed += 1;
+        showRetryLoopProgress(getHighDemandRetryStatusText(retriesUsed));
+        await waitForRetryDelay(
+          HIGH_DEMAND_RETRY_DELAYS_MS[retriesUsed - 1],
+          signal,
+        );
+      }
+    }
   };
 
   const markPendingTransportDone = (finalResponse: string) => {
@@ -382,7 +482,7 @@ export const useGeminiEngine = (config: {
             return;
           }
 
-          setPendingAssistantTurn((previous) => {
+          setPendingAssistantTurn((previous: PendingAssistantTurn | null) => {
             if (!previous || previous.id !== turn.id || previous.phase !== "primed") {
               return previous;
             }
@@ -681,6 +781,7 @@ export const useGeminiEngine = (config: {
     const requestStartedAtMs = Date.now();
     const responseId = Date.now().toString();
     beginPendingAssistantTurn(responseId, "initial", requestStartedAtMs);
+    let hasGeneratedTitleFromBrief = false;
 
     try {
       if (signal.aborted) {
@@ -694,29 +795,44 @@ export const useGeminiEngine = (config: {
         "[useGeminiEngine] Calling startNewThreadStream with model:",
         modelId,
       );
-      const responseText = await startNewThreadStream(
-        modelId,
-        imgData.path,
-        (token: string) => {
-          if (signal.aborted) return;
-          appendPendingRawText(token);
-        },
-        config.userName,
-        config.userEmail,
-        config.userInstruction,
-        (brief: string) => {
-          if (!isRetry && !imgData.fromHistory && config.generateTitle && config.onTitleGenerated) {
-            console.log("[useGeminiEngine] Triggering title generation using image brief");
-            config
-              .generateTitle(brief)
-              .then((title) => {
-                console.log("[useGeminiEngine] Title generated:", title);
-                if (!signal.aborted) config.onTitleGenerated?.(title);
-              })
-              .catch(console.error);
-          }
-        },
-        toolTracker.onEvent,
+      const responseText = await runWithHighDemandRetries(
+        () =>
+          startNewThreadStream(
+            modelId,
+            imgData.path,
+            (token: string) => {
+              if (signal.aborted) return;
+              appendPendingRawText(token);
+            },
+            config.userName,
+            config.userEmail,
+            config.userInstruction,
+            (brief: string) => {
+              if (
+                hasGeneratedTitleFromBrief ||
+                isRetry ||
+                imgData.fromHistory ||
+                !config.generateTitle ||
+                !config.onTitleGenerated
+              ) {
+                return;
+              }
+
+              hasGeneratedTitleFromBrief = true;
+              console.log(
+                "[useGeminiEngine] Triggering title generation using image brief",
+              );
+              config
+                .generateTitle(brief)
+                .then((title) => {
+                  console.log("[useGeminiEngine] Title generated:", title);
+                  if (!signal.aborted) config.onTitleGenerated?.(title);
+                })
+                .catch(console.error);
+            },
+            toolTracker.onEvent,
+          ),
+        signal,
       );
       console.log("[useGeminiEngine] startNewThreadStream finished!");
 
@@ -754,12 +870,7 @@ export const useGeminiEngine = (config: {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
-      let errorMsg = "An error occurred while connecting to Gemini.";
-      if (apiError.message?.includes("429"))
-        errorMsg = "Quota limit reached or server busy.";
-      else if (apiError.message?.includes("503"))
-        errorMsg = "Service temporarily unavailable.";
-      else if (apiError.message) errorMsg = apiError.message;
+      const errorMsg = getFriendlyGeminiErrorMessage(apiError);
 
       clearPendingAssistantTurn();
       appendErrorMessage(errorMsg, sessionChatIdRef.current || config.chatId);
@@ -797,19 +908,27 @@ export const useGeminiEngine = (config: {
     beginPendingAssistantTurn(responseId, "edit", requestStartedAtMs);
 
     try {
+      if (!config.startupImage) {
+        throw new Error("Cannot start session. Missing required data.");
+      }
+      const startupImage = config.startupImage;
+
       const toolTracker = createToolEventHandler(resetPendingRawText);
 
-      const responseText = await startNewThreadStream(
-        config.currentModel,
-        config.startupImage.path,
-        (token: string) => {
-          appendPendingRawText(token);
-        },
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        toolTracker.onEvent,
+      const responseText = await runWithHighDemandRetries(
+        () =>
+          startNewThreadStream(
+            config.currentModel,
+            startupImage.path,
+            (token: string) => {
+              appendPendingRawText(token);
+            },
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            toolTracker.onEvent,
+          ),
       );
 
       void toolTracker;
@@ -819,12 +938,7 @@ export const useGeminiEngine = (config: {
         return;
       }
       console.error(apiError);
-      let errorMsg = "An error occurred while connecting to Gemini.";
-      if (apiError.message?.includes("429"))
-        errorMsg = "Quota limit reached or server busy.";
-      else if (apiError.message?.includes("503"))
-        errorMsg = "Service temporarily unavailable.";
-      else if (apiError.message) errorMsg = apiError.message;
+      const errorMsg = getFriendlyGeminiErrorMessage(apiError);
 
       clearPendingAssistantTurn();
       appendErrorMessage(errorMsg, targetChatId);
@@ -845,14 +959,17 @@ export const useGeminiEngine = (config: {
 
     try {
       const toolTracker = createToolEventHandler(resetPendingRawText);
-      const responseText = await apiSendMessage(
-        lastSentMessage.text,
-        undefined,
-        (token: string) => {
-          appendPendingRawText(token);
-        },
-        config.chatId,
-        toolTracker.onEvent,
+      const responseText = await runWithHighDemandRetries(
+        () =>
+          apiSendMessage(
+            lastSentMessage.text,
+            undefined,
+            (token: string) => {
+              appendPendingRawText(token);
+            },
+            config.chatId,
+            toolTracker.onEvent,
+          ),
       );
 
       void toolTracker;
@@ -862,11 +979,7 @@ export const useGeminiEngine = (config: {
         return;
       }
       clearPendingAssistantTurn();
-      appendErrorMessage(
-        "An error occurred while sending the message. " +
-          (apiError.message || ""),
-        targetChatId,
-      );
+      appendErrorMessage(getFriendlyGeminiErrorMessage(apiError), targetChatId);
     }
   };
 
@@ -895,14 +1008,17 @@ export const useGeminiEngine = (config: {
 
     try {
       const toolTracker = createToolEventHandler(resetPendingRawText);
-      const responseText = await apiSendMessage(
-        userText,
-        modelId,
-        (token: string) => {
-          appendPendingRawText(token);
-        },
-        config.chatId,
-        toolTracker.onEvent,
+      const responseText = await runWithHighDemandRetries(
+        () =>
+          apiSendMessage(
+            userText,
+            modelId,
+            (token: string) => {
+              appendPendingRawText(token);
+            },
+            config.chatId,
+            toolTracker.onEvent,
+          ),
       );
 
       void toolTracker;
@@ -912,11 +1028,7 @@ export const useGeminiEngine = (config: {
         return;
       }
       clearPendingAssistantTurn();
-      appendErrorMessage(
-        "An error occurred while sending the message. " +
-          (apiError.message || ""),
-        targetChatId,
-      );
+      appendErrorMessage(getFriendlyGeminiErrorMessage(apiError), targetChatId);
     }
   };
 
@@ -956,16 +1068,19 @@ export const useGeminiEngine = (config: {
         msgIndex === 0 ? "initial" : "retry",
         requestStartedAtMs,
       );
-      const responseText = await apiRetryFromMessage(
-        msgIndex,
-        messages,
-        retryModelId,
-        (token: string) => {
-          appendPendingRawText(token);
-        },
-        fallbackImagePath,
-        undefined,
-        toolTracker.onEvent,
+      const responseText = await runWithHighDemandRetries(
+        () =>
+          apiRetryFromMessage(
+            msgIndex,
+            messages,
+            retryModelId,
+            (token: string) => {
+              appendPendingRawText(token);
+            },
+            fallbackImagePath,
+            undefined,
+            toolTracker.onEvent,
+          ),
       );
 
       if (
@@ -988,10 +1103,7 @@ export const useGeminiEngine = (config: {
         return;
       }
       console.error("Retry failed:", apiError);
-
-      const errorMsg =
-        "An error occurred while regenerating the response. " +
-        (apiError.message || "");
+      const errorMsg = getFriendlyGeminiErrorMessage(apiError);
       clearPendingAssistantTurn();
       setRetryingMessageId(null);
       appendErrorMessage(errorMsg, config.chatId);

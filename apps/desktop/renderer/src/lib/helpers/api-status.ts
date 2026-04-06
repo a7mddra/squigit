@@ -4,6 +4,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export interface AttachmentAnalysisCounts {
+  imageCount: number;
+  fileCount: number;
+}
+
+export const ATTACHMENT_ANALYSIS_STATUS_DELAY_MS = 1800;
+export const HIGH_DEMAND_RETRY_DELAYS_MS = [1500, 3000, 4500] as const;
+export const HIGH_DEMAND_RETRY_ATTEMPTS = HIGH_DEMAND_RETRY_DELAYS_MS.length;
+const ANALYZED_STATUS_PREFIX = "Analyzed ";
+
 export const API_STATUS_TEXT = {
   ANALYZING_IMAGE: "Analyzing your image",
   WRAPPING_UP: "Wrapping up with what I have so far",
@@ -15,8 +25,55 @@ export const API_STATUS_TEXT = {
     "Search is unavailable right now, continuing with available context",
   SEARCH_UNAVAILABLE_NOW: "Search is unavailable right now.",
   FETCHING_SOURCE_FAILED: "Couldn't open one source, trying another",
+  MODEL_BUSY_RETRYING:
+    "Things are a bit slow right now. Reconnecting",
   ANSWER_NOW_BUTTON: "Answer Now",
 } as const;
+
+export const getAttachmentAnalysisStatusText = (
+  counts: AttachmentAnalysisCounts | null | undefined,
+): string => {
+  if (!counts) {
+    return "";
+  }
+
+  const parts: string[] = [];
+
+  if (counts.imageCount > 0) {
+    parts.push(
+      `${counts.imageCount} image${counts.imageCount === 1 ? "" : "s"}`,
+    );
+  }
+
+  if (counts.fileCount > 0) {
+    parts.push(`${counts.fileCount} file${counts.fileCount === 1 ? "" : "s"}`);
+  }
+
+  return parts.length > 0
+    ? `${ANALYZED_STATUS_PREFIX}${parts.join(", ")}`
+    : "";
+};
+
+export const getHighDemandRetryStatusText = (
+  attempt: number,
+  total = HIGH_DEMAND_RETRY_ATTEMPTS,
+): string => {
+  return `${API_STATUS_TEXT.MODEL_BUSY_RETRYING} ${attempt}/${total}`;
+};
+
+export const isAnswerNowSuppressedProgressText = (
+  text: string | null | undefined,
+): boolean => {
+  const trimmed = text?.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  return (
+    trimmed.startsWith(ANALYZED_STATUS_PREFIX) ||
+    trimmed.startsWith(API_STATUS_TEXT.MODEL_BUSY_RETRYING)
+  );
+};
 
 type ToolStatusMapResult =
   | { type: "set"; text: string }
