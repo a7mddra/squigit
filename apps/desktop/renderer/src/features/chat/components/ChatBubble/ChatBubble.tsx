@@ -426,9 +426,9 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
             undefined,
             sourcePath,
           );
+          const fileName = sourcePath ? getBaseName(sourcePath) : attachment.name;
           const label =
-            getNodeText(children).trim() ||
-            (sourcePath ? getBaseName(sourcePath) : attachment.name);
+            getNodeText(children).trim() || fileName;
 
           return (
             <CitationChip
@@ -436,7 +436,7 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
               label={label}
               visual={{
                 kind: "file",
-                extension: attachment.extension,
+                fileName,
               }}
               onClick={(event) => {
                 event.preventDefault();

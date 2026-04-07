@@ -21,7 +21,7 @@ const IMAGE_EXTENSION_VALUES = [
   "webp",
   "bmp",
   "svg",
- ] as const;
+] as const;
 
 const ACCEPTED_EXTENSION_VALUES = [
   ...IMAGE_EXTENSION_VALUES,
@@ -32,12 +32,20 @@ const ACCEPTED_EXTENSION_VALUES = [
   "xml",
   "yaml",
   "yml",
+  "toml",
+  "ini",
+  "cfg",
+  "conf",
   "html",
   "css",
   "js",
   "ts",
   "jsx",
   "tsx",
+  "sh",
+  "bash",
+  "zsh",
+  "fish",
   "py",
   "rs",
   "go",
@@ -46,6 +54,8 @@ const ACCEPTED_EXTENSION_VALUES = [
   "cpp",
   "h",
   "hpp",
+  "sql",
+  "log",
   "pdf",
   "docx",
   "doc",

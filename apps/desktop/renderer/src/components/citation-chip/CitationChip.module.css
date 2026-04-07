@@ -57,32 +57,18 @@
 .fileIcon {
   width: 16px;
   height: 16px;
+  min-width: 16px;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.fileIcon svg {
   display: block;
-}
-
-.fileIconFrame {
-  fill: color-mix(in srgb, var(--chip-file-accent) 18%, white);
-  stroke: var(--chip-file-accent);
-  stroke-width: 1.1;
-}
-
-.fileIconFold {
-  fill: color-mix(in srgb, var(--chip-file-accent) 38%, white);
-}
-
-.fileIconText {
-  fill: var(--chip-file-accent);
-  font-size: 4.1px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  font-family:
-    "SF Mono",
-    "Consolas",
-    "Liberation Mono",
-    "Menlo",
-    monospace;
+  width: 16px;
+  height: 16px;
 }
 
 @keyframes citationChipReveal {

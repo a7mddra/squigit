@@ -5,28 +5,8 @@
  */
 
 import React, { forwardRef, useMemo, useState } from "react";
-import {
-  codeFaviconSvg,
-  excelFaviconSvg,
-  fileFaviconSvg,
-  imageFaviconSvg,
-  pdfFaviconSvg,
-  powerpointFaviconSvg,
-  textFaviconSvg,
-  wordFaviconSvg,
-} from "@/assets/favicons";
-import type { AcceptedExtension } from "@/lib";
+import { getIcon } from "material-file-icons";
 import styles from "./CitationChip.module.css";
-
-type FileIconAssetKey =
-  | "code"
-  | "excel"
-  | "file"
-  | "image"
-  | "pdf"
-  | "powerpoint"
-  | "text"
-  | "word";
 
 type CitationChipVisual =
   | {
@@ -36,7 +16,7 @@ type CitationChipVisual =
     }
   | {
       kind: "file";
-      extension: string;
+      fileName: string;
     };
 
 export interface CitationChipProps
@@ -47,66 +27,30 @@ export interface CitationChipProps
   animate?: boolean;
 }
 
-const FILE_ICON_ASSETS: Record<FileIconAssetKey, string> = {
-  code: codeFaviconSvg,
-  excel: excelFaviconSvg,
-  file: fileFaviconSvg,
-  image: imageFaviconSvg,
-  pdf: pdfFaviconSvg,
-  powerpoint: powerpointFaviconSvg,
-  text: textFaviconSvg,
-  word: wordFaviconSvg,
-};
+const DEFAULT_FILE_ICON_NAME = "file";
 
-const FILE_ICON_BY_EXTENSION: Record<AcceptedExtension, FileIconAssetKey> = {
-  png: "image",
-  jpg: "image",
-  jpeg: "image",
-  gif: "image",
-  webp: "image",
-  bmp: "image",
-  svg: "image",
-  txt: "text",
-  md: "code",
-  csv: "excel",
-  json: "code",
-  xml: "code",
-  yaml: "code",
-  yml: "code",
-  html: "code",
-  css: "code",
-  js: "code",
-  ts: "code",
-  jsx: "code",
-  tsx: "code",
-  py: "code",
-  rs: "code",
-  go: "code",
-  java: "code",
-  c: "code",
-  cpp: "code",
-  h: "code",
-  hpp: "code",
-  pdf: "pdf",
-  docx: "word",
-  doc: "word",
-  xlsx: "excel",
-  xls: "excel",
-  pptx: "powerpoint",
-  ppt: "powerpoint",
-  rtf: "word",
-};
-
-function getFileIconAsset(extension: string): string {
-  const normalized = extension.trim().toLowerCase() as AcceptedExtension;
-  const assetKey = FILE_ICON_BY_EXTENSION[normalized] || "file";
-  return FILE_ICON_ASSETS[assetKey];
+function resolveLocalFileIconMarkup(fileName: string): string {
+  const normalizedFileName = fileName.trim() || DEFAULT_FILE_ICON_NAME;
+  try {
+    return getIcon(normalizedFileName).svg;
+  } catch {
+    return getIcon(DEFAULT_FILE_ICON_NAME).svg;
+  }
 }
 
-const FileExtensionIcon: React.FC<{ extension: string }> = ({ extension }) => {
-  const iconSrc = useMemo(() => getFileIconAsset(extension), [extension]);
+const LocalFileIcon: React.FC<{ fileName: string }> = ({ fileName }) => {
+  const iconMarkup = useMemo(
+    () => resolveLocalFileIconMarkup(fileName),
+    [fileName],
+  );
 
-  return <img src={iconSrc} alt="" aria-hidden="true" className={styles.fileIcon} />;
+  return (
+    <span
+      aria-hidden="true"
+      className={styles.fileIcon}
+      dangerouslySetInnerHTML={{ __html: iconMarkup }}
+    />
+  );
 };
 
 export const CitationChip = forwardRef<HTMLAnchorElement, CitationChipProps>(
@@ -146,7 +90,7 @@ export const CitationChip = forwardRef<HTMLAnchorElement, CitationChipProps>(
             />
           )
         ) : (
-          <FileExtensionIcon extension={visual.extension} />
+          <LocalFileIcon fileName={visual.fileName} />
         )}
         <span className={styles.title}>{label}</span>
       </a>
