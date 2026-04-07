@@ -1,8 +1,8 @@
 {
-  "$schema": "renderer/node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Squigit",
   "version": "0.1.0",
-  "identifier": "squigit",
+  "identifier": "com.squigit.app",
+  "$schema": "renderer/node_modules/@tauri-apps/cli/config.schema.json",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

@@ -1,20 +1,20 @@
 {
   "name": "squigit",
   "version": "0.1.0",
-  "description": "AI and contextual analysis module for screenshot data.",
   "type": "module",
+  "$schema": "https://json.schemastore.org/package.json",
+  "homepage": "https://github.com/squigit-org/squigit#readme",
+  "description": "An open-source `Circle to search` that brings the power of Gemini directly into your screen.",
   "author": "a7mddra <a7mddra@gmail.com>",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/a7mddra/squigit",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "cd .. && tauri",
-    "test:googler": "tsc scripts/googler.test.ts --target ES2022 --module NodeNext --moduleResolution NodeNext --lib ES2022,DOM --outDir /tmp/squigit-googler-test --skipLibCheck --pretty false && node /tmp/squigit-googler-test/googler.test.js"
+    "tsc": "npx tsc --noEmit"
   },
   "dependencies": {
-    "@google/genai": "^1.29.1",
     "@primer/octicons-react": "^19.21.2",
     "@tauri-apps/api": "^2.9.1",
     "@tauri-apps/plugin-dialog": "^2.6.0",
@@ -24,6 +24,8 @@
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.3.3",
     "@tauri-apps/plugin-updater": "^2.9.0",
+    "@tiptap/core": "^3.22.2",
+    "@tiptap/react": "^3.22.2",
     "clsx": "^2.0.0",
     "katex": "^0.16.27",
     "lucide-react": "^0.553.0",
