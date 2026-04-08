@@ -219,7 +219,6 @@
 
 .thumbnailWrapper.thumbnailLoading {
   cursor: not-allowed;
-  opacity: 0.8;
 }
 
 .thumbnailWrapper.thumbnailLoading::after {
@@ -297,30 +296,6 @@
   overflow: hidden;
   background-color: color-mix(in srgb, var(--c-raw-012) 82%, var(--c-raw-010));
   pointer-events: none;
-}
-
-.miniThumbSkeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--c-raw-036) 24%, var(--c-raw-012)) 50%,
-    transparent 100%
-  );
-  transform: translateX(-120%);
-  animation: thumbSkeletonSweep 1.2s linear infinite;
-}
-
-@keyframes thumbSkeletonSweep {
-  from {
-    transform: translateX(-120%);
-  }
-
-  to {
-    transform: translateX(120%);
-  }
 }
 
 .inputContainer {

@@ -126,7 +126,10 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
   const [errorDialog, setErrorDialog] = useState<DialogContent | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [showScrollbar, setShowScrollbar] = useState(false);
-  const [loadedThumbPath, setLoadedThumbPath] = useState<string | null>(null);
+  const [displayedThumb, setDisplayedThumb] = useState<{
+    path: string;
+    src: string;
+  } | null>(null);
   const [imageToneMode, setImageToneMode] = useState<ImageToneMode>(
     (startupImage?.tone as ImageToneMode) || "dark",
   );
@@ -201,6 +204,43 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
   const OCRMenuRef = useRef<OCRMenuHandle>(null);
 
   const imageSrc = startupImage?.path ? convertFileSrc(startupImage.path) : "";
+  const displayedThumbPath = displayedThumb?.path ?? null;
+  const displayedThumbSrc = displayedThumb?.src ?? null;
+
+  useEffect(() => {
+    if (!startupImage?.path || !imageSrc) {
+      setDisplayedThumb(null);
+      return;
+    }
+
+    if (displayedThumbPath === startupImage.path) {
+      return;
+    }
+
+    let cancelled = false;
+    const preloadImage = new window.Image();
+
+    const commitThumb = () => {
+      if (cancelled) {
+        return;
+      }
+
+      setDisplayedThumb({
+        path: startupImage.path,
+        src: imageSrc,
+      });
+    };
+
+    preloadImage.onload = commitThumb;
+    preloadImage.onerror = commitThumb;
+    preloadImage.src = imageSrc;
+
+    return () => {
+      cancelled = true;
+      preloadImage.onload = null;
+      preloadImage.onerror = null;
+    };
+  }, [displayedThumbPath, imageSrc, startupImage?.path]);
 
   const { isLensLoading, triggerLens, showAuthDialog, setShowAuthDialog } =
     useGoogleLens(
@@ -520,10 +560,11 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
   };
 
   const isThumbLoaded =
-    !!startupImage?.path && loadedThumbPath === startupImage.path;
+    !!startupImage?.path && displayedThumbPath === startupImage.path;
   const isExpandLocked = isNavigating || loading || !isThumbLoaded;
   const isArtifactExpanded = isExpanded && !isExpandLocked;
-  const showThumbnailSkeleton = isExpandLocked;
+  const showThumbnailSkeleton = !displayedThumbSrc;
+  const showThumbnailLoadingState = showThumbnailSkeleton;
 
   const handleCopyImage = useCallback(async (): Promise<boolean> => {
     if (!startupImage?.path) return false;
@@ -654,15 +695,14 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
       >
         <div className={styles.barHeader}>
           <div
-            className={`${styles.thumbnailWrapper} ${isExpandLocked ? styles.thumbnailLoading : ""} ${isArtifactExpanded ? styles.thumbnailExpanded : ""}`}
+            className={`${styles.thumbnailWrapper} ${showThumbnailLoadingState ? styles.thumbnailLoading : ""} ${isArtifactExpanded ? styles.thumbnailExpanded : ""}`}
             onClick={isExpandLocked || isArtifactExpanded ? undefined : toggleExpand}
             title={isExpandLocked ? "Loading..." : undefined}
           >
             <img
-              src={imageSrc}
+              src={displayedThumbSrc ?? undefined}
               alt="Thumbnail"
               className={`${styles.miniThumb} ${showThumbnailSkeleton ? styles.miniThumbHidden : ""}`}
-              onLoad={() => setLoadedThumbPath(startupImage.path)}
             />
             {showThumbnailSkeleton && (
               <div className={styles.miniThumbSkeleton} aria-hidden="true" />

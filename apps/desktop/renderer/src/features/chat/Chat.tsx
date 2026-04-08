@@ -60,6 +60,10 @@ function dedupeAttachmentsByPath(items: Attachment[]): Attachment[] {
   return Array.from(byPath.values());
 }
 
+const BOTTOM_SYNC_EPSILON_PX = 2;
+const BOTTOM_STABLE_MS = 260;
+const BOTTOM_SETTLE_POLL_MS = 100;
+
 export const Chat: React.FC = () => {
   const app = useAppContext();
   const [inputValue, setInputValue] = useState("");
@@ -80,6 +84,9 @@ export const Chat: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomAnchorRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(false);
+  const pendingReloadBottomSyncRef = useRef(true);
+  const bottomStableSinceRef = useRef<number | null>(null);
+  const lastObservedScrollYRef = useRef<number | null>(null);
   const imageProgressTurnIdRef = useRef<string | null>(null);
 
   // Hooks
@@ -108,8 +115,8 @@ export const Chat: React.FC = () => {
 
   const visibleStartupImage =
     app.system.startupImage ?? (app.isNavigating ? retainedStartupImage : null);
-  const showArtifactPlaceholder =
-    (app.isNavigating || !app.isChatContentReady) && !visibleStartupImage;
+  const isNavigationLoading = app.isNavigating || !app.isChatContentReady;
+  const showArtifactPlaceholder = isNavigationLoading && !visibleStartupImage;
 
   const revealTarget = app.searchOverlay.pendingReveal;
   const isRevealPendingForActiveChat =
@@ -121,11 +128,8 @@ export const Chat: React.FC = () => {
     bottomAnchorRef,
     wasAtBottomRef,
   });
-  const showLoadingState = app.isNavigating || !app.isChatContentReady;
-  const [showLoadingOverlay, setShowLoadingOverlay] = useState(showLoadingState);
-  const [isContentMounted, setIsContentMounted] = useState(
-    () => !showLoadingState,
-  );
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
+  const [isContentMounted, setIsContentMounted] = useState(false);
   const deferredMessages = useDeferredValue(app.chat.messages);
   const showScrollToBottomButton =
     !isSpinnerVisible &&
@@ -133,22 +137,29 @@ export const Chat: React.FC = () => {
     !isRevealPendingForActiveChat &&
     !isAtBottom;
 
-  const handleScrollToBottom = useCallback(() => {
-    const bottomAnchor = bottomAnchorRef.current;
-    if (!bottomAnchor) return;
+  const scrollBottomIntoView = useCallback(
+    (behavior: ScrollBehavior = "auto") => {
+      const bottomAnchor = bottomAnchorRef.current;
+      if (!bottomAnchor) return;
 
+      bottomAnchor.scrollIntoView({
+        behavior,
+        block: "end",
+        inline: "nearest",
+      });
+    },
+    [],
+  );
+
+  const handleScrollToBottom = useCallback(() => {
     wasAtBottomRef.current = true;
-    bottomAnchor.scrollIntoView({
-      behavior: "smooth",
-      block: "end",
-      inline: "nearest",
-    });
-  }, []);
+    scrollBottomIntoView("smooth");
+  }, [scrollBottomIntoView]);
 
   useLayoutEffect(() => {
-    if (showLoadingState || isRevealPendingForActiveChat) {
-      setShowLoadingOverlay(showLoadingState);
-      setIsContentMounted(!showLoadingState);
+    if (isNavigationLoading) {
+      setShowLoadingOverlay(true);
+      setIsContentMounted(false);
       return;
     }
 
@@ -158,20 +169,17 @@ export const Chat: React.FC = () => {
       return;
     }
 
+    if (isRevealPendingForActiveChat) {
+      pendingReloadBottomSyncRef.current = false;
+      setShowLoadingOverlay(false);
+      return;
+    }
+
     setShowLoadingOverlay(true);
 
     let revealFrameId: number | null = null;
-    const container = scrollContainerRef.current;
-    if (container) {
-      // Force scrollbar thumb to sync with reversed-flow layout on initial paint.
-      void container.offsetHeight;
-      container.scrollTop = -1;
-      container.scrollTop = 0;
-    }
-    wasAtBottomRef.current = true;
-
     revealFrameId = window.requestAnimationFrame(() => {
-      setShowLoadingOverlay(false);
+      scrollBottomIntoView("auto");
     });
 
     return () => {
@@ -182,8 +190,99 @@ export const Chat: React.FC = () => {
   }, [
     app.chatHistory.activeSessionId,
     isContentMounted,
+    isNavigationLoading,
     isRevealPendingForActiveChat,
-    showLoadingState,
+    scrollBottomIntoView,
+  ]);
+
+  useLayoutEffect(() => {
+    if (
+      isNavigationLoading ||
+      showLoadingOverlay ||
+      isRevealPendingForActiveChat ||
+      !wasAtBottomRef.current
+    ) {
+      return;
+    }
+
+    scrollBottomIntoView("auto");
+  }, [
+    app.chat.pendingAssistantTurn,
+    deferredMessages,
+    isNavigationLoading,
+    isRevealPendingForActiveChat,
+    scrollBottomIntoView,
+    showLoadingOverlay,
+  ]);
+
+  useEffect(() => {
+    pendingReloadBottomSyncRef.current = true;
+    bottomStableSinceRef.current = null;
+    lastObservedScrollYRef.current = null;
+    wasAtBottomRef.current = false;
+    setShowLoadingOverlay(true);
+    setIsContentMounted(false);
+  }, [app.chatHistory.activeSessionId]);
+
+  useEffect(() => {
+    if (
+      !pendingReloadBottomSyncRef.current ||
+      isNavigationLoading ||
+      !isContentMounted ||
+      isRevealPendingForActiveChat ||
+      !showLoadingOverlay
+    ) {
+      return;
+    }
+
+    const settleIntervalId = window.setInterval(() => {
+      if (!pendingReloadBottomSyncRef.current) {
+        return;
+      }
+
+      const container = scrollContainerRef.current;
+      if (!container) {
+        return;
+      }
+
+      const maxY = Math.max(0, container.scrollHeight - container.clientHeight);
+      const y = Math.max(0, container.scrollTop);
+      const isAtBottom = Math.abs(maxY - y) <= BOTTOM_SYNC_EPSILON_PX;
+
+      if (!isAtBottom) {
+        bottomStableSinceRef.current = null;
+        lastObservedScrollYRef.current = y;
+        container.scrollTop = maxY;
+        scrollBottomIntoView("auto");
+        return;
+      }
+
+      const previousY = lastObservedScrollYRef.current;
+      lastObservedScrollYRef.current = y;
+      const yChanged =
+        previousY === null || Math.abs(previousY - y) > BOTTOM_SYNC_EPSILON_PX;
+
+      if (yChanged || bottomStableSinceRef.current === null) {
+        bottomStableSinceRef.current = Date.now();
+        return;
+      }
+
+      if (Date.now() - bottomStableSinceRef.current >= BOTTOM_STABLE_MS) {
+        pendingReloadBottomSyncRef.current = false;
+        wasAtBottomRef.current = true;
+        setShowLoadingOverlay(false);
+      }
+    }, BOTTOM_SETTLE_POLL_MS);
+
+    return () => {
+      window.clearInterval(settleIntervalId);
+    };
+  }, [
+    isContentMounted,
+    isNavigationLoading,
+    isRevealPendingForActiveChat,
+    scrollBottomIntoView,
+    showLoadingOverlay,
   ]);
 
   // Capture listen
@@ -393,6 +492,8 @@ export const Chat: React.FC = () => {
     const target = revealTarget;
     if (!target) return;
     if (app.chatHistory.activeSessionId !== target.chatId) return;
+
+    wasAtBottomRef.current = false;
 
     let hideHighlightTimer: number | null = null;
 

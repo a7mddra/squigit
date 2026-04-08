@@ -211,16 +211,6 @@ const ChatLayoutComponent: React.FC<ChatLayoutProps> = ({
             { "--input-height": `${inputHeight}px` } as React.CSSProperties
           }
         >
-          <div
-            ref={bottomAnchorRef}
-            className={styles.scrollBottomAnchor}
-            aria-hidden="true"
-          />
-          <div
-            className={styles.scrollBottomSpacer}
-            style={{ height: inputHeight + 10 }}
-            aria-hidden="true"
-          />
           <main className={styles.scrollContent}>
             <div className={styles.contentViewport}>
               <div className={styles.contentStage}>
@@ -241,12 +231,20 @@ const ChatLayoutComponent: React.FC<ChatLayoutProps> = ({
               </div>
             </div>
           </main>
+          <div
+            className={styles.scrollBottomSpacer}
+            style={{ height: inputHeight + 10 }}
+            aria-hidden="true"
+          />
+          <div
+            ref={bottomAnchorRef}
+            className={styles.scrollBottomAnchor}
+            aria-hidden="true"
+          />
         </div>
 
         <div
           className={`${styles.loadingOverlay} ${
-            !hasArtifactShell ? styles.loadingOverlayNoImage : ""
-          } ${
             showLoadingState ? styles.loadingVisible : styles.loadingHidden
           }`}
           role={showLoadingState ? "status" : undefined}
@@ -254,10 +252,8 @@ const ChatLayoutComponent: React.FC<ChatLayoutProps> = ({
           aria-label={showLoadingState ? "Loading chat" : undefined}
           aria-hidden={!showLoadingState}
         >
-          <div className={styles.loadingState}>
-            <div className={styles.spinnerContainer}>
-              <LoadingSpinner />
-            </div>
+          <div className={styles.loadingOverlaySpinner} aria-hidden="true">
+            <LoadingSpinner />
           </div>
         </div>
 

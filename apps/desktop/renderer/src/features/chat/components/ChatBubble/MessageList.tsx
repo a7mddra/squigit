@@ -170,6 +170,25 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
   return (
     <div className={styles.container}>
+      {messages.map((msg) => (
+        <div key={msg.id} className={styles.item}>
+          <ChatBubble
+            message={msg}
+            onRetry={
+              msg.role !== "user" && onRetryMessage
+                ? () => onRetryMessage(msg.id, selectedModel)
+                : undefined
+            }
+            onUndo={
+              msg.role === "user" && onUndoMessage
+                ? () => onUndoMessage(msg.id)
+                : undefined
+            }
+            onAction={msg.role === "system" ? onSystemAction : undefined}
+          />
+        </div>
+      ))}
+
       {pendingAssistantTurn && (
         <div className={styles.item}>
           <div className={styles.pendingTurn}>
@@ -221,28 +240,6 @@ const MessageListComponent: React.FC<MessageListProps> = ({
           </div>
         </div>
       )}
-
-      {messages
-        .slice()
-        .reverse()
-        .map((msg) => (
-          <div key={msg.id} className={styles.item}>
-            <ChatBubble
-              message={msg}
-              onRetry={
-                msg.role !== "user" && onRetryMessage
-                  ? () => onRetryMessage(msg.id, selectedModel)
-                  : undefined
-              }
-              onUndo={
-                msg.role === "user" && onUndoMessage
-                  ? () => onUndoMessage(msg.id)
-                  : undefined
-              }
-              onAction={msg.role === "system" ? onSystemAction : undefined}
-            />
-          </div>
-        ))}
     </div>
   );
 };

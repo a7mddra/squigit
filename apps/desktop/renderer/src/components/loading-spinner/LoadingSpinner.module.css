@@ -9,10 +9,13 @@
   width: 18px;
   height: 18px;
   display: inline-block;
-  animation: "rotate" 0.9s linear infinite;
-  contain: layout paint style;
-  transform: translateZ(0);
-  will-change: transform;
+  animation: "rotate" 0.9s infinite;
+  animation-timing-function: linear;
+  contain: strict;
+  isolation: isolate;
+  transform-origin: center;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
 }
 
 .arm {
@@ -20,6 +23,8 @@
   inset: 0;
   display: flex;
   justify-content: center;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
 }
 
 .blade {
@@ -28,4 +33,7 @@
   margin-top: 5.5555551%;
   background: var(--c-raw-124);
   border-radius: 999px;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  will-change: transform, opacity;
 }

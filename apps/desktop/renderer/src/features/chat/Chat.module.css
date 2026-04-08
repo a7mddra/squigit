@@ -9,7 +9,7 @@
     var(--image-artifact-top-gap) + var(--image-artifact-height)
   );
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   overflow-y: scroll;
@@ -79,9 +79,6 @@
   display: flex;
   justify-content: center;
   pointer-events: none;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  will-change: transform;
 }
 
 .headerContainer {
@@ -130,23 +127,6 @@
   box-shadow: 0 3px 12px #0000001a;
   overflow: hidden;
   isolation: isolate;
-}
-
-.artifactPlaceholder::after {
-  content: "";
-  position: absolute;
-  inset: -140%;
-  background: linear-gradient(
-    45deg,
-    transparent 43%,
-    color-mix(in srgb, var(--c-raw-036) 9%, var(--c-raw-012)) 50%,
-    transparent 57%
-  );
-  transform: translate3d(-35%, -35%, 0);
-  opacity: 0;
-  animation: artifactQuietShimmer 2.8s cubic-bezier(0.2, 0.55, 0.3, 1) infinite;
-  will-change: transform, opacity;
-  pointer-events: none;
 }
 
 .chatContainer {
@@ -214,16 +194,38 @@
   inset: 0;
   z-index: 2;
   display: flex;
+  align-items: flex-start;
   justify-content: center;
-  padding-top: var(--chat-image-offset);
   pointer-events: none;
+  padding-top: calc(
+    var(--image-artifact-top-gap) + var(--image-artifact-height) + 1.75rem
+  );
+  background: var(--c-raw-013);
+  isolation: isolate;
+  contain: strict;
+  transform: translateZ(0);
+  will-change: opacity;
   transition:
     opacity 0.14s ease,
     visibility 0s linear 0.14s;
 }
 
-.loadingOverlayNoImage {
-  padding-top: 0;
+.loadingOverlay::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  background: var(--c-raw-013);
+  pointer-events: none;
+}
+
+.loadingOverlaySpinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--c-raw-000);
 }
 
 @media (min-width: 768px) {
@@ -254,27 +256,6 @@
   padding-top: 0.75rem;
 }
 
-.spinnerContainer {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 3rem;
-  height: 3rem;
-  contain: layout paint style;
-  isolation: isolate;
-  transform: translateZ(0);
-  will-change: transform;
-}
-
-.loadingState {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  min-height: clamp(8rem, 28vh, 14rem);
-  padding-top: 0.5rem;
-  contain: layout paint style;
-}
-
 .loadingVisible {
   opacity: 1;
   visibility: visible;
@@ -286,27 +267,6 @@
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-}
-
-@keyframes artifactQuietShimmer {
-  0% {
-    transform: translate3d(-38%, -38%, 0);
-    opacity: 0;
-  }
-
-  20% {
-    opacity: 0.22;
-  }
-
-  55% {
-    transform: translate3d(38%, 38%, 0);
-    opacity: 0.18;
-  }
-
-  100% {
-    transform: translate3d(76%, 76%, 0);
-    opacity: 0;
-  }
 }
 
 .imagePendingProgress {
@@ -371,11 +331,6 @@
     animation: none;
     opacity: 1;
     transform: none;
-  }
-
-  .artifactPlaceholder::after {
-    animation: none;
-    opacity: 0;
   }
 }
 
