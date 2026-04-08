@@ -161,11 +161,13 @@ export const Chat: React.FC = () => {
     setShowLoadingOverlay(true);
 
     let revealFrameId: number | null = null;
-
-    bottomAnchorRef.current?.scrollIntoView({
-      block: "end",
-      inline: "nearest",
-    });
+    const container = scrollContainerRef.current;
+    if (container) {
+      // Force scrollbar thumb to sync with reversed-flow layout on initial paint.
+      void container.offsetHeight;
+      container.scrollTop = -1;
+      container.scrollTop = 0;
+    }
     wasAtBottomRef.current = true;
 
     revealFrameId = window.requestAnimationFrame(() => {

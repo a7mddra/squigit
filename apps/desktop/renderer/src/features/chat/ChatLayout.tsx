@@ -211,6 +211,16 @@ const ChatLayoutComponent: React.FC<ChatLayoutProps> = ({
             { "--input-height": `${inputHeight}px` } as React.CSSProperties
           }
         >
+          <div
+            ref={bottomAnchorRef}
+            className={styles.scrollBottomAnchor}
+            aria-hidden="true"
+          />
+          <div
+            className={styles.scrollBottomSpacer}
+            style={{ height: inputHeight + 10 }}
+            aria-hidden="true"
+          />
           <main className={styles.scrollContent}>
             <div className={styles.contentViewport}>
               <div className={styles.contentStage}>
@@ -231,16 +241,6 @@ const ChatLayoutComponent: React.FC<ChatLayoutProps> = ({
               </div>
             </div>
           </main>
-          <div
-            className={styles.scrollBottomSpacer}
-            style={{ height: inputHeight + 10 }}
-            aria-hidden="true"
-          />
-          <div
-            ref={bottomAnchorRef}
-            className={styles.scrollBottomAnchor}
-            aria-hidden="true"
-          />
         </div>
 
         <div
