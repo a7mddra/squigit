@@ -65,12 +65,12 @@ const AppRouterContent: React.FC = () => {
       disabled: action.actionKey === "confirm" ? !isAgreed : action.disabled,
     })),
   };
+  const activeId = app.chatHistory.activeSessionId;
+  const hasActiveChatSession = !!activeId && !isOnboardingId(activeId);
   const shouldRenderChatShell =
-    app.showChatShellDuringNavigation || !app.isImageMissing;
+    app.showChatShellDuringNavigation || hasActiveChatSession || !app.isImageMissing;
 
   const renderMainContent = () => {
-    const activeId = app.chatHistory.activeSessionId;
-
     if (activeId && isOnboardingId(activeId)) {
       if (activeId === "__system_welcome") {
         return <Agreement />;

@@ -87,6 +87,7 @@ export interface ImageArtifactProps {
 
 const globalScanLock = new Set<string>();
 type ImageToneMode = "dark" | "light";
+const TONE_DETECTION_RUN_COUNT = 1;
 
 const normalizeToneResult = (value: string): ImageToneMode => {
   const normalized = value.trim().toLowerCase();
@@ -125,6 +126,7 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
   const [errorDialog, setErrorDialog] = useState<DialogContent | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [showScrollbar, setShowScrollbar] = useState(false);
+  const [loadedThumbPath, setLoadedThumbPath] = useState<string | null>(null);
   const [imageToneMode, setImageToneMode] = useState<ImageToneMode>(
     (startupImage?.tone as ImageToneMode) || "dark",
   );
@@ -139,13 +141,13 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
     let cancelled = false;
 
     const runToneDetection = async () => {
-      if (!startupImage?.path) {
+      if (!startupImage?.path || startupImage?.tone || isNavigating) {
         return;
       }
 
       const runs: ImageToneMode[] = [];
 
-      for (let i = 1; i <= 5; i += 1) {
+      for (let i = 1; i <= TONE_DETECTION_RUN_COUNT; i += 1) {
         try {
           const raw = await invoke<string>("detect_image_tone", {
             path: startupImage.path,
@@ -153,11 +155,11 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
           const tone = normalizeToneResult(raw);
           runs.push(tone);
           console.log(
-            `[ToneDetector] run ${i}/5 image=${startupImage.imageId} tone=${tone}`,
+            `[ToneDetector] run ${i}/${TONE_DETECTION_RUN_COUNT} image=${startupImage.imageId} tone=${tone}`,
           );
         } catch (err) {
           console.error(
-            `[ToneDetector] run ${i}/5 image=${startupImage.imageId} failed`,
+            `[ToneDetector] run ${i}/${TONE_DETECTION_RUN_COUNT} image=${startupImage.imageId} failed`,
             err,
           );
         }
@@ -184,7 +186,7 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [startupImage?.imageId, startupImage?.path]);
+  }, [isNavigating, startupImage?.imageId, startupImage?.path, startupImage?.tone]);
 
   const scanRequestRef = useRef(0);
 
@@ -364,7 +366,9 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
           autoExpandOCR &&
           onToggleExpand &&
           !hasScannedRef.current &&
-          !isExpanded
+          !isExpanded &&
+          !isNavigating &&
+          !loading
         ) {
           onToggleExpand();
         }
@@ -408,6 +412,8 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
       autoExpandOCR,
       onToggleExpand,
       isExpanded,
+      isNavigating,
+      loading,
       onUpdateOCRData,
       currentOcrModel,
       onOcrModelChange,
@@ -513,6 +519,12 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
     }
   };
 
+  const isThumbLoaded =
+    !!startupImage?.path && loadedThumbPath === startupImage.path;
+  const isExpandLocked = isNavigating || loading || !isThumbLoaded;
+  const isArtifactExpanded = isExpanded && !isExpandLocked;
+  const showThumbnailSkeleton = isExpandLocked;
+
   const handleCopyImage = useCallback(async (): Promise<boolean> => {
     if (!startupImage?.path) return false;
 
@@ -558,6 +570,9 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
   }, [startupImage]);
 
   const toggleExpand = () => {
+    if (isExpandLocked) {
+      return;
+    }
     if (onToggleExpand) {
       onToggleExpand();
     }
@@ -578,11 +593,11 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
       const el = scrollWrapperRef.current;
       if (el) {
         const hasOverflow = el.scrollHeight > el.clientHeight;
-        setShowScrollbar(isExpanded && hasOverflow);
+        setShowScrollbar(isArtifactExpanded && hasOverflow);
       }
     };
 
-    if (isExpanded) {
+    if (isArtifactExpanded) {
       timeoutId = setTimeout(checkOverflow, 260);
       window.addEventListener("resize", checkOverflow);
     } else {
@@ -595,10 +610,16 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
       }
       window.removeEventListener("resize", checkOverflow);
     };
-  }, [isExpanded, size]);
+  }, [isArtifactExpanded, size]);
 
   const isExpandedRef = useRef(isExpanded);
-  isExpandedRef.current = isExpanded;
+  isExpandedRef.current = isArtifactExpanded;
+
+  useEffect(() => {
+    if (isExpandLocked && isExpanded && onToggleExpand) {
+      onToggleExpand();
+    }
+  }, [isExpandLocked, isExpanded, onToggleExpand]);
 
   useEffect(() => {
     const imageBox = scrollWrapperRef.current;
@@ -629,15 +650,23 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
     <>
       <div
         ref={containerRef}
-        className={`${styles.floatingContainer} ${isExpanded ? styles.expanded : ""}`}
+        className={`${styles.floatingContainer} ${isArtifactExpanded ? styles.expanded : ""}`}
       >
         <div className={styles.barHeader}>
           <div
-            className={`${styles.thumbnailWrapper} ${loading ? styles.thumbnailLoading : ""} ${isExpanded ? styles.thumbnailExpanded : ""}`}
-            onClick={loading || isExpanded ? undefined : toggleExpand}
-            title={loading ? "Processing..." : undefined}
+            className={`${styles.thumbnailWrapper} ${isExpandLocked ? styles.thumbnailLoading : ""} ${isArtifactExpanded ? styles.thumbnailExpanded : ""}`}
+            onClick={isExpandLocked || isArtifactExpanded ? undefined : toggleExpand}
+            title={isExpandLocked ? "Loading..." : undefined}
           >
-            <img src={imageSrc} alt="Thumbnail" className={styles.miniThumb} />
+            <img
+              src={imageSrc}
+              alt="Thumbnail"
+              className={`${styles.miniThumb} ${showThumbnailSkeleton ? styles.miniThumbHidden : ""}`}
+              onLoad={() => setLoadedThumbPath(startupImage.path)}
+            />
+            {showThumbnailSkeleton && (
+              <div className={styles.miniThumbSkeleton} aria-hidden="true" />
+            )}
             {loading && (
               <div
                 className={styles.cancelButton}
@@ -663,7 +692,7 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
               isLensLoading={isLensLoading}
               isTranslateDisabled={isTranslateDisabled}
               isOCRLoading={loading}
-              isExpanded={isExpanded}
+              isExpanded={isArtifactExpanded}
               placeholder="Add to your search"
               currentOcrModel={currentOcrModel}
               onOcrModelChange={handleUserOcrModelChange}
@@ -713,7 +742,7 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
             onCopyImage={handleCopyImage}
             onSaveClick={handleExpandSave}
             constraintRef={scrollWrapperRef}
-            isExpanded={isExpanded}
+            isExpanded={isArtifactExpanded}
           />
         </div>
       </div>

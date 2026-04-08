@@ -27,6 +27,7 @@ import styles from "./ChatInput.module.css";
 export const ChatInput: React.FC<ChatInputProps> = React.memo(({
   startupImage,
   forceVisible = false,
+  isNavigating = false,
   input: value,
   onInputChange: onChange,
   onSend,
@@ -46,7 +47,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({
   showScrollToBottomButton = false,
   onScrollToBottom,
 }) => {
-  if (!startupImage && !forceVisible) return null;
+  if (!startupImage && !forceVisible && !isNavigating) return null;
 
   const placeholder = customPlaceholder || "Ask anything";
   const disabled = isLoading && !isAiTyping;

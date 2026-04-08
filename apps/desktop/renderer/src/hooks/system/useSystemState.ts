@@ -14,6 +14,7 @@ export const useSystemState = () => {
     mimeType: string;
     imageId: string;
     fromHistory?: boolean;
+    tone?: string;
   } | null>(null);
 
   const [sessionChatTitle, setSessionChatTitle] = useState<string | null>(null);

@@ -147,7 +147,10 @@
   width: var(--image-artifact-width, 95%);
   max-width: var(--image-artifact-max-width, 41.5rem);
   height: var(--image-artifact-height, 57px);
-  margin: var(--image-artifact-top-gap, 10px) auto 1rem auto;
+  margin: var(
+    --image-artifact-shell-margin,
+    var(--image-artifact-top-gap, 10px) auto 1rem auto
+  );
   border-radius: 12px;
   overflow: hidden;
   z-index: 10;
@@ -278,6 +281,46 @@
   transition:
     filter 0.2s ease,
     opacity 0.3s ease;
+}
+
+.miniThumbHidden {
+  opacity: 0;
+}
+
+.miniThumbSkeleton {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: color-mix(in srgb, var(--c-raw-012) 82%, var(--c-raw-010));
+  pointer-events: none;
+}
+
+.miniThumbSkeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--c-raw-036) 24%, var(--c-raw-012)) 50%,
+    transparent 100%
+  );
+  transform: translateX(-120%);
+  animation: thumbSkeletonSweep 1.2s linear infinite;
+}
+
+@keyframes thumbSkeletonSweep {
+  from {
+    transform: translateX(-120%);
+  }
+
+  to {
+    transform: translateX(120%);
+  }
 }
 
 .inputContainer {

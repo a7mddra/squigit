@@ -4,12 +4,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import React, {
+  useRef,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useDeferredValue,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useAppContext } from "@/providers/AppProvider";
 import { useInlineMenu } from "@/hooks";
-import { InlineMenu, LoadingSpinner, Dialog, TextShimmer } from "@/components";
 import {
   API_STATUS_TEXT,
   ATTACHMENT_ANALYSIS_STATUS_DELAY_MS,
@@ -22,14 +28,13 @@ import {
   type Attachment,
 } from "@/lib";
 import {
-  ChatInput,
-  ImageArtifact,
   useChatScroll,
   useInputHeight,
   useChatWheel,
   useChatError,
-  MessageList,
 } from "@/features";
+import { ChatLayout } from "./ChatLayout";
+import { ChatContent } from "./ChatContent";
 import styles from "./Chat.module.css";
 
 function getBaseName(path: string): string {
@@ -56,6 +61,7 @@ function dedupeAttachmentsByPath(items: Attachment[]): Attachment[] {
 }
 
 const SCROLL_TO_BOTTOM_THRESHOLD_PX = 48;
+const CONTENT_REVEAL_SETTLE_DELAYS_MS = [0, 32, 96, 180] as const;
 
 export const Chat: React.FC = () => {
   const app = useAppContext();
@@ -109,7 +115,8 @@ export const Chat: React.FC = () => {
 
   const visibleStartupImage =
     app.system.startupImage ?? (app.isNavigating ? retainedStartupImage : null);
-  const showArtifactPlaceholder = app.isNavigating && !visibleStartupImage;
+  const showArtifactPlaceholder =
+    (app.isNavigating || !app.isChatContentReady) && !visibleStartupImage;
 
   const revealTarget = app.searchOverlay.pendingReveal;
   const isRevealPendingForActiveChat =
@@ -124,7 +131,12 @@ export const Chat: React.FC = () => {
     wasAtBottomRef,
     suspendAutoScroll: isRevealPendingForActiveChat,
   });
-  const showLoadingState = app.isNavigating || isSpinnerVisible;
+  const showLoadingState = app.isNavigating || !app.isChatContentReady;
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(showLoadingState);
+  const [isContentMounted, setIsContentMounted] = useState(
+    () => !showLoadingState,
+  );
+  const deferredMessages = useDeferredValue(app.chat.messages);
 
   const updateScrollToBottomButtonVisibility = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -138,9 +150,10 @@ export const Chat: React.FC = () => {
 
     setShowScrollToBottomButton(
       !isSpinnerVisible &&
+        !showLoadingOverlay &&
         distanceFromBottom > SCROLL_TO_BOTTOM_THRESHOLD_PX,
     );
-  }, [isSpinnerVisible]);
+  }, [isSpinnerVisible, showLoadingOverlay]);
 
   const handleScrollToBottom = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -181,6 +194,67 @@ export const Chat: React.FC = () => {
   }, [
     app.chatHistory.activeSessionId,
     updateScrollToBottomButtonVisibility,
+  ]);
+
+  useLayoutEffect(() => {
+    if (showLoadingState || isRevealPendingForActiveChat) {
+      setShowLoadingOverlay(showLoadingState);
+      setIsContentMounted(!showLoadingState);
+      return;
+    }
+
+    const container = scrollContainerRef.current;
+    setIsContentMounted(true);
+    setShowLoadingOverlay(true);
+
+    if (!container) {
+      const revealFrameId = window.requestAnimationFrame(() => {
+        setShowLoadingOverlay(false);
+      });
+
+      return () => {
+        window.cancelAnimationFrame(revealFrameId);
+      };
+    }
+
+    const syncToBottom = () => {
+      const maxScrollTop = Math.max(
+        0,
+        container.scrollHeight - container.clientHeight,
+      );
+      wasAtBottomRef.current = true;
+      if (Math.abs(container.scrollTop - maxScrollTop) > 1) {
+        container.scrollTop = maxScrollTop;
+      }
+    };
+
+    let revealFrameId: number | null = null;
+    const timeoutIds = CONTENT_REVEAL_SETTLE_DELAYS_MS.map(
+      (delayMs, index) =>
+        window.setTimeout(() => {
+          syncToBottom();
+
+          if (index !== CONTENT_REVEAL_SETTLE_DELAYS_MS.length - 1) {
+            return;
+          }
+
+          revealFrameId = window.requestAnimationFrame(() => {
+            syncToBottom();
+            setShowLoadingOverlay(false);
+          });
+        }, delayMs),
+    );
+
+    return () => {
+      timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      if (revealFrameId !== null) {
+        window.cancelAnimationFrame(revealFrameId);
+      }
+    };
+  }, [
+    app.chatHistory.activeSessionId,
+    isRevealPendingForActiveChat,
+    showLoadingState,
   ]);
 
   // Capture listen
@@ -544,184 +618,78 @@ export const Chat: React.FC = () => {
     (hasRunningToolStep || hasPreStepSearchStatus);
 
   return (
-    <div className={styles.chatContainer}>
-      <div ref={headerRef} className={styles.headerContainer}>
-        {visibleStartupImage ? (
-          <ImageArtifact
-            startupImage={visibleStartupImage}
-            sessionLensUrl={app.sessionLensUrl}
-            setSessionLensUrl={app.handleUpdateLensUrl}
-            chatTitle={app.chatTitle}
-            onDescribeEdits={async (desc) => app.chat.handleDescribeEdits(desc)}
-            ocrData={app.ocrData}
-            onUpdateOCRData={app.handleUpdateOCRData}
-            onOpenSettings={app.system.openSettings}
-            isVisible={true}
-            scrollContainerRef={scrollContainerRef}
-            chatId={app.chatHistory.activeSessionId}
-            inputValue={app.imageInput}
-            onInputChange={app.setImageInput}
-            onToggleExpand={() => setIsImageExpanded(!isImageExpanded)}
-            ocrEnabled={app.system.ocrEnabled}
-            autoExpandOCR={app.system.autoExpandOCR}
-            activeProfileId={app.system.activeProfile?.id || null}
-            currentOcrModel={app.system.sessionOcrLanguage}
-            onOcrModelChange={app.system.setSessionOcrLanguage}
-            isOcrScanning={app.isOcrScanning}
-            onOcrScanningChange={app.setIsOcrScanning}
-            isExpanded={isImageExpanded}
-            isNavigating={app.isNavigating}
-          />
-        ) : showArtifactPlaceholder ? (
-          <div
-            className={styles.artifactPlaceholder}
-            aria-hidden="true"
-          />
-        ) : null}
-      </div>
-      <div className={styles.contentColumn}>
-        <div
-          className={`${styles.container} ${!visibleStartupImage ? styles.noImage : ""}`}
-          ref={scrollContainerRef}
-          style={
-            { "--input-height": `${inputHeight}px` } as React.CSSProperties
-          }
-        >
-          <main
-            className={styles.scrollContent}
-            style={{ paddingBottom: inputHeight + 10 }}
-          >
-            <div className={styles.contentViewport}>
-              <div
-                className={`${styles.contentInner} ${
-                  showLoadingState
-                    ? styles.contentOffsetUp
-                    : styles.contentOffsetDown
-                }`}
-              >
-                {parsedError && (
-                  <Dialog
-                    isOpen={isErrorOpen}
-                    variant="error"
-                    title={parsedError.title}
-                    message={parsedError.message}
-                    actions={errorActions}
-                  />
-                )}
-                <Dialog
-                  isOpen={!!pendingUndoMessageId}
-                  type="UNDO_MESSAGE"
-                  onAction={handleUndoDialogAction}
-                />
-
-                {showLoadingState ? (
-                  <div
-                    className={styles.loadingState}
-                    role="status"
-                    aria-live="polite"
-                    aria-label="Loading chat"
-                  >
-                    <div className={styles.spinnerContainer}>
-                      <LoadingSpinner />
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {isImageProgressVisible && (
-                      <div className={styles.imagePendingProgress}>
-                        <div className={styles.imageProgressRow}>
-                          <TextShimmer
-                            text={API_STATUS_TEXT.ANALYZING_IMAGE}
-                            compact={true}
-                            duration={2}
-                            spotWidth={30}
-                            angle={90}
-                            peakWidth={3}
-                            bleedInner={8}
-                            bleedOuter={30}
-                            className={styles.imageProgressShimmer}
-                          />
-                          {showAnswerNow && (
-                            <button
-                              type="button"
-                              className={styles.answerNowButton}
-                              onClick={app.chat.handleAnswerNow}
-                            >
-                              {API_STATUS_TEXT.ANSWER_NOW_BUTTON}
-                            </button>
-                          )}
-                        </div>
-
-                        {visibleImageProgressText && (
-                          <p
-                            key={visibleImageProgressText}
-                            className={styles.imageProgressText}
-                            aria-live="polite"
-                          >
-                            {visibleImageProgressText}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    <MessageList
-                      messages={app.chat.messages}
-                      pendingAssistantTurn={app.chat.pendingAssistantTurn}
-                      pendingPromptAttachmentAnalysis={
-                        app.pendingPromptAttachmentAnalysis
-                      }
-                      hideThinkingProgress={app.chat.isAnalyzing}
-                      selectedModel={app.inputModel}
-                      onAnswerNow={app.chat.handleAnswerNow}
-                      onRetryMessage={handleRetryMessage}
-                      onUndoMessage={handleRequestUndoMessage}
-                      onSystemAction={app.handleSystemAction}
-                    />
-                  </>
-                )}
-              </div>
-            </div>
-          </main>
-        </div>
-
-        <div
-          ref={inputContainerRef}
-          className={styles.inputOverlay}
-          style={{ pointerEvents: "none" }}
-        >
-          <div style={{ pointerEvents: "auto", width: "100%" }}>
-            <ChatInput
-              startupImage={visibleStartupImage}
-              forceVisible={app.isNavigating}
-              input={inputValue}
-              onInputChange={setInputValue}
-              onSend={handleSend}
-              isLoading={app.chat.isLoading}
-              isAiTyping={app.chat.isAiTyping}
-              isStoppable={app.chat.isAnalyzing || app.chat.isGenerating}
-              onStopGeneration={app.chat.handleStopGeneration}
-              selectedModel={app.inputModel}
-              onModelChange={app.setInputModel}
-              attachments={app.attachments}
-              onAttachmentsChange={app.setAttachments}
-              onCaptureToInput={handleCaptureToInput}
-              onPreviewAttachment={app.openMediaViewer}
-              rememberAttachmentSourcePath={app.rememberAttachmentSourcePath}
-              showScrollToBottomButton={showScrollToBottomButton}
-              onScrollToBottom={handleScrollToBottom}
-            />
-          </div>
-        </div>
-
-        <InlineMenu
-          menuRef={menuRef}
-          sliderRef={sliderRef}
-          page1Ref={page1Ref}
-          page2Ref={page2Ref}
-          pageFlatRef={pageFlatRef}
-          onAction={handleAction}
-          onSwitchPage={switchPage}
-        />
-      </div>
-    </div>
+    <ChatLayout
+      headerRef={headerRef}
+      scrollContainerRef={scrollContainerRef}
+      inputContainerRef={inputContainerRef}
+      inputHeight={inputHeight}
+      visibleStartupImage={visibleStartupImage}
+      showArtifactPlaceholder={showArtifactPlaceholder}
+      showLoadingState={showLoadingOverlay}
+      isContentMounted={isContentMounted}
+      isNavigating={app.isNavigating}
+      isImageExpanded={isImageExpanded}
+      onToggleImageExpanded={() => setIsImageExpanded(!isImageExpanded)}
+      sessionLensUrl={app.sessionLensUrl}
+      setSessionLensUrl={app.handleUpdateLensUrl}
+      chatTitle={app.chatTitle}
+      onDescribeEdits={app.chat.handleDescribeEdits}
+      ocrData={app.ocrData}
+      onUpdateOCRData={app.handleUpdateOCRData}
+      onOpenSettings={app.system.openSettings}
+      chatId={app.chatHistory.activeSessionId}
+      imageInput={app.imageInput}
+      onImageInputChange={app.setImageInput}
+      ocrEnabled={app.system.ocrEnabled}
+      autoExpandOCR={app.system.autoExpandOCR}
+      activeProfileId={app.system.activeProfile?.id || null}
+      currentOcrModel={app.system.sessionOcrLanguage}
+      onOcrModelChange={app.system.setSessionOcrLanguage}
+      isOcrScanning={app.isOcrScanning}
+      onOcrScanningChange={app.setIsOcrScanning}
+      inputValue={inputValue}
+      onInputChange={setInputValue}
+      onSend={handleSend}
+      isChatLoading={app.chat.isLoading}
+      isAiTyping={app.chat.isAiTyping}
+      isStoppable={app.chat.isAnalyzing || app.chat.isGenerating}
+      onStopGeneration={app.chat.handleStopGeneration}
+      selectedModel={app.inputModel}
+      onModelChange={app.setInputModel}
+      attachments={app.attachments}
+      onAttachmentsChange={app.setAttachments}
+      onCaptureToInput={handleCaptureToInput}
+      onPreviewAttachment={app.openMediaViewer}
+      rememberAttachmentSourcePath={app.rememberAttachmentSourcePath}
+      showScrollToBottomButton={showScrollToBottomButton}
+      onScrollToBottom={handleScrollToBottom}
+      menuRef={menuRef}
+      sliderRef={sliderRef}
+      page1Ref={page1Ref}
+      page2Ref={page2Ref}
+      pageFlatRef={pageFlatRef}
+      onInlineMenuAction={handleAction}
+      onInlineMenuSwitchPage={switchPage}
+    >
+      <ChatContent
+        parsedError={parsedError}
+        isErrorOpen={isErrorOpen}
+        errorActions={errorActions}
+        pendingUndoMessageId={pendingUndoMessageId}
+        onUndoDialogAction={handleUndoDialogAction}
+        isImageProgressVisible={isImageProgressVisible}
+        showAnswerNow={showAnswerNow}
+        visibleImageProgressText={visibleImageProgressText}
+        onAnswerNow={app.chat.handleAnswerNow}
+        messages={deferredMessages}
+        pendingAssistantTurn={app.chat.pendingAssistantTurn}
+        pendingPromptAttachmentAnalysis={app.pendingPromptAttachmentAnalysis}
+        hideThinkingProgress={app.chat.isAnalyzing}
+        selectedModel={app.inputModel}
+        onRetryMessage={handleRetryMessage}
+        onUndoMessage={handleRequestUndoMessage}
+        onSystemAction={app.handleSystemAction}
+      />
+    </ChatLayout>
   );
 };

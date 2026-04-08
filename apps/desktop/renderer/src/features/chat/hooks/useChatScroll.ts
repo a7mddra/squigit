@@ -4,10 +4,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useRef, useState, useEffect, useLayoutEffect, RefObject } from "react";
+import {
+  useRef,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  RefObject,
+} from "react";
 import { Message } from "../chat.types";
 
 const BOTTOM_THRESHOLD_PX = 48;
+const BOTTOM_LOCK_MS_CHAT_CHANGE = 2200;
+const BOTTOM_LOCK_MS_MESSAGE_APPEND = 1000;
+const MAX_BOTTOM_LOCK_FRAMES = 180;
 
 function isNearBottom(el: HTMLDivElement): boolean {
   const distanceFromBottom =
@@ -38,6 +48,9 @@ export function useChatScroll({
   const prevMessageCountRef = useRef(messages.length);
   const MIN_SPINNER_DURATION = 400;
   const previousInputHeightRef = useRef(0);
+  const bottomLockUntilRef = useRef(0);
+  const bottomLockRafRef = useRef<number | null>(null);
+  const bottomLockFrameCountRef = useRef(0);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -70,37 +83,98 @@ export function useChatScroll({
 
   const isSpinnerVisible = isNavigating || showSpinner;
 
+  const jumpToBottom = useCallback((el: HTMLDivElement) => {
+    const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
+    if (Math.abs(el.scrollTop - maxScrollTop) > 1) {
+      el.scrollTop = maxScrollTop;
+    }
+  }, []);
+
+  const isBottomLockActive = useCallback(
+    () => Date.now() < bottomLockUntilRef.current,
+    [],
+  );
+
+  const runBottomLockTick = useCallback(() => {
+    bottomLockRafRef.current = null;
+
+    const el = scrollContainerRef.current;
+    if (!el || isSpinnerVisible || suspendAutoScroll || !isBottomLockActive()) {
+      return;
+    }
+
+    jumpToBottom(el);
+
+    bottomLockFrameCountRef.current += 1;
+    if (bottomLockFrameCountRef.current < MAX_BOTTOM_LOCK_FRAMES) {
+      bottomLockRafRef.current = window.requestAnimationFrame(runBottomLockTick);
+    }
+  }, [
+    isBottomLockActive,
+    isSpinnerVisible,
+    jumpToBottom,
+    scrollContainerRef,
+    suspendAutoScroll,
+  ]);
+
+  const startBottomLock = useCallback(
+    (durationMs: number) => {
+      if (durationMs > 0) {
+        bottomLockUntilRef.current = Math.max(
+          bottomLockUntilRef.current,
+          Date.now() + durationMs,
+        );
+      }
+      bottomLockFrameCountRef.current = 0;
+
+      if (bottomLockRafRef.current === null) {
+        bottomLockRafRef.current =
+          window.requestAnimationFrame(runBottomLockTick);
+      }
+    },
+    [runBottomLockTick],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (bottomLockRafRef.current !== null) {
+        window.cancelAnimationFrame(bottomLockRafRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isSpinnerVisible && isBottomLockActive()) {
+      startBottomLock(0);
+    }
+  }, [isBottomLockActive, isSpinnerVisible, startBottomLock]);
+
   useLayoutEffect(() => {
     const el = scrollContainerRef.current;
     if (!el || isSpinnerVisible) return;
 
-    let rafId: number | null = null;
-    const timeoutIds: number[] = [];
     const chatChanged = prevChatIdRef.current !== chatId;
     const messageCountChanged = messages.length !== prevMessageCountRef.current;
 
-    const scrollToBottom = () => {
-      el.scrollTo({ top: el.scrollHeight, behavior: "instant" });
-    };
-
     if (!suspendAutoScroll) {
       if (chatChanged) {
-        scrollToBottom();
-        rafId = requestAnimationFrame(scrollToBottom);
-        timeoutIds.push(window.setTimeout(scrollToBottom, 50));
-        timeoutIds.push(window.setTimeout(scrollToBottom, 150));
+        jumpToBottom(el);
+        startBottomLock(BOTTOM_LOCK_MS_CHAT_CHANGE);
         prevChatIdRef.current = chatId;
       } else if (messageCountChanged) {
         if (prevMessageCountRef.current === 0 && messages.length > 0) {
           const isStreamCompletion =
             messages.length === 1 && messages[0]?.role === "model";
           if (!isStreamCompletion) {
-            scrollToBottom();
+            jumpToBottom(el);
+            startBottomLock(BOTTOM_LOCK_MS_MESSAGE_APPEND);
           }
         } else {
           const lastMessage = messages[messages.length - 1];
           if (lastMessage?.role === "user") {
-            el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+            const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
+            el.scrollTo({ top: maxScrollTop, behavior: "smooth" });
+            startBottomLock(BOTTOM_LOCK_MS_MESSAGE_APPEND);
           }
         }
       }
@@ -111,20 +185,13 @@ export function useChatScroll({
     }
 
     prevMessageCountRef.current = messages.length;
-
-    return () => {
-      if (rafId !== null) {
-        window.cancelAnimationFrame(rafId);
-      }
-      for (const timeoutId of timeoutIds) {
-        window.clearTimeout(timeoutId);
-      }
-    };
   }, [
     chatId,
     isSpinnerVisible,
+    jumpToBottom,
     messages,
     scrollContainerRef,
+    startBottomLock,
     suspendAutoScroll,
   ]);
 
@@ -135,11 +202,23 @@ export function useChatScroll({
 
     const isGrowing = inputHeight > previousInputHeightRef.current;
 
-    if (!isGrowing && wasAtBottomRef.current) {
-      scrollEl.scrollTop = scrollEl.scrollHeight;
+    if (
+      !isGrowing &&
+      (wasAtBottomRef.current || isBottomLockActive()) &&
+      !suspendAutoScroll
+    ) {
+      jumpToBottom(scrollEl);
     }
     previousInputHeightRef.current = inputHeight;
-  }, [inputHeight, isSpinnerVisible, scrollContainerRef, wasAtBottomRef]);
+  }, [
+    inputHeight,
+    isBottomLockActive,
+    isSpinnerVisible,
+    jumpToBottom,
+    scrollContainerRef,
+    suspendAutoScroll,
+    wasAtBottomRef,
+  ]);
 
   useLayoutEffect(() => {
     const scrollEl = scrollContainerRef.current;
@@ -147,13 +226,21 @@ export function useChatScroll({
     if (!scrollEl || !contentEl || isSpinnerVisible) return;
 
     const observer = new ResizeObserver(() => {
-      if (!wasAtBottomRef.current) return;
-      scrollEl.scrollTop = scrollEl.scrollHeight;
+      if (suspendAutoScroll) return;
+      if (!wasAtBottomRef.current && !isBottomLockActive()) return;
+      jumpToBottom(scrollEl);
     });
 
     observer.observe(contentEl);
     return () => observer.disconnect();
-  }, [isSpinnerVisible, scrollContainerRef, wasAtBottomRef]);
+  }, [
+    isBottomLockActive,
+    isSpinnerVisible,
+    jumpToBottom,
+    scrollContainerRef,
+    suspendAutoScroll,
+    wasAtBottomRef,
+  ]);
 
   return { isSpinnerVisible };
 }

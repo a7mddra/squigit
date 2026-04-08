@@ -418,6 +418,7 @@ export const useApp = () => {
     chat.isAiTyping ||
     ocr.isOcrScanning;
   const [isNavigating, setIsNavigating] = useState(false);
+  const [isChatContentReady, setIsChatContentReady] = useState(true);
   const [showChatShellDuringNavigation, setShowChatShellDuringNavigation] =
     useState(false);
   const navigationRequestIdRef = useRef(0);
@@ -425,6 +426,18 @@ export const useApp = () => {
     chatId: null,
     isBusy: false,
   });
+
+  const finalizeNavigationState = useCallback((requestId: number) => {
+    if (navigationRequestIdRef.current !== requestId) {
+      return;
+    }
+
+    flushSync(() => {
+      setIsNavigating(false);
+      setShowChatShellDuringNavigation(false);
+      setIsChatContentReady(true);
+    });
+  }, []);
 
   useEffect(() => {
     const activeId = chatHistory.activeSessionId;
@@ -897,6 +910,7 @@ export const useApp = () => {
 
       flushSync(() => {
         setIsNavigating(true);
+        setIsChatContentReady(false);
         setShowChatShellDuringNavigation(!isOnboardingId(id));
         setPendingSearchReveal(null);
         closeMediaViewer();
@@ -931,12 +945,7 @@ export const useApp = () => {
           }
           chatHistory.setActiveSessionId(id);
         });
-        window.setTimeout(() => {
-          if (navigationRequestIdRef.current === requestId) {
-            setIsNavigating(false);
-            setShowChatShellDuringNavigation(false);
-          }
-        }, 300);
+        finalizeNavigationState(requestId);
         return;
       }
 
@@ -958,6 +967,7 @@ export const useApp = () => {
               mimeType: "image/png",
               imageId: metadata.image_hash,
               fromHistory: true,
+              tone: metadata.image_tone ?? undefined,
             });
             chatHistory.setActiveSessionId(id);
           });
@@ -1010,6 +1020,7 @@ export const useApp = () => {
             mimeType: "image/png",
             imageId: chatData.metadata.image_hash,
             fromHistory: true,
+            tone: chatData.metadata.image_tone ?? undefined,
           });
           chatHistory.setActiveSessionId(id);
         });
@@ -1039,29 +1050,44 @@ export const useApp = () => {
       } catch (e) {
         console.error("Failed to load chat:", e);
       } finally {
-        window.setTimeout(() => {
-          if (navigationRequestIdRef.current === requestId) {
-            setIsNavigating(false);
-            setShowChatShellDuringNavigation(false);
-          }
-        }, 300);
+        finalizeNavigationState(requestId);
       }
     },
-    [chat, chatHistory, closeMediaViewer, ocr, system],
+    [
+      chat,
+      chatHistory,
+      closeMediaViewer,
+      finalizeNavigationState,
+      ocr,
+      system,
+    ],
   );
 
-  const performNewSession = useCallback(() => {
-    setIsNavigating(true);
-    setShowChatShellDuringNavigation(false);
-    setPendingSearchReveal(null);
-    closeMediaViewer();
+  const performNewSession = useCallback(async () => {
+    const requestId = navigationRequestIdRef.current + 1;
+    navigationRequestIdRef.current = requestId;
+
+    flushSync(() => {
+      setIsNavigating(true);
+      setIsChatContentReady(false);
+      setShowChatShellDuringNavigation(false);
+      setPendingSearchReveal(null);
+      closeMediaViewer();
+    });
+
     system.resetSession();
     chatHistory.setActiveSessionId(null);
     chatHistory.setActiveSessionId(null);
     ocr.setOcrData({});
     ocr.setSessionLensUrl(null);
-    setTimeout(() => setIsNavigating(false), 300);
-  }, [chatHistory, closeMediaViewer, ocr, system]);
+    finalizeNavigationState(requestId);
+  }, [
+    chatHistory,
+    closeMediaViewer,
+    finalizeNavigationState,
+    ocr,
+    system,
+  ]);
 
   const handleSelectChat = useCallback(
     (id: string) => {
@@ -1381,6 +1407,7 @@ export const useApp = () => {
 
     toggleSidePanel: panel.toggleSidePanel,
     isNavigating,
+    isChatContentReady,
     showChatShellDuringNavigation,
     setShowGeminiAuthDialog: dialogs.setShowGeminiAuthDialog,
     setShowLoginRequiredDialog: dialogs.setShowLoginRequiredDialog,

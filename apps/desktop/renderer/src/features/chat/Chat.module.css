@@ -5,7 +5,6 @@
  */
 
 .container {
-  --chat-image-offset: 80px;
   --chat-code-block-sticky-top: calc(
     var(--image-artifact-top-gap) + var(--image-artifact-height)
   );
@@ -66,27 +65,43 @@
   margin-top: 0;
 }
 
+.overlayLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  isolation: isolate;
+}
+
 .inputOverlay {
   position: absolute;
   bottom: 0;
   left: 0;
+  right: 0;
   width: 100%;
-  z-index: 20;
+  z-index: 1;
   background: linear-gradient(to top, var(--c-raw-013) 80%, transparent);
   display: flex;
   justify-content: center;
+  pointer-events: none;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform;
 }
 
 .headerContainer {
-  z-index: 10;
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
+  z-index: 1;
   display: flex;
   justify-content: center;
   flex-shrink: 0;
   pointer-events: none;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform;
 }
 
 .headerContainer::before {
@@ -109,29 +124,43 @@
 }
 
 .artifactPlaceholder {
+  position: relative;
   width: var(--image-artifact-width);
   max-width: var(--image-artifact-max-width);
   height: var(--image-artifact-height);
-  margin: var(--image-artifact-top-gap) auto 1rem auto;
+  margin: var(--image-artifact-shell-margin);
   border-radius: 12px;
-  border: 1px solid var(--c-raw-010);
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--c-raw-012) 94%, transparent) 0%,
-      color-mix(in srgb, var(--c-raw-036) 18%, var(--c-raw-012)) 50%,
-      color-mix(in srgb, var(--c-raw-012) 94%, transparent) 100%
-    );
-  background-size: 200% 100%;
-  box-shadow: 0 4px 16px #00000024;
-  animation: chatShellPulse 1.15s linear infinite;
+  border: 1px solid color-mix(in srgb, var(--c-raw-010) 65%, transparent);
+  background-color: color-mix(in srgb, var(--c-raw-012) 96%, transparent);
+  box-shadow: 0 3px 12px #0000001a;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.artifactPlaceholder::after {
+  content: "";
+  position: absolute;
+  inset: -140%;
+  background: linear-gradient(
+    45deg,
+    transparent 43%,
+    color-mix(in srgb, var(--c-raw-036) 9%, var(--c-raw-012)) 50%,
+    transparent 57%
+  );
+  transform: translate3d(-35%, -35%, 0);
+  opacity: 0;
+  animation: artifactQuietShimmer 2.8s cubic-bezier(0.2, 0.55, 0.3, 1) infinite;
+  will-change: transform, opacity;
+  pointer-events: none;
 }
 
 .chatContainer {
+  --chat-image-offset: 80px;
   --image-artifact-width: 95%;
   --image-artifact-max-width: 41.5rem;
   --image-artifact-height: 57px;
   --image-artifact-top-gap: 10px;
+  --image-artifact-shell-margin: var(--image-artifact-top-gap) auto 1rem auto;
   --image-artifact-cover-height: 38.5px;
   display: flex;
   height: 100%;
@@ -169,11 +198,46 @@
   min-height: 100%;
 }
 
+.contentStage {
+  position: relative;
+  min-height: 100%;
+}
+
+.loadingOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  padding-top: var(--chat-image-offset);
+  pointer-events: none;
+  transition:
+    opacity 0.14s ease,
+    visibility 0s linear 0.14s;
+}
+
+.loadingOverlayNoImage {
+  padding-top: 0;
+}
+
 @media (min-width: 768px) {
   .contentInner {
     padding-left: 2rem;
     padding-right: 2rem;
   }
+}
+
+.contentVisible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.contentHidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
 }
 
 .contentOffsetUp {
@@ -205,13 +269,37 @@
   contain: layout paint style;
 }
 
-@keyframes chatShellPulse {
-  from {
-    background-position: 0% 50%;
+.loadingVisible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+
+.loadingHidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@keyframes artifactQuietShimmer {
+  0% {
+    transform: translate3d(-38%, -38%, 0);
+    opacity: 0;
   }
 
-  to {
-    background-position: 200% 50%;
+  20% {
+    opacity: 0.22;
+  }
+
+  55% {
+    transform: translate3d(38%, 38%, 0);
+    opacity: 0.18;
+  }
+
+  100% {
+    transform: translate3d(76%, 76%, 0);
+    opacity: 0;
   }
 }
 
@@ -277,6 +365,11 @@
     animation: none;
     opacity: 1;
     transform: none;
+  }
+
+  .artifactPlaceholder::after {
+    animation: none;
+    opacity: 0;
   }
 }
 

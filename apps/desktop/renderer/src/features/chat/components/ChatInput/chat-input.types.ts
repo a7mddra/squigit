@@ -18,6 +18,7 @@ export interface ChatInputProps {
     imageId: string;
   } | null;
   forceVisible?: boolean;
+  isNavigating?: boolean;
   input: string;
   onInputChange: (value: string) => void;
   onSend: ChatSubmitHandler;
