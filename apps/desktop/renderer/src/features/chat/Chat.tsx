@@ -22,7 +22,7 @@ import {
   attachmentFromPath,
   buildAttachmentMention,
   getAttachmentAnalysisStatusText,
-  isAnswerNowSuppressedProgressText,
+  isQuickAnswerSuppressedProgressText,
   parseAttachmentPaths,
   stripImageAttachmentMentions,
   type Attachment,
@@ -139,17 +139,27 @@ export const Chat: React.FC = () => {
 
   const scrollBottomIntoView = useCallback(
     (behavior: ScrollBehavior = "auto") => {
-      const bottomAnchor = bottomAnchorRef.current;
-      if (!bottomAnchor) return;
+      const container = scrollContainerRef.current;
+      if (!container) return;
 
-      bottomAnchor.scrollIntoView({
-        behavior,
-        block: "end",
-        inline: "nearest",
-      });
+      const maxY = Math.max(0, container.scrollHeight - container.clientHeight);
+      container.scrollTo({ top: maxY, behavior });
     },
     [],
   );
+
+  const snapToBottomAfterSend = useCallback(() => {
+    wasAtBottomRef.current = true;
+
+    window.requestAnimationFrame(() => {
+      scrollBottomIntoView("smooth");
+
+      // Run one more frame to catch late layout updates from streamed placeholders.
+      window.requestAnimationFrame(() => {
+        scrollBottomIntoView("auto");
+      });
+    });
+  }, [scrollBottomIntoView]);
 
   const handleScrollToBottom = useCallback(() => {
     wasAtBottomRef.current = true;
@@ -252,7 +262,6 @@ export const Chat: React.FC = () => {
       if (!isAtBottom) {
         bottomStableSinceRef.current = null;
         lastObservedScrollYRef.current = y;
-        container.scrollTop = maxY;
         scrollBottomIntoView("auto");
         return;
       }
@@ -387,6 +396,7 @@ export const Chat: React.FC = () => {
     app.chat.handleSend(finalInput, app.inputModel);
     setInputValue("");
     app.clearAttachments();
+    snapToBottomAfterSend();
   }, [
     app.attachments,
     app.chat,
@@ -395,6 +405,7 @@ export const Chat: React.FC = () => {
     app.inputModel,
     app.trackPendingPromptAttachmentAnalysis,
     inputValue,
+    snapToBottomAfterSend,
   ]);
 
   const handleCaptureToInput = useCallback(async () => {
@@ -505,10 +516,18 @@ export const Chat: React.FC = () => {
       const bubble = container.querySelector<HTMLElement>(selector);
       if (!bubble) return false;
 
-      bubble.scrollIntoView({
+      const containerRect = container.getBoundingClientRect();
+      const bubbleRect = bubble.getBoundingClientRect();
+      const maxY = Math.max(0, container.scrollHeight - container.clientHeight);
+      const bubbleTopInContainer =
+        bubbleRect.top - containerRect.top + container.scrollTop;
+      const centeredTop =
+        bubbleTopInContainer - (container.clientHeight - bubbleRect.height) / 2;
+      const targetTop = Math.min(maxY, Math.max(0, centeredTop));
+
+      container.scrollTo({
+        top: targetTop,
         behavior: "smooth",
-        block: "center",
-        inline: "nearest",
       });
       bubble.classList.add(styles.revealFlash);
 
@@ -635,8 +654,8 @@ export const Chat: React.FC = () => {
     !!app.chat.toolStatus &&
     app.chat.streamingToolSteps.length === 0 &&
     app.chat.isSearching;
-  const showAnswerNow =
-    !isAnswerNowSuppressedProgressText(visibleImageProgressText) &&
+  const showQuickAnswer =
+    !isQuickAnswerSuppressedProgressText(visibleImageProgressText) &&
     (hasRunningToolStep || hasPreStepSearchStatus);
 
   return (
@@ -701,9 +720,9 @@ export const Chat: React.FC = () => {
         pendingUndoMessageId={pendingUndoMessageId}
         onUndoDialogAction={handleUndoDialogAction}
         isImageProgressVisible={isImageProgressVisible}
-        showAnswerNow={showAnswerNow}
+        showQuickAnswer={showQuickAnswer}
         visibleImageProgressText={visibleImageProgressText}
-        onAnswerNow={app.chat.handleAnswerNow}
+        onQuickAnswer={app.chat.handleQuickAnswer}
         messages={deferredMessages}
         pendingAssistantTurn={app.chat.pendingAssistantTurn}
         pendingPromptAttachmentAnalysis={app.pendingPromptAttachmentAnalysis}

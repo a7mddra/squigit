@@ -66,6 +66,11 @@
   flex-direction: column;
 }
 
+.richTextSurface {
+  position: relative;
+  width: 100%;
+}
+
 .customPlaceholder {
   position: absolute;
   top: 0;
@@ -79,6 +84,122 @@
   width: 100%;
   z-index: 0;
   overflow: hidden;
+}
+
+.richTextEditor {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  max-height: var(--chat-input-max-height, 248px);
+  padding: 4px 0;
+  font-size: 16px;
+  color: var(--c-raw-002);
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  line-height: 24px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  caret-color: var(--c-raw-002);
+}
+
+.richTextEditor p {
+  margin: 0;
+  min-height: 24px;
+  white-space: inherit;
+  word-break: inherit;
+  overflow-wrap: inherit;
+}
+
+.richTextEditor::selection,
+.richTextEditor *::selection {
+  color: inherit;
+  background: color-mix(in srgb, var(--c-raw-002) 24%, transparent);
+  -webkit-text-fill-color: currentColor;
+}
+
+.richTextEditor:focus {
+  outline: none;
+}
+
+.richTextEditor::-webkit-scrollbar-track {
+  margin-top: 13px;
+}
+
+.richTextEditor::-webkit-scrollbar-track-piece:start {
+  margin-top: 13px;
+}
+
+.attachmentMentionNode {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -0.08em;
+  max-width: min(100%, 20rem);
+  user-select: none;
+}
+
+.emptyParagraph::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--c-raw-005);
+  pointer-events: none;
+}
+
+.inputAttachmentChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  max-width: 100%;
+  height: 1.4rem;
+  padding: 0 0.42rem;
+  border-radius: 999px;
+  border: 1px solid var(--c-raw-043);
+  background: color-mix(in srgb, var(--c-raw-012) 70%, transparent);
+  color: var(--c-raw-003);
+  font-size: 0.95em;
+  line-height: 1;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.inputAttachmentChip:hover {
+  background: color-mix(in srgb, var(--c-raw-012) 78%, transparent);
+  border-color: color-mix(in srgb, var(--c-raw-043) 80%, var(--c-raw-003) 20%);
+}
+
+.inputAttachmentChip:focus-visible {
+  outline: 2px solid var(--c-raw-004);
+  outline-offset: 2px;
+}
+
+.inputAttachmentChipIcon {
+  width: 0.92em;
+  height: 0.92em;
+  min-width: 0.92em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.inputAttachmentChipIcon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.inputAttachmentChipLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .textarea {

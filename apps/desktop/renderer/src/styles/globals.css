@@ -280,9 +280,15 @@ html.light .shiki-dual-theme .shiki {
 }
 
 html,
-body {
+body,
+#root {
   height: 100%;
   width: 100%;
+  overflow: hidden;
+}
+
+html,
+body {
   margin: 0;
   overscroll-behavior: none;
   background-color: var(--c-raw-013);
@@ -304,7 +310,6 @@ body {
   transition:
     background-color 0.3s ease-in-out,
     color 0.3s ease-in-out;
-  overflow: hidden;
 }
 
 body.light-mode {

@@ -10,7 +10,7 @@ import {
   API_STATUS_TEXT,
   type AttachmentAnalysisCounts,
 } from "@/lib";
-import { MessageList } from "./components/ChatBubble/MessageList";
+import { MessageList } from "@/features";
 import type { Message, PendingAssistantTurn } from "./chat.types";
 import styles from "./Chat.module.css";
 
@@ -21,9 +21,9 @@ interface ChatContentProps {
   pendingUndoMessageId: string | null;
   onUndoDialogAction: (actionKey: string) => void;
   isImageProgressVisible: boolean;
-  showAnswerNow: boolean;
+  showQuickAnswer: boolean;
   visibleImageProgressText: string | null;
-  onAnswerNow?: () => void;
+  onQuickAnswer?: () => void;
   messages: Message[];
   pendingAssistantTurn?: PendingAssistantTurn | null;
   pendingPromptAttachmentAnalysis?: AttachmentAnalysisCounts | null;
@@ -41,9 +41,9 @@ const ChatContentComponent: React.FC<ChatContentProps> = ({
   pendingUndoMessageId,
   onUndoDialogAction,
   isImageProgressVisible,
-  showAnswerNow,
+  showQuickAnswer,
   visibleImageProgressText,
-  onAnswerNow,
+  onQuickAnswer,
   messages,
   pendingAssistantTurn,
   pendingPromptAttachmentAnalysis,
@@ -84,13 +84,13 @@ const ChatContentComponent: React.FC<ChatContentProps> = ({
               bleedOuter={30}
               className={styles.imageProgressShimmer}
             />
-            {showAnswerNow && (
+            {showQuickAnswer && (
               <button
                 type="button"
-                className={styles.answerNowButton}
-                onClick={onAnswerNow}
+                className={styles.quickAnswerButton}
+                onClick={onQuickAnswer}
               >
-                {API_STATUS_TEXT.ANSWER_NOW_BUTTON}
+                {API_STATUS_TEXT.QUICK_ANSWER_BUTTON}
               </button>
             )}
           </div>
@@ -113,7 +113,7 @@ const ChatContentComponent: React.FC<ChatContentProps> = ({
         pendingPromptAttachmentAnalysis={pendingPromptAttachmentAnalysis}
         hideThinkingProgress={hideThinkingProgress}
         selectedModel={selectedModel}
-        onAnswerNow={onAnswerNow}
+        onQuickAnswer={onQuickAnswer}
         onRetryMessage={onRetryMessage}
         onUndoMessage={onUndoMessage}
         onSystemAction={onSystemAction}
@@ -137,10 +137,10 @@ export const ChatContent = React.memo(
       prevProps.pendingUndoMessageId === nextProps.pendingUndoMessageId &&
       prevProps.onUndoDialogAction === nextProps.onUndoDialogAction &&
       prevProps.isImageProgressVisible === nextProps.isImageProgressVisible &&
-      prevProps.showAnswerNow === nextProps.showAnswerNow &&
+      prevProps.showQuickAnswer === nextProps.showQuickAnswer &&
       prevProps.visibleImageProgressText ===
         nextProps.visibleImageProgressText &&
-      prevProps.onAnswerNow === nextProps.onAnswerNow &&
+      prevProps.onQuickAnswer === nextProps.onQuickAnswer &&
       prevProps.messages === nextProps.messages &&
       prevProps.pendingAssistantTurn === nextProps.pendingAssistantTurn &&
       prevProps.pendingPromptAttachmentAnalysis ===

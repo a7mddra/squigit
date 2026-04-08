@@ -23,7 +23,7 @@ import {
   sendMessage as apiSendMessage,
   retryFromMessage as apiRetryFromMessage,
   cancelCurrentRequest,
-  answerNowCurrentRequest,
+  quickAnswerCurrentRequest,
   replaceLastAssistantHistory,
   restoreSession as apiRestoreSession,
   getImageDescription,
@@ -1192,8 +1192,8 @@ export const useGeminiEngine = (config: {
     clearPendingGenerationState();
   };
 
-  const handleAnswerNow = async () => {
-    await answerNowCurrentRequest();
+  const handleQuickAnswer = async () => {
+    await quickAnswerCurrentRequest();
     setToolStatus(API_STATUS_TEXT.WRAPPING_UP);
     updatePendingAssistantTurn((turn) => ({
       ...turn,
@@ -1216,7 +1216,7 @@ export const useGeminiEngine = (config: {
     handleUndoMessage,
     handleDescribeEdits,
     handleStopGeneration,
-    handleAnswerNow,
+    handleQuickAnswer,
     handleStreamComplete,
     cleanupAbortController,
   };

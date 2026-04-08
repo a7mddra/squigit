@@ -54,8 +54,8 @@ export const commands = {
     invoke("cancel_download_ocr_model", { modelId }),
 
   // Gemini Runtime Control
-  answerNowGeminiRequest: (channelId: string) =>
-    invoke("answer_now_gemini_request", { channelId }),
+  quickAnswerGeminiRequest: (channelId: string) =>
+    invoke("quick_answer_gemini_request", { channelId }),
 
   // UI audio
   playUiSound: (effect: "dialog-warning" = "dialog-warning") =>

@@ -27,7 +27,7 @@ export const API_STATUS_TEXT = {
   FETCHING_SOURCE_FAILED: "Couldn't open one source, trying another",
   MODEL_BUSY_RETRYING:
     "Things are a bit slow right now. Reconnecting",
-  ANSWER_NOW_BUTTON: "Answer Now",
+  QUICK_ANSWER_BUTTON: "Quick Answer",
 } as const;
 
 export const getAttachmentAnalysisStatusText = (
@@ -61,7 +61,7 @@ export const getHighDemandRetryStatusText = (
   return `${API_STATUS_TEXT.MODEL_BUSY_RETRYING} ${attempt}/${total}`;
 };
 
-export const isAnswerNowSuppressedProgressText = (
+export const isQuickAnswerSuppressedProgressText = (
   text: string | null | undefined,
 ): boolean => {
   const trimmed = text?.trim();
@@ -107,7 +107,7 @@ export const mapToolStatusText = (
   }
 
   if (
-    /^Answer Now requested/i.test(trimmed) ||
+    /^Quick Answer requested/i.test(trimmed) ||
     /^Tool call limit reached/i.test(trimmed)
   ) {
     return { type: "set", text: API_STATUS_TEXT.WRAPPING_UP };

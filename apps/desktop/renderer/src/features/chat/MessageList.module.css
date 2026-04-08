@@ -35,7 +35,7 @@
 }
 
 .progressText {
-  max-width: min(100%, 42rem);
+  max-width: min(100%, var(--chat-content-rail-width, 41.5rem));
   color: var(--c-raw-057);
   font-size: 0.88rem;
   line-height: 1.45;
@@ -55,7 +55,7 @@
   }
 }
 
-.answerNowButton {
+.quickAnswerButton {
   border: none;
   background: transparent;
   color: var(--c-raw-004);
@@ -68,7 +68,7 @@
   transition: color 0.15s ease;
 }
 
-.answerNowButton:hover {
+.quickAnswerButton:hover {
   color: var(--c-raw-003);
 }
 

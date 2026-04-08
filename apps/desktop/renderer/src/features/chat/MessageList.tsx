@@ -8,14 +8,14 @@ import React from "react";
 import {
   Message,
   PendingAssistantTurn,
-} from "../../chat.types";
-import { ChatBubble } from "./ChatBubble";
+} from "./chat.types";
+import { ChatBubble } from "@/features";
 import { TextShimmer } from "@/components";
 import {
   API_STATUS_TEXT,
   ATTACHMENT_ANALYSIS_STATUS_DELAY_MS,
   getAttachmentAnalysisStatusText,
-  isAnswerNowSuppressedProgressText,
+  isQuickAnswerSuppressedProgressText,
 } from "@/lib";
 import type { AttachmentAnalysisCounts } from "@/lib";
 import styles from "./MessageList.module.css";
@@ -28,13 +28,13 @@ interface MessageListProps {
   pendingPromptAttachmentAnalysis?: AttachmentAnalysisCounts | null;
   hideThinkingProgress?: boolean;
   selectedModel: string;
-  onAnswerNow?: () => void;
+  onQuickAnswer?: () => void;
   onRetryMessage?: (messageId: string, modelId?: string) => void;
   onUndoMessage?: (messageId: string) => void;
   onSystemAction?: (actionId: string, value?: string) => void;
 }
 
-function isAnswerNowEligibleProgress(text: string | undefined): boolean {
+function isQuickAnswerEligibleProgress(text: string | undefined): boolean {
   if (!text) return false;
 
   return [
@@ -61,7 +61,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   pendingPromptAttachmentAnalysis,
   hideThinkingProgress = false,
   selectedModel,
-  onAnswerNow,
+  onQuickAnswer,
   onRetryMessage,
   onUndoMessage,
   onSystemAction,
@@ -159,14 +159,14 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const hasRunningToolStep =
     pendingAssistantTurn?.toolSteps.some((step) => step.status === "running") ??
     false;
-  const showAnswerNow =
+  const showQuickAnswer =
     shouldShowThinkingLabel &&
-    !!onAnswerNow &&
+    !!onQuickAnswer &&
     !!pendingAssistantTurn &&
     pendingAssistantTurn.phase === "thinking" &&
-    !isAnswerNowSuppressedProgressText(visibleProgressText) &&
+    !isQuickAnswerSuppressedProgressText(visibleProgressText) &&
     (hasRunningToolStep ||
-      isAnswerNowEligibleProgress(pendingAssistantTurn.progressText));
+      isQuickAnswerEligibleProgress(pendingAssistantTurn.progressText));
 
   return (
     <div className={styles.container}>
@@ -196,13 +196,13 @@ const MessageListComponent: React.FC<MessageListProps> = ({
               <div className={styles.pendingProgress}>
                 <div className={styles.progressRow}>
                   <TextShimmer text={THINKING_LABEL} compact={true} />
-                  {showAnswerNow && (
+                  {showQuickAnswer && (
                     <button
                       type="button"
-                      className={styles.answerNowButton}
-                      onClick={onAnswerNow}
+                      className={styles.quickAnswerButton}
+                      onClick={onQuickAnswer}
                     >
-                      {API_STATUS_TEXT.ANSWER_NOW_BUTTON}
+                      {API_STATUS_TEXT.QUICK_ANSWER_BUTTON}
                     </button>
                   )}
                 </div>

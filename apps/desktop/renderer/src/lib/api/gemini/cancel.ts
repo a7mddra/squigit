@@ -29,12 +29,12 @@ export const cancelCurrentRequest = () => {
   }
 };
 
-export const answerNowCurrentRequest = async () => {
+export const quickAnswerCurrentRequest = async () => {
   const channelId = geminiStore.currentChannelId;
   if (!channelId) return;
 
   try {
-    await invoke("answer_now_gemini_request", { channelId });
+    await invoke("quick_answer_gemini_request", { channelId });
   } catch (error) {
     console.error("Failed to request answer-now:", error);
   }

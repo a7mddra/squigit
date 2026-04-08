@@ -102,7 +102,7 @@
   top: 0;
   left: 50%;
   width: var(--image-artifact-width);
-  max-width: var(--image-artifact-max-width);
+  max-width: 43.5rem;
   height: var(--image-artifact-cover-height);
   transform: translateX(-50%);
   background-color: var(--c-raw-013);
@@ -118,7 +118,7 @@
 .artifactPlaceholder {
   position: relative;
   width: var(--image-artifact-width);
-  max-width: var(--image-artifact-max-width);
+  max-width: 43.5rem;
   height: var(--image-artifact-height);
   margin: var(--image-artifact-shell-margin);
   border-radius: 12px;
@@ -132,7 +132,7 @@
 .chatContainer {
   --chat-image-offset: 80px;
   --image-artifact-width: 95%;
-  --image-artifact-max-width: 41.5rem;
+  --chat-content-rail-width: min(var(--image-artifact-width), 41.5rem);
   --image-artifact-height: 57px;
   --image-artifact-top-gap: 10px;
   --image-artifact-shell-margin: var(--image-artifact-top-gap) auto 1rem auto;
@@ -161,10 +161,10 @@
 .contentInner {
   margin-left: auto;
   margin-right: auto;
-  width: 100%;
-  max-width: 45rem;
-  padding-left: 1rem;
-  padding-right: 1rem;
+  width: var(--chat-content-rail-width);
+  max-width: var(--chat-content-rail-width);
+  padding-left: 0;
+  padding-right: 0;
   padding-bottom: 0;
 }
 
@@ -228,13 +228,6 @@
   color: var(--c-raw-000);
 }
 
-@media (min-width: 768px) {
-  .contentInner {
-    padding-left: 2rem;
-    padding-right: 2rem;
-  }
-}
-
 .contentVisible {
   opacity: 1;
   visibility: visible;
@@ -289,7 +282,7 @@
 }
 
 .imageProgressText {
-  max-width: min(100%, 42rem);
+  max-width: min(100%, var(--chat-content-rail-width));
   color: var(--c-raw-057);
   font-size: 0.88rem;
   line-height: 1.45;
@@ -309,7 +302,7 @@
   }
 }
 
-.answerNowButton {
+.quickAnswerButton {
   border: none;
   background: transparent;
   color: var(--c-raw-004);
@@ -322,7 +315,7 @@
   transition: color 0.15s ease;
 }
 
-.answerNowButton:hover {
+.quickAnswerButton:hover {
   color: var(--c-raw-003);
 }
 

@@ -149,7 +149,7 @@
   box-shadow: 0 4px 16px #00000024;
   position: relative;
   width: var(--image-artifact-width, 95%);
-  max-width: var(--image-artifact-max-width, 41.5rem);
+  max-width: 43.5rem;
   height: var(--image-artifact-height, 57px);
   margin: var(
     --image-artifact-shell-margin,

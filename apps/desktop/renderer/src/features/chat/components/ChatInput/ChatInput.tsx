@@ -6,7 +6,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDown } from "lucide-react";
-import { useTextEditor, useTextContextMenu } from "@/hooks";
+import { useTextContextMenu } from "@/hooks";
 import { TextContextMenu } from "@/layout";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -17,7 +17,10 @@ import {
   isAcceptedExtension,
   isImageExtension,
 } from "@/lib";
-import { InputTextarea } from "./InputTextarea";
+import {
+  InputTextarea,
+  type ChatInputEditorHandle,
+} from "./InputTextarea";
 import { InputActions } from "./InputActions";
 import { ImageStrip } from "./ImageStrip";
 import { CodeEditor } from "./CodeEditor";
@@ -56,9 +59,8 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({
   const [isCodeEditorOpen, setIsCodeEditorOpen] = useState(false);
   const [codeEditorValue, setCodeEditorValue] = useState("");
   const [codeEditorLanguage, setCodeEditorLanguage] = useState("text");
-
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const shadowRef = useRef<HTMLTextAreaElement>(null);
+  const [hasSelection, setHasSelection] = useState(false);
+  const editorRef = useRef<ChatInputEditorHandle | null>(null);
 
   const handleSubmit = () => {
     if (!disabled && !isLoading && (value.trim().length > 0 || attachments.length > 0)) {
@@ -67,49 +69,10 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({
   };
 
   const {
-    ref: editorRef,
-    handleKeyDown: editorKeyDown,
-    hasSelection,
-    handleCopy,
-    handleCut,
-    handlePaste,
-    handleSelectAll,
-    undo,
-    redo,
-  } = useTextEditor({
-    value,
-    onChange: (newValue) => {
-      onChange(newValue);
-    },
-    onSubmit: handleSubmit,
-    preventNewLine: false,
-  });
-
-  const {
     data: contextMenuData,
     handleContextMenu,
     handleClose: handleCloseContextMenu,
-  } = useTextContextMenu();
-
-  const handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Intercept Ctrl+V for images
-    if ((e.ctrlKey || e.metaKey) && e.key === "v") {
-      try {
-        const result = await invoke<{ hash: string; path: string }>(
-          "read_clipboard_image",
-        );
-        if (result && result.path) {
-          onAttachmentsChange([
-            ...latestAttachmentsRef.current,
-            attachmentFromPath(result.path),
-          ]);
-        }
-      } catch (err) {
-        // Not an image or clipboard error, allow default paste behavior
-      }
-    }
-    editorKeyDown(e);
-  };
+  } = useTextContextMenu({ hasSelection });
 
   const isButtonActive =
     !disabled &&
@@ -128,6 +91,21 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({
     latestAttachmentsRef.current = attachments;
   }, [attachments]);
 
+  const appendTextToInput = useCallback(
+    (textToAppend: string) => {
+      if (!textToAppend) return;
+
+      const nextEditor = editorRef.current;
+      if (nextEditor) {
+        nextEditor.appendRawText(textToAppend);
+        return;
+      }
+
+      onChange(latestValueRef.current + textToAppend);
+    },
+    [onChange],
+  );
+
   const appendCodeBlockToInput = useCallback(
     (language: string, code: string) => {
       const normalizedLanguage = language.trim() || "text";
@@ -135,47 +113,24 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({
       const currentValue = latestValueRef.current;
       const prefix =
         currentValue.length > 0 && !currentValue.endsWith("\n") ? "\n" : "";
-      const nextValue =
-        currentValue +
-        `${prefix}\`\`\`${normalizedLanguage}\n${normalizedCode}\n\`\`\`\n`;
-
-      onChange(nextValue);
-      window.setTimeout(() => {
-        const nextTextarea = textareaRef.current;
-        if (!nextTextarea) return;
-        nextTextarea.focus();
-        nextTextarea.setSelectionRange(nextValue.length, nextValue.length);
-      }, 0);
+      appendTextToInput(
+        `${prefix}\`\`\`${normalizedLanguage}\n${normalizedCode}\n\`\`\`\n`,
+      );
     },
-    [onChange],
+    [appendTextToInput],
   );
 
   const insertTextAtCaret = useCallback(
     (textToInsert: string) => {
       if (!textToInsert) return;
 
-      const textarea = textareaRef.current;
-      if (!textarea) {
+      const nextEditor = editorRef.current;
+      if (!nextEditor) {
         onChange(latestValueRef.current + textToInsert);
         return;
       }
 
-      const currentValue = latestValueRef.current;
-      const start = textarea.selectionStart ?? currentValue.length;
-      const end = textarea.selectionEnd ?? start;
-      const nextValue =
-        currentValue.slice(0, start) +
-        textToInsert +
-        currentValue.slice(end);
-      const cursorPos = start + textToInsert.length;
-
-      onChange(nextValue);
-      window.setTimeout(() => {
-        const nextTextarea = textareaRef.current;
-        if (!nextTextarea) return;
-        nextTextarea.focus();
-        nextTextarea.setSelectionRange(cursorPos, cursorPos);
-      }, 0);
+      nextEditor.insertRawText(textToInsert);
     },
     [onChange],
   );
@@ -300,15 +255,20 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({
       />
 
       <InputTextarea
+        ref={editorRef}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={handleKeyDown}
+        onChange={onChange}
+        onSubmit={handleSubmit}
         disabled={disabled}
         placeholder={placeholder}
-        editorRef={editorRef}
-        shadowRef={shadowRef}
-        textareaRef={textareaRef}
+        onSelectionChange={setHasSelection}
         onContextMenu={handleContextMenu}
+        onImagePasted={(path) => {
+          onAttachmentsChange([
+            ...latestAttachmentsRef.current,
+            attachmentFromPath(path),
+          ]);
+        }}
         isExpanded={isExpanded}
         setIsExpanded={setIsExpanded}
       />
@@ -317,28 +277,18 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({
           x={contextMenuData.x}
           y={contextMenuData.y}
           onClose={handleCloseContextMenu}
-          onCopy={handleCopy}
-          onCut={handleCut}
-          onPaste={async () => {
-            try {
-              const result = await invoke<{ hash: string; path: string }>(
-                "read_clipboard_image",
-              );
-              if (result && result.path) {
-                onAttachmentsChange([
-                  ...latestAttachmentsRef.current,
-                  attachmentFromPath(result.path),
-                ]);
-                return;
-              }
-            } catch (err) {
-              // Not an image, fall through to text paste
-            }
-            handlePaste();
+          onCopy={() => {
+            void editorRef.current?.copySelection();
           }}
-          onSelectAll={handleSelectAll}
-          onUndo={undo}
-          onRedo={redo}
+          onCut={() => {
+            void editorRef.current?.cutSelection();
+          }}
+          onPaste={() => {
+            void editorRef.current?.pasteFromClipboard();
+          }}
+          onSelectAll={() => editorRef.current?.selectAll()}
+          onUndo={() => editorRef.current?.undo()}
+          onRedo={() => editorRef.current?.redo()}
           hasSelection={hasSelection}
         />
       )}
@@ -354,7 +304,15 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({
         onModelChange={onModelChange}
         onTranscript={(text, isFinal) => {
           if (isFinal) {
-            onChange((value + " " + text).trim());
+            const normalizedText = text.trim();
+            if (!normalizedText) {
+              return;
+            }
+
+            const currentValue = latestValueRef.current;
+            const prefix =
+              currentValue.length > 0 && !/\s$/u.test(currentValue) ? " " : "";
+            appendTextToInput(`${prefix}${normalizedText}`);
           }
         }}
         onCaptureToInput={onCaptureToInput}
