@@ -294,25 +294,39 @@
 }
 
 .chatActions {
-  position: relative;
   margin-left: auto;
-  flex: 0 0 34px;
-  width: 34px;
-  min-width: 34px;
+  position: relative;
+  flex: 0 0 24px;
+  width: 24px;
+  min-width: 24px;
   height: 24px;
+  overflow: hidden;
+  contain: layout paint;
+  isolation: isolate;
 }
 
 .chatDate {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   font-size: 0.72rem;
   color: var(--c-raw-106);
   line-height: 1;
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  text-align: right;
-  transition: opacity 0.15s ease;
-  will-change: opacity;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  opacity: 1;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    color 0.15s ease;
+  pointer-events: none;
+  transform: translate3d(0, 0, 0) scale(1);
+  will-change: opacity, transform;
+  backface-visibility: hidden;
 }
 
 .rowShortcut {
@@ -352,16 +366,15 @@
 .chatRow:hover .chatDate,
 .chatRow.menuOpen .chatDate {
   opacity: 0;
+  transform: translate3d(0, -2px, 0) scale(0.96);
 }
 
 .menuBtn {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: absolute;
-  top: 50%;
-  right: 0;
-  transform: translateY(-50%) translateZ(0);
   width: 24px;
   height: 24px;
   border-radius: 4px;
@@ -370,30 +383,32 @@
   color: var(--c-raw-000);
   transition:
     opacity 0.15s ease,
-    color 0.15s ease,
-    visibility 0s linear 0.15s;
+    transform 0.15s ease,
+    color 0.15s ease;
   cursor: pointer;
   opacity: 0;
-  visibility: hidden;
-  will-change: opacity;
+  pointer-events: none;
+  transform: translate3d(0, 2px, 0) scale(0.96);
+  will-change: opacity, transform;
+  backface-visibility: hidden;
 }
 
 .chatRow:hover .menuBtn,
 .chatRow.menuOpen .menuBtn {
   opacity: 1;
-  visibility: visible;
-  transition-delay: 0s;
+  pointer-events: auto;
+  transform: translate3d(0, 0, 0) scale(1);
 }
 
 .pinnedMenuBtn {
   opacity: 0;
-  visibility: hidden;
+  pointer-events: none;
 }
 
 .chatRow:hover .pinnedMenuBtn,
 .chatRow.menuOpen .pinnedMenuBtn {
   opacity: 1;
-  visibility: visible;
+  pointer-events: auto;
 }
 
 .menuBtn:hover {

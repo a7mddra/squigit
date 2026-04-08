@@ -353,6 +353,16 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
 
   const markdownComponents = useMemo(
     () => ({
+      pre({ children, ...props }: any) {
+        const childNodes = React.Children.toArray(children);
+
+        if (childNodes.length === 1 && React.isValidElement(childNodes[0])) {
+          return <>{childNodes[0]}</>;
+        }
+
+        return <pre {...props}>{children}</pre>;
+      },
+
       code({ className, children, ...props }: any) {
         const match = /language-(\w+)/u.exec(className || "");
         const isInline = !match && !String(children).includes("\n");

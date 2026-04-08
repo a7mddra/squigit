@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useRef, useCallback } from "react";
-import { Paperclip, ArrowUp, Square, Camera } from "lucide-react";
+import { Paperclip, ArrowUp, Square, Camera, Code2 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ACCEPTED_EXTENSIONS, MODELS } from "@/lib";
 import {
@@ -35,6 +35,7 @@ interface InputActionsProps {
   onTranscript: (text: string, isFinal: boolean) => void;
   onCaptureToInput?: () => void;
   onFilePaths?: (paths: string[]) => void;
+  onOpenCodeEditor?: () => void;
 }
 
 export const InputActions: React.FC<InputActionsProps> = ({
@@ -49,12 +50,15 @@ export const InputActions: React.FC<InputActionsProps> = ({
   onTranscript,
   onCaptureToInput,
   onFilePaths,
+  onOpenCodeEditor,
 }) => {
   const [showFileButtonTooltip, setShowFileButtonTooltip] = useState(false);
+  const [showCodeButtonTooltip, setShowCodeButtonTooltip] = useState(false);
   const [showKeepProgressTooltip, setShowKeepProgressTooltip] = useState(false);
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
 
   const fileButtonRef = useRef<HTMLButtonElement>(null);
+  const codeButtonRef = useRef<HTMLButtonElement>(null);
   const keepProgressInfoRef = useRef<HTMLButtonElement>(null);
 
   const handlePaperclipClick = async () => {
@@ -109,6 +113,23 @@ export const InputActions: React.FC<InputActionsProps> = ({
           text="Add photos & files"
           parentRef={fileButtonRef}
           show={showFileButtonTooltip}
+          above
+        />
+
+        <button
+          className={styles.iconButton}
+          aria-label="Write code"
+          ref={codeButtonRef}
+          onMouseEnter={() => setShowCodeButtonTooltip(true)}
+          onMouseLeave={() => setShowCodeButtonTooltip(false)}
+          onClick={onOpenCodeEditor}
+        >
+          <Code2 size={18} />
+        </button>
+        <Tooltip
+          text="write code"
+          parentRef={codeButtonRef}
+          show={showCodeButtonTooltip}
           above
         />
 

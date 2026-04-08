@@ -475,6 +475,7 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
 
   useEffect(() => {
     if (
+      !isNavigating &&
       startupImage &&
       ocrEnabled &&
       currentOcrModel &&
@@ -495,6 +496,7 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
     errorDialog,
     scan,
     currentOcrModel,
+    isNavigating,
     ocrEnabled,
   ]);
 

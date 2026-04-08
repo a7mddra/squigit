@@ -144,10 +144,10 @@
   border: 1px solid var(--c-raw-010);
   box-shadow: 0 4px 16px #00000024;
   position: relative;
-  width: 95%;
-  max-width: 41.5rem;
-  height: 57px;
-  margin: 10px auto 1rem auto;
+  width: var(--image-artifact-width, 95%);
+  max-width: var(--image-artifact-max-width, 41.5rem);
+  height: var(--image-artifact-height, 57px);
+  margin: var(--image-artifact-top-gap, 10px) auto 1rem auto;
   border-radius: 12px;
   overflow: hidden;
   z-index: 10;

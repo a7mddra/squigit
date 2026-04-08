@@ -4,11 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDown } from "lucide-react";
 import { useTextEditor, useTextContextMenu } from "@/hooks";
 import { TextContextMenu } from "@/layout";
-import { useAppContext } from "@/providers/AppProvider";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -19,14 +18,15 @@ import {
   isImageExtension,
 } from "@/lib";
 import { InputTextarea } from "./InputTextarea";
-import { InputCodeEditor, useCodeEditor } from "./InputCodeEditor";
 import { InputActions } from "./InputActions";
 import { ImageStrip } from "./ImageStrip";
+import { CodeEditor } from "./CodeEditor";
 import type { ChatInputProps } from "./chat-input.types";
 import styles from "./ChatInput.module.css";
 
-export const ChatInput: React.FC<ChatInputProps> = ({
+export const ChatInput: React.FC<ChatInputProps> = React.memo(({
   startupImage,
+  forceVisible = false,
   input: value,
   onInputChange: onChange,
   onSend,
@@ -41,46 +41,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   attachments,
   onAttachmentsChange,
   onCaptureToInput,
+  onPreviewAttachment,
+  rememberAttachmentSourcePath,
   showScrollToBottomButton = false,
   onScrollToBottom,
 }) => {
-  const app = useAppContext();
-  if (!startupImage) return null;
+  if (!startupImage && !forceVisible) return null;
 
   const placeholder = customPlaceholder || "Ask anything";
   const disabled = isLoading && !isAiTyping;
 
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isCodeEditorOpen, setIsCodeEditorOpen] = useState(false);
+  const [codeEditorValue, setCodeEditorValue] = useState("");
+  const [codeEditorLanguage, setCodeEditorLanguage] = useState("text");
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const shadowRef = useRef<HTMLTextAreaElement>(null);
-  const codeTaRef = useRef<HTMLTextAreaElement>(null);
-
-  const {
-    isCodeBlockActive,
-    codeLanguage,
-    codeValue,
-    setCodeValue,
-    handleChange,
-    handleCodeKeyDown,
-    commitCodeBlockToTextarea,
-    resetCodeEditor,
-  } = useCodeEditor({
-    value,
-    onChange,
-    textareaRef,
-  });
 
   const handleSubmit = () => {
-    if (
-      !disabled &&
-      !isLoading &&
-      (value.trim().length > 0 ||
-        codeValue.trim().length > 0 ||
-        attachments.length > 0)
-    ) {
+    if (!disabled && !isLoading && (value.trim().length > 0 || attachments.length > 0)) {
       onSend();
-      resetCodeEditor();
     }
   };
 
@@ -132,12 +113,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const isButtonActive =
     !disabled &&
     !isLoading &&
-    (value.trim().length > 0 ||
-      codeValue.trim().length > 0 ||
-      attachments.length > 0);
+    (value.trim().length > 0 || attachments.length > 0);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const pendingInlineInsertRef = useRef<string | null>(null);
   const latestValueRef = useRef(value);
   const latestAttachmentsRef = useRef(attachments);
 
@@ -149,7 +127,29 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     latestAttachmentsRef.current = attachments;
   }, [attachments]);
 
-  const insertTextAtCaret = React.useCallback(
+  const appendCodeBlockToInput = useCallback(
+    (language: string, code: string) => {
+      const normalizedLanguage = language.trim() || "text";
+      const normalizedCode = code.replace(/\r\n?/g, "\n").replace(/\n+$/u, "");
+      const currentValue = latestValueRef.current;
+      const prefix =
+        currentValue.length > 0 && !currentValue.endsWith("\n") ? "\n" : "";
+      const nextValue =
+        currentValue +
+        `${prefix}\`\`\`${normalizedLanguage}\n${normalizedCode}\n\`\`\`\n`;
+
+      onChange(nextValue);
+      window.setTimeout(() => {
+        const nextTextarea = textareaRef.current;
+        if (!nextTextarea) return;
+        nextTextarea.focus();
+        nextTextarea.setSelectionRange(nextValue.length, nextValue.length);
+      }, 0);
+    },
+    [onChange],
+  );
+
+  const insertTextAtCaret = useCallback(
     (textToInsert: string) => {
       if (!textToInsert) return;
 
@@ -179,35 +179,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [onChange],
   );
 
-  const insertInlineFileLinks = React.useCallback(
+  const insertInlineFileLinks = useCallback(
     (links: string[]) => {
       if (links.length === 0) return;
 
-      const textToInsert = `${links.join(" ")} `;
-      if (isCodeBlockActive) {
-        pendingInlineInsertRef.current = textToInsert;
-        commitCodeBlockToTextarea();
-        return;
-      }
-
-      insertTextAtCaret(textToInsert);
+      insertTextAtCaret(`${links.join(" ")} `);
     },
-    [commitCodeBlockToTextarea, insertTextAtCaret, isCodeBlockActive],
+    [insertTextAtCaret],
   );
 
-  useEffect(() => {
-    if (!pendingInlineInsertRef.current || isCodeBlockActive) {
-      return;
-    }
-
-    const textToInsert = pendingInlineInsertRef.current;
-    pendingInlineInsertRef.current = null;
-    window.setTimeout(() => {
-      insertTextAtCaret(textToInsert);
-    }, 0);
-  }, [insertTextAtCaret, isCodeBlockActive, value]);
-
-  const handleFilePaths = React.useCallback(
+  const handleFilePaths = useCallback(
     async (paths: string[]) => {
       const currentAttachments = latestAttachmentsRef.current;
       const nextAttachments = [...currentAttachments];
@@ -224,7 +205,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               "store_image_from_path",
               { path: filePath },
             );
-            app.rememberAttachmentSourcePath(result.path, filePath);
+            rememberAttachmentSourcePath?.(result.path, filePath);
             nextAttachments.push(
               attachmentFromPath(
                 result.path,
@@ -245,7 +226,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               "store_file_from_path",
               { path: filePath },
             );
-            app.rememberAttachmentSourcePath(result.path, filePath);
+            rememberAttachmentSourcePath?.(result.path, filePath);
             inlineLinks.push(buildAttachmentMention(result.path, originalName));
           } catch (err) {
             console.error("Failed to store file:", err);
@@ -266,7 +247,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             "store_file_from_path",
             { path: filePath },
           );
-          app.rememberAttachmentSourcePath(result.path, filePath);
+          rememberAttachmentSourcePath?.(result.path, filePath);
           inlineLinks.push(buildAttachmentMention(result.path, originalName));
         } catch (err) {
           console.error("Failed to validate selected text file:", err);
@@ -281,9 +262,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     },
     [
-      app,
       insertInlineFileLinks,
       onAttachmentsChange,
+      rememberAttachmentSourcePath,
     ],
   );
 
@@ -311,7 +292,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     >
       <ImageStrip
         attachments={attachments}
-        onClick={app.openMediaViewer}
+        onClick={onPreviewAttachment}
         onRemove={(id) =>
           onAttachmentsChange(attachments.filter((a) => a.id !== id))
         }
@@ -319,10 +300,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       <InputTextarea
         value={value}
-        onChange={handleChange}
+        onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
         disabled={disabled}
-        isCodeBlockActive={isCodeBlockActive}
         placeholder={placeholder}
         editorRef={editorRef}
         shadowRef={shadowRef}
@@ -331,7 +311,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         isExpanded={isExpanded}
         setIsExpanded={setIsExpanded}
       />
-      {contextMenuData.isOpen && !isCodeBlockActive && (
+      {contextMenuData.isOpen && (
         <TextContextMenu
           x={contextMenuData.x}
           y={contextMenuData.y}
@@ -362,16 +342,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         />
       )}
 
-      <InputCodeEditor
-        isCodeBlockActive={isCodeBlockActive}
-        codeLanguage={codeLanguage}
-        codeValue={codeValue}
-        onCodeValueChange={setCodeValue}
-        onCodeKeyDown={handleCodeKeyDown}
-        isExpanded={isExpanded}
-        codeTaRef={codeTaRef}
-      />
-
       <InputActions
         onSubmit={handleSubmit}
         onStop={() => onStopGeneration?.()}
@@ -390,31 +360,57 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onFilePaths={async (paths: string[]) => {
           await handleFilePaths(paths);
         }}
+        onOpenCodeEditor={() => setIsCodeEditorOpen(true)}
       />
     </div>
   );
 
+  const codeEditorOverlay = (
+    <CodeEditor
+      isOpen={isCodeEditorOpen}
+      onClose={() => setIsCodeEditorOpen(false)}
+      value={codeEditorValue}
+      language={codeEditorLanguage}
+      onValueChange={setCodeEditorValue}
+      onLanguageChange={setCodeEditorLanguage}
+      onInsert={(language, code) => {
+        appendCodeBlockToInput(language, code);
+        setIsCodeEditorOpen(false);
+      }}
+    />
+  );
+
   if (variant === "transparent") {
-    return containerContent;
+    return (
+      <>
+        {containerContent}
+        {codeEditorOverlay}
+      </>
+    );
   }
 
   return (
-    <footer className={styles.footer}>
-      <div className={styles.inputWrapper}>
-        {showScrollToBottomButton && onScrollToBottom && (
-          <button
-            type="button"
-            className={`${styles.iconButton} ${styles.scrollToBottomButton}`}
-            onClick={onScrollToBottom}
-            aria-label="Scroll to bottom"
-          >
-            <ArrowDown size={14} />
-          </button>
-        )}
-        {containerContent}
-      </div>
-    </footer>
+    <>
+      <footer className={styles.footer}>
+        <div className={styles.inputWrapper}>
+          {showScrollToBottomButton && onScrollToBottom && (
+            <button
+              type="button"
+              className={`${styles.iconButton} ${styles.scrollToBottomButton}`}
+              onClick={onScrollToBottom}
+              aria-label="Scroll to bottom"
+            >
+              <ArrowDown size={14} />
+            </button>
+          )}
+          {containerContent}
+        </div>
+      </footer>
+      {codeEditorOverlay}
+    </>
   );
-};
+});
+
+ChatInput.displayName = "ChatInput";
 
 export default ChatInput;

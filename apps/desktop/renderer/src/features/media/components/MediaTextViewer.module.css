@@ -13,27 +13,3 @@
   box-sizing: border-box;
   padding-inline-end: 8px;
 }
-
-.textViewerWrap *::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
-}
-
-.textViewerWrap *::-webkit-scrollbar-track {
-  background: transparent;
-  margin: 4px;
-}
-
-.textViewerWrap *::-webkit-scrollbar-thumb {
-  background: var(--c-raw-054);
-  border-radius: 4px;
-}
-
-.textViewerWrap *::-webkit-scrollbar-thumb:hover {
-  background: var(--c-raw-085);
-}
-
-.textViewerWrap * {
-  scrollbar-width: thin;
-  scrollbar-color: var(--c-raw-054) transparent;
-}

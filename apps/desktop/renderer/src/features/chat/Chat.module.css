@@ -5,13 +5,15 @@
  */
 
 .container {
+  --chat-image-offset: 80px;
+  --chat-code-block-sticky-top: calc(
+    var(--image-artifact-top-gap) + var(--image-artifact-height)
+  );
   flex: 1;
   min-height: 0;
   overflow-y: scroll;
-  padding-top: 80px;
   margin-left: 0.75rem;
   margin-right: 0.5rem;
-  transform: translateZ(0);
 }
 
 .container::-webkit-scrollbar {
@@ -43,6 +45,15 @@
 }
 
 .container.noImage {
+  --chat-code-block-sticky-top: 0px;
+}
+
+.scrollContent {
+  position: relative;
+  padding-top: var(--chat-image-offset);
+}
+
+.container.noImage .scrollContent {
   padding-top: 0;
 }
 
@@ -70,24 +81,58 @@
   z-index: 10;
   position: absolute;
   top: 0;
-  width: 100%;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
   flex-shrink: 0;
+  pointer-events: none;
+}
+
+.headerContainer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: var(--image-artifact-width);
+  max-width: var(--image-artifact-max-width);
+  height: var(--image-artifact-cover-height);
+  transform: translateX(-50%);
   background-color: var(--c-raw-013);
-  mask-image: linear-gradient(
-    to bottom,
-    var(--c-raw-042) calc(100% - 12px),
-    transparent 100%
-  );
-  mask-composite: intersect;
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    var(--c-raw-042) calc(100% - 12px),
-    transparent 100%
-  );
-  -webkit-mask-composite: source-in;
+  pointer-events: none;
+}
+
+.headerContainer > * {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.artifactPlaceholder {
+  width: var(--image-artifact-width);
+  max-width: var(--image-artifact-max-width);
+  height: var(--image-artifact-height);
+  margin: var(--image-artifact-top-gap) auto 1rem auto;
+  border-radius: 12px;
+  border: 1px solid var(--c-raw-010);
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--c-raw-012) 94%, transparent) 0%,
+      color-mix(in srgb, var(--c-raw-036) 18%, var(--c-raw-012)) 50%,
+      color-mix(in srgb, var(--c-raw-012) 94%, transparent) 100%
+    );
+  background-size: 200% 100%;
+  box-shadow: 0 4px 16px #00000024;
+  animation: chatShellPulse 1.15s linear infinite;
 }
 
 .chatContainer {
+  --image-artifact-width: 95%;
+  --image-artifact-max-width: 41.5rem;
+  --image-artifact-height: 57px;
+  --image-artifact-top-gap: 10px;
+  --image-artifact-cover-height: 38.5px;
   display: flex;
   height: 100%;
   flex-direction: column;
@@ -119,6 +164,11 @@
   padding-bottom: 0;
 }
 
+.contentViewport {
+  position: relative;
+  min-height: 100%;
+}
+
 @media (min-width: 768px) {
   .contentInner {
     padding-left: 2rem;
@@ -137,7 +187,32 @@
 .spinnerContainer {
   display: flex;
   justify-content: center;
-  padding-top: 0.75rem;
+  align-items: center;
+  width: 3rem;
+  height: 3rem;
+  contain: layout paint style;
+  isolation: isolate;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.loadingState {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: clamp(8rem, 28vh, 14rem);
+  padding-top: 0.5rem;
+  contain: layout paint style;
+}
+
+@keyframes chatShellPulse {
+  from {
+    background-position: 0% 50%;
+  }
+
+  to {
+    background-position: 200% 50%;
+  }
 }
 
 .imagePendingProgress {

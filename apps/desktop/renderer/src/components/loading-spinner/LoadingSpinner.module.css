@@ -8,7 +8,11 @@
   position: relative;
   width: 18px;
   height: 18px;
+  display: inline-block;
   animation: "rotate" 0.9s linear infinite;
+  contain: layout paint style;
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .arm {

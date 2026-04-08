@@ -16,9 +16,16 @@ const CodeBlockComponent = forwardRef<HTMLTextAreaElement, CodeBlockProps>(
       value,
       isEditor = false,
       onChange,
+      onLanguageChange,
       onKeyDown,
       placeholder,
       stickyHeader,
+      actionLabel,
+      actionTitle,
+      actionIcon,
+      onAction,
+      actionDisabled,
+      fillHeight,
       style,
     },
     ref,
@@ -30,8 +37,15 @@ const CodeBlockComponent = forwardRef<HTMLTextAreaElement, CodeBlockProps>(
           language={language}
           value={value}
           onChange={onChange}
+          onLanguageChange={onLanguageChange}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
+          actionLabel={actionLabel}
+          actionTitle={actionTitle}
+          actionIcon={actionIcon}
+          onAction={onAction}
+          actionDisabled={actionDisabled}
+          fillHeight={fillHeight}
           style={style}
         />
       );
@@ -42,6 +56,7 @@ const CodeBlockComponent = forwardRef<HTMLTextAreaElement, CodeBlockProps>(
         language={language}
         value={value}
         stickyHeader={stickyHeader}
+        fillHeight={fillHeight}
       />
     );
   },

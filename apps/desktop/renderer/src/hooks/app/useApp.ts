@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { flushSync } from "react-dom";
 import { exit, relaunch } from "@tauri-apps/plugin-process";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -253,6 +254,14 @@ function mapStoredMessage(message: {
   };
 }
 
+function waitForNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
 export const useApp = () => {
   const system = useSystemSync();
   const auth = useAuth();
@@ -409,6 +418,9 @@ export const useApp = () => {
     chat.isAiTyping ||
     ocr.isOcrScanning;
   const [isNavigating, setIsNavigating] = useState(false);
+  const [showChatShellDuringNavigation, setShowChatShellDuringNavigation] =
+    useState(false);
+  const navigationRequestIdRef = useRef(0);
   const busyTouchStateRef = useRef<{ chatId: string | null; isBusy: boolean }>({
     chatId: null,
     isBusy: false,
@@ -879,35 +891,108 @@ export const useApp = () => {
 
   const performSelectChat = useCallback(
     async (id: string) => {
-      setIsNavigating(true);
-      setPendingSearchReveal(null);
-      closeMediaViewer();
+      const requestId = navigationRequestIdRef.current + 1;
+      navigationRequestIdRef.current = requestId;
+      const metadata = chatHistory.chats.find((chatMeta) => chatMeta.id === id);
+
+      flushSync(() => {
+        setIsNavigating(true);
+        setShowChatShellDuringNavigation(!isOnboardingId(id));
+        setPendingSearchReveal(null);
+        closeMediaViewer();
+        ocr.setSessionLensUrl(null);
+
+        if (!isOnboardingId(id) && metadata?.title) {
+          system.setSessionChatTitle(metadata.title);
+        }
+      });
 
       // Hard-kill OCR auto-runs during navigation. OCR can only start
       // on fresh chat creation (when enabled) or manual model selection.
       cancelOcrJob();
-      ocr.setIsOcrScanning(false);
-      ocr.setOcrData(withNavigationOcrGuard({}));
+      flushSync(() => {
+        ocr.setIsOcrScanning(false);
+        ocr.setOcrData(withNavigationOcrGuard({}));
+      });
+
+      await waitForNextPaint();
+      if (navigationRequestIdRef.current !== requestId) {
+        return;
+      }
 
       if (isOnboardingId(id)) {
-        ocr.setSessionLensUrl(null);
-        if (id === "__system_welcome") {
-          system.setSessionChatTitle(`Welcome to ${system.appName}!`);
-        } else if (id.startsWith("__system_update")) {
-          system.setSessionChatTitle("Update Available");
-        } else if (id === SYSTEM_GALLERY_ID) {
-          system.setSessionChatTitle("Gallery");
-        }
-        chatHistory.setActiveSessionId(id);
-        setTimeout(() => setIsNavigating(false), 300);
+        flushSync(() => {
+          if (id === "__system_welcome") {
+            system.setSessionChatTitle(`Welcome to ${system.appName}!`);
+          } else if (id.startsWith("__system_update")) {
+            system.setSessionChatTitle("Update Available");
+          } else if (id === SYSTEM_GALLERY_ID) {
+            system.setSessionChatTitle("Gallery");
+          }
+          chatHistory.setActiveSessionId(id);
+        });
+        window.setTimeout(() => {
+          if (navigationRequestIdRef.current === requestId) {
+            setIsNavigating(false);
+            setShowChatShellDuringNavigation(false);
+          }
+        }, 300);
         return;
       }
 
       try {
-        const chatData = await loadChat(id);
-        const imagePath = await getImagePath(chatData.metadata.image_hash);
+        const imagePathPromise = metadata?.image_hash
+          ? getImagePath(metadata.image_hash)
+          : null;
+        const chatDataPromise = loadChat(id);
 
-        system.setSessionChatTitle(chatData.metadata.title);
+        if (imagePathPromise && metadata?.image_hash) {
+          const imagePath = await imagePathPromise;
+          if (navigationRequestIdRef.current !== requestId) {
+            return;
+          }
+
+          flushSync(() => {
+            system.setStartupImage({
+              path: imagePath,
+              mimeType: "image/png",
+              imageId: metadata.image_hash,
+              fromHistory: true,
+            });
+            chatHistory.setActiveSessionId(id);
+          });
+
+          chat.restoreState(
+            {
+              messages: [],
+              streamingText: "",
+              firstResponseId: null,
+            },
+            {
+              path: imagePath,
+              mimeType: "image/png",
+              imageId: metadata.image_hash,
+            },
+            null,
+          );
+
+          await waitForNextPaint();
+          if (navigationRequestIdRef.current !== requestId) {
+            return;
+          }
+        }
+
+        const chatData = await chatDataPromise;
+        if (navigationRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        const imagePath = imagePathPromise
+          ? await imagePathPromise
+          : await getImagePath(chatData.metadata.image_hash);
+        if (navigationRequestIdRef.current !== requestId) {
+          return;
+        }
 
         const loadedOcrData = chatData.ocr_data || {};
         const navigationSafeOcrData = withNavigationOcrGuard(loadedOcrData);
@@ -915,7 +1000,23 @@ export const useApp = () => {
           loadedOcrData,
           chatData.metadata.ocr_lang,
         );
-        system.setSessionOcrLanguage(system.ocrEnabled ? chatOcrModel : "");
+        flushSync(() => {
+          system.setSessionChatTitle(chatData.metadata.title);
+          system.setSessionOcrLanguage(system.ocrEnabled ? chatOcrModel : "");
+          ocr.setOcrData(navigationSafeOcrData);
+          ocr.setSessionLensUrl(chatData.imgbb_url || null);
+          system.setStartupImage({
+            path: imagePath,
+            mimeType: "image/png",
+            imageId: chatData.metadata.image_hash,
+            fromHistory: true,
+          });
+          chatHistory.setActiveSessionId(id);
+        });
+        await waitForNextPaint();
+        if (navigationRequestIdRef.current !== requestId) {
+          return;
+        }
 
         const messages = chatData.messages.map((message, idx) => ({
           ...mapStoredMessage(message),
@@ -935,23 +1036,15 @@ export const useApp = () => {
           },
           chatData.rolling_summary,
         );
-
-        ocr.setOcrData(navigationSafeOcrData);
-
-        ocr.setSessionLensUrl(chatData.imgbb_url || null);
-
-        system.setStartupImage({
-          path: imagePath,
-          mimeType: "image/png",
-          imageId: chatData.metadata.image_hash,
-          fromHistory: true,
-        });
-
-        chatHistory.setActiveSessionId(id);
       } catch (e) {
         console.error("Failed to load chat:", e);
       } finally {
-        setTimeout(() => setIsNavigating(false), 300);
+        window.setTimeout(() => {
+          if (navigationRequestIdRef.current === requestId) {
+            setIsNavigating(false);
+            setShowChatShellDuringNavigation(false);
+          }
+        }, 300);
       }
     },
     [chat, chatHistory, closeMediaViewer, ocr, system],
@@ -959,6 +1052,7 @@ export const useApp = () => {
 
   const performNewSession = useCallback(() => {
     setIsNavigating(true);
+    setShowChatShellDuringNavigation(false);
     setPendingSearchReveal(null);
     closeMediaViewer();
     system.resetSession();
@@ -1287,6 +1381,7 @@ export const useApp = () => {
 
     toggleSidePanel: panel.toggleSidePanel,
     isNavigating,
+    showChatShellDuringNavigation,
     setShowGeminiAuthDialog: dialogs.setShowGeminiAuthDialog,
     setShowLoginRequiredDialog: dialogs.setShowLoginRequiredDialog,
     setShowCaptureDeniedDialog: dialogs.setShowCaptureDeniedDialog,

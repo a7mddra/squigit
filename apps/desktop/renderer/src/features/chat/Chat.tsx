@@ -70,6 +70,9 @@ export const Chat: React.FC = () => {
       turnId: string;
       text: string;
     } | null>(null);
+  const [retainedStartupImage, setRetainedStartupImage] = useState(
+    app.system.startupImage,
+  );
 
   // Refs
   const headerRef = useRef<HTMLDivElement>(null);
@@ -93,6 +96,21 @@ export const Chat: React.FC = () => {
     wasAtBottomRef,
   });
 
+  useEffect(() => {
+    if (app.system.startupImage) {
+      setRetainedStartupImage(app.system.startupImage);
+      return;
+    }
+
+    if (!app.isNavigating) {
+      setRetainedStartupImage(null);
+    }
+  }, [app.isNavigating, app.system.startupImage]);
+
+  const visibleStartupImage =
+    app.system.startupImage ?? (app.isNavigating ? retainedStartupImage : null);
+  const showArtifactPlaceholder = app.isNavigating && !visibleStartupImage;
+
   const revealTarget = app.searchOverlay.pendingReveal;
   const isRevealPendingForActiveChat =
     revealTarget?.chatId === app.chatHistory.activeSessionId;
@@ -106,6 +124,7 @@ export const Chat: React.FC = () => {
     wasAtBottomRef,
     suspendAutoScroll: isRevealPendingForActiveChat,
   });
+  const showLoadingState = app.isNavigating || isSpinnerVisible;
 
   const updateScrollToBottomButtonVisibility = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -276,13 +295,13 @@ export const Chat: React.FC = () => {
     inputValue,
   ]);
 
-  const handleCaptureToInput = async () => {
+  const handleCaptureToInput = useCallback(async () => {
     try {
       await invoke("spawn_capture_to_input");
     } catch (err) {
       console.error("Failed to spawn capture to input:", err);
     }
-  };
+  }, []);
 
   const handleRequestUndoMessage = useCallback((messageId: string) => {
     setPendingUndoMessageId(messageId);
@@ -527,120 +546,139 @@ export const Chat: React.FC = () => {
   return (
     <div className={styles.chatContainer}>
       <div ref={headerRef} className={styles.headerContainer}>
-        <ImageArtifact
-          startupImage={app.system.startupImage}
-          sessionLensUrl={app.sessionLensUrl}
-          setSessionLensUrl={app.handleUpdateLensUrl}
-          chatTitle={app.chatTitle}
-          onDescribeEdits={async (desc) => app.chat.handleDescribeEdits(desc)}
-          ocrData={app.ocrData}
-          onUpdateOCRData={app.handleUpdateOCRData}
-          onOpenSettings={app.system.openSettings}
-          isVisible={true}
-          scrollContainerRef={scrollContainerRef}
-          chatId={app.chatHistory.activeSessionId}
-          inputValue={app.imageInput}
-          onInputChange={app.setImageInput}
-          onToggleExpand={() => setIsImageExpanded(!isImageExpanded)}
-          ocrEnabled={app.system.ocrEnabled}
-          autoExpandOCR={app.system.autoExpandOCR}
-          activeProfileId={app.system.activeProfile?.id || null}
-          currentOcrModel={app.system.sessionOcrLanguage}
-          onOcrModelChange={app.system.setSessionOcrLanguage}
-          isOcrScanning={app.isOcrScanning}
-          onOcrScanningChange={app.setIsOcrScanning}
-          isExpanded={isImageExpanded}
-          isNavigating={app.isNavigating}
-        />
+        {visibleStartupImage ? (
+          <ImageArtifact
+            startupImage={visibleStartupImage}
+            sessionLensUrl={app.sessionLensUrl}
+            setSessionLensUrl={app.handleUpdateLensUrl}
+            chatTitle={app.chatTitle}
+            onDescribeEdits={async (desc) => app.chat.handleDescribeEdits(desc)}
+            ocrData={app.ocrData}
+            onUpdateOCRData={app.handleUpdateOCRData}
+            onOpenSettings={app.system.openSettings}
+            isVisible={true}
+            scrollContainerRef={scrollContainerRef}
+            chatId={app.chatHistory.activeSessionId}
+            inputValue={app.imageInput}
+            onInputChange={app.setImageInput}
+            onToggleExpand={() => setIsImageExpanded(!isImageExpanded)}
+            ocrEnabled={app.system.ocrEnabled}
+            autoExpandOCR={app.system.autoExpandOCR}
+            activeProfileId={app.system.activeProfile?.id || null}
+            currentOcrModel={app.system.sessionOcrLanguage}
+            onOcrModelChange={app.system.setSessionOcrLanguage}
+            isOcrScanning={app.isOcrScanning}
+            onOcrScanningChange={app.setIsOcrScanning}
+            isExpanded={isImageExpanded}
+            isNavigating={app.isNavigating}
+          />
+        ) : showArtifactPlaceholder ? (
+          <div
+            className={styles.artifactPlaceholder}
+            aria-hidden="true"
+          />
+        ) : null}
       </div>
       <div className={styles.contentColumn}>
         <div
-          className={`${styles.container} ${!app.system.startupImage ? styles.noImage : ""}`}
+          className={`${styles.container} ${!visibleStartupImage ? styles.noImage : ""}`}
           ref={scrollContainerRef}
           style={
             { "--input-height": `${inputHeight}px` } as React.CSSProperties
           }
         >
-          <main style={{ paddingBottom: inputHeight + 10 }}>
-            <div
-              className={`${styles.contentInner} ${
-                isSpinnerVisible
-                  ? styles.contentOffsetUp
-                  : styles.contentOffsetDown
-              }`}
-            >
-              {parsedError && (
+          <main
+            className={styles.scrollContent}
+            style={{ paddingBottom: inputHeight + 10 }}
+          >
+            <div className={styles.contentViewport}>
+              <div
+                className={`${styles.contentInner} ${
+                  showLoadingState
+                    ? styles.contentOffsetUp
+                    : styles.contentOffsetDown
+                }`}
+              >
+                {parsedError && (
+                  <Dialog
+                    isOpen={isErrorOpen}
+                    variant="error"
+                    title={parsedError.title}
+                    message={parsedError.message}
+                    actions={errorActions}
+                  />
+                )}
                 <Dialog
-                  isOpen={isErrorOpen}
-                  variant="error"
-                  title={parsedError.title}
-                  message={parsedError.message}
-                  actions={errorActions}
+                  isOpen={!!pendingUndoMessageId}
+                  type="UNDO_MESSAGE"
+                  onAction={handleUndoDialogAction}
                 />
-              )}
-              <Dialog
-                isOpen={!!pendingUndoMessageId}
-                type="UNDO_MESSAGE"
-                onAction={handleUndoDialogAction}
-              />
 
-              {isSpinnerVisible ? (
-                <div className={styles.spinnerContainer}>
-                  <LoadingSpinner />
-                </div>
-              ) : (
-                <>
-                  {isImageProgressVisible && (
-                    <div className={styles.imagePendingProgress}>
-                      <div className={styles.imageProgressRow}>
-                        <TextShimmer
-                          text={API_STATUS_TEXT.ANALYZING_IMAGE}
-                          compact={true}
-                          duration={2}
-                          spotWidth={30}
-                          angle={90}
-                          peakWidth={3}
-                          bleedInner={8}
-                          bleedOuter={30}
-                          className={styles.imageProgressShimmer}
-                        />
-                        {showAnswerNow && (
-                          <button
-                            type="button"
-                            className={styles.answerNowButton}
-                            onClick={app.chat.handleAnswerNow}
+                {showLoadingState ? (
+                  <div
+                    className={styles.loadingState}
+                    role="status"
+                    aria-live="polite"
+                    aria-label="Loading chat"
+                  >
+                    <div className={styles.spinnerContainer}>
+                      <LoadingSpinner />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {isImageProgressVisible && (
+                      <div className={styles.imagePendingProgress}>
+                        <div className={styles.imageProgressRow}>
+                          <TextShimmer
+                            text={API_STATUS_TEXT.ANALYZING_IMAGE}
+                            compact={true}
+                            duration={2}
+                            spotWidth={30}
+                            angle={90}
+                            peakWidth={3}
+                            bleedInner={8}
+                            bleedOuter={30}
+                            className={styles.imageProgressShimmer}
+                          />
+                          {showAnswerNow && (
+                            <button
+                              type="button"
+                              className={styles.answerNowButton}
+                              onClick={app.chat.handleAnswerNow}
+                            >
+                              {API_STATUS_TEXT.ANSWER_NOW_BUTTON}
+                            </button>
+                          )}
+                        </div>
+
+                        {visibleImageProgressText && (
+                          <p
+                            key={visibleImageProgressText}
+                            className={styles.imageProgressText}
+                            aria-live="polite"
                           >
-                            {API_STATUS_TEXT.ANSWER_NOW_BUTTON}
-                          </button>
+                            {visibleImageProgressText}
+                          </p>
                         )}
                       </div>
-
-                      {visibleImageProgressText && (
-                        <p
-                          key={visibleImageProgressText}
-                          className={styles.imageProgressText}
-                          aria-live="polite"
-                        >
-                          {visibleImageProgressText}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  <MessageList
-                    messages={app.chat.messages}
-                    pendingAssistantTurn={app.chat.pendingAssistantTurn}
-                    pendingPromptAttachmentAnalysis={
-                      app.pendingPromptAttachmentAnalysis
-                    }
-                    hideThinkingProgress={app.chat.isAnalyzing}
-                    selectedModel={app.inputModel}
-                    onAnswerNow={app.chat.handleAnswerNow}
-                    onRetryMessage={handleRetryMessage}
-                    onUndoMessage={handleRequestUndoMessage}
-                    onSystemAction={app.handleSystemAction}
-                  />
-                </>
-              )}
+                    )}
+                    <MessageList
+                      messages={app.chat.messages}
+                      pendingAssistantTurn={app.chat.pendingAssistantTurn}
+                      pendingPromptAttachmentAnalysis={
+                        app.pendingPromptAttachmentAnalysis
+                      }
+                      hideThinkingProgress={app.chat.isAnalyzing}
+                      selectedModel={app.inputModel}
+                      onAnswerNow={app.chat.handleAnswerNow}
+                      onRetryMessage={handleRetryMessage}
+                      onUndoMessage={handleRequestUndoMessage}
+                      onSystemAction={app.handleSystemAction}
+                    />
+                  </>
+                )}
+              </div>
             </div>
           </main>
         </div>
@@ -652,21 +690,22 @@ export const Chat: React.FC = () => {
         >
           <div style={{ pointerEvents: "auto", width: "100%" }}>
             <ChatInput
-              startupImage={app.system.startupImage}
+              startupImage={visibleStartupImage}
+              forceVisible={app.isNavigating}
               input={inputValue}
               onInputChange={setInputValue}
               onSend={handleSend}
               isLoading={app.chat.isLoading}
               isAiTyping={app.chat.isAiTyping}
               isStoppable={app.chat.isAnalyzing || app.chat.isGenerating}
-              onStopGeneration={() => {
-                app.chat.handleStopGeneration();
-              }}
+              onStopGeneration={app.chat.handleStopGeneration}
               selectedModel={app.inputModel}
               onModelChange={app.setInputModel}
               attachments={app.attachments}
               onAttachmentsChange={app.setAttachments}
               onCaptureToInput={handleCaptureToInput}
+              onPreviewAttachment={app.openMediaViewer}
+              rememberAttachmentSourcePath={app.rememberAttachmentSourcePath}
               showScrollToBottomButton={showScrollToBottomButton}
               onScrollToBottom={handleScrollToBottom}
             />

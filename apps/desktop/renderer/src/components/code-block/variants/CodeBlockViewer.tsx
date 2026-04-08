@@ -13,12 +13,14 @@ interface CodeBlockViewerProps {
   language: string;
   value: string;
   stickyHeader?: boolean;
+  fillHeight?: boolean;
 }
 
 export const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
   language,
   value,
   stickyHeader = true,
+  fillHeight = false,
 }) => {
   const PLAIN_LANGUAGES = ["text", "txt", "plain", "plaintext", "prompt"];
   const isPlain = !language || PLAIN_LANGUAGES.includes(language.toLowerCase());
@@ -35,7 +37,11 @@ export const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
   const shouldShowPlain = isPlain || isLoading;
 
   return (
-    <div className={styles.wrapper} role="region" aria-label="code block">
+    <div
+      className={`${styles.wrapper} ${fillHeight ? styles.fillHeight : ""}`}
+      role="region"
+      aria-label="code block"
+    >
       <div className={styles.header}>
         <div className={styles.langLabel}>
           <span className={styles.langName}>{language || "text"}</span>

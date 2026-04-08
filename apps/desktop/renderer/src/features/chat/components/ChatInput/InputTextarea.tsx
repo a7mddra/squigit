@@ -13,7 +13,6 @@ interface InputTextareaProps {
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   disabled: boolean;
-  isCodeBlockActive: boolean;
   placeholder: string;
   editorRef: React.MutableRefObject<
     HTMLTextAreaElement | HTMLInputElement | null
@@ -30,7 +29,6 @@ export const InputTextarea: React.FC<InputTextareaProps> = ({
   onChange,
   onKeyDown,
   disabled,
-  isCodeBlockActive,
   placeholder,
   editorRef,
   shadowRef,
@@ -63,7 +61,7 @@ export const InputTextarea: React.FC<InputTextareaProps> = ({
     const newHeight = Math.max(Math.min(scrollHeight, maxHeight), minHeight);
     textarea.style.height = `${newHeight}px`;
 
-    setShowExpandButton(isCodeBlockActive || scrollHeight > lineHeight * 10);
+    setShowExpandButton(scrollHeight > lineHeight * 10);
 
     if (
       document.activeElement === textarea &&
@@ -73,7 +71,7 @@ export const InputTextarea: React.FC<InputTextareaProps> = ({
         textarea.scrollTop = textarea.scrollHeight;
       }
     }
-  }, [value, isExpanded, isCodeBlockActive, textareaRef, shadowRef]);
+  }, [value, isExpanded, textareaRef, shadowRef]);
 
   useLayoutEffect(() => {
     const raf = requestAnimationFrame(() => resizeTextarea());
@@ -98,7 +96,7 @@ export const InputTextarea: React.FC<InputTextareaProps> = ({
       </div>
 
       <div className={styles.inputArea}>
-        {!isCodeBlockActive && value.length === 0 && (
+        {value.length === 0 && (
           <div className={styles.customPlaceholder}>{placeholder}</div>
         )}
         <textarea
@@ -122,7 +120,6 @@ export const InputTextarea: React.FC<InputTextareaProps> = ({
           onKeyDown={onKeyDown}
           disabled={disabled}
           rows={1}
-          style={{ display: isCodeBlockActive ? "none" : undefined }}
           onContextMenu={onContextMenu}
         />
       </div>

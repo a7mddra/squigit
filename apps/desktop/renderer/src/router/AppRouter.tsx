@@ -65,6 +65,8 @@ const AppRouterContent: React.FC = () => {
       disabled: action.actionKey === "confirm" ? !isAgreed : action.disabled,
     })),
   };
+  const shouldRenderChatShell =
+    app.showChatShellDuringNavigation || !app.isImageMissing;
 
   const renderMainContent = () => {
     const activeId = app.chatHistory.activeSessionId;
@@ -81,7 +83,7 @@ const AppRouterContent: React.FC = () => {
       }
     }
 
-    if (app.isImageMissing) {
+    if (!shouldRenderChatShell) {
       return (
         <Welcome
           onImageReady={app.handleImageReady}
@@ -190,7 +192,7 @@ const AppRouterContent: React.FC = () => {
   return (
     <MainScreen
       onContextMenu={app.handleContextMenu}
-      containerRef={app.isImageMissing ? undefined : app.containerRef}
+      containerRef={shouldRenderChatShell ? app.containerRef : undefined}
       isSidePanelOpen={app.isSidePanelOpen}
       enablePanelAnimation={app.enablePanelAnimation}
       content={renderMainContent()}

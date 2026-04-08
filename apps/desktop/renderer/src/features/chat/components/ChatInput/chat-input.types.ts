@@ -17,6 +17,7 @@ export interface ChatInputProps {
     mimeType: string;
     imageId: string;
   } | null;
+  forceVisible?: boolean;
   input: string;
   onInputChange: (value: string) => void;
   onSend: ChatSubmitHandler;
@@ -33,6 +34,11 @@ export interface ChatInputProps {
   attachments: Attachment[];
   onAttachmentsChange: (attachments: Attachment[]) => void;
   onCaptureToInput?: () => void;
+  onPreviewAttachment?: (attachment: Attachment) => void;
+  rememberAttachmentSourcePath?: (
+    storedPath: string,
+    sourcePath: string,
+  ) => void;
   showScrollToBottomButton?: boolean;
   onScrollToBottom?: () => void;
 }
