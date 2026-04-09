@@ -48,6 +48,8 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({
   onPreviewAttachment,
   rememberAttachmentSourcePath,
   showScrollToBottomButton = false,
+  keepScrollToBottomButtonMounted = false,
+  scrollToBottomButtonRef,
   onScrollToBottom,
 }) => {
   if (!startupImage && !forceVisible && !isNavigating) return null;
@@ -79,6 +81,9 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({
     !disabled &&
     !isLoading &&
     (value.trim().length > 0 || attachments.length > 0);
+  const shouldRenderScrollToBottomButton =
+    !!onScrollToBottom &&
+    (showScrollToBottomButton || keepScrollToBottomButtonMounted);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const latestValueRef = useRef(value);
@@ -353,12 +358,17 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({
     <>
       <footer className={styles.footer}>
         <div className={styles.inputWrapper}>
-          {showScrollToBottomButton && onScrollToBottom && (
+          {shouldRenderScrollToBottomButton && (
             <button
               type="button"
-              className={`${styles.iconButton} ${styles.scrollToBottomButton}`}
+              ref={scrollToBottomButtonRef}
+              className={`${styles.iconButton} ${styles.scrollToBottomButton} ${
+                !showScrollToBottomButton ? styles.scrollToBottomButtonHidden : ""
+              }`}
               onClick={onScrollToBottom}
               aria-label="Scroll to bottom"
+              aria-hidden={!showScrollToBottomButton}
+              tabIndex={showScrollToBottomButton ? 0 : -1}
             >
               <ArrowDown size={14} />
             </button>

@@ -205,6 +205,27 @@
   animation: citationFooterReveal 0.22s ease-out both;
 }
 
+.inlineCollapseFooter {
+  margin-top: 0.42rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.inlineCollapseButton {
+  border: none;
+  background: transparent;
+  color: var(--c-raw-004);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.25;
+  padding: 0;
+  cursor: pointer;
+}
+
+.inlineCollapseButton:hover {
+  color: var(--c-raw-003);
+}
+
 .userFooter {
   flex-direction: row-reverse;
 }

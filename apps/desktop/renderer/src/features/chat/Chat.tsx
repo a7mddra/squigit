@@ -35,6 +35,7 @@ import {
 } from "@/features";
 import { ChatLayout } from "./ChatLayout";
 import { ChatContent } from "./ChatContent";
+import type { MessageCollapseMode } from "./chat.types";
 import styles from "./Chat.module.css";
 
 function getBaseName(path: string): string {
@@ -63,10 +64,25 @@ function dedupeAttachmentsByPath(items: Attachment[]): Attachment[] {
 const BOTTOM_SYNC_EPSILON_PX = 2;
 const BOTTOM_STABLE_MS = 260;
 const BOTTOM_SETTLE_POLL_MS = 100;
+const MESSAGE_WINDOW_CHUNK = 24;
+const HISTORY_LOAD_TRIGGER_TOP_PX = 2;
+const HISTORY_LOAD_DELAY_MS = 180;
+
+function areIdSetsEqual(left: Set<string>, right: Set<string>): boolean {
+  if (left === right) return true;
+  if (left.size !== right.size) return false;
+
+  for (const value of left) {
+    if (!right.has(value)) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 export const Chat: React.FC = () => {
   const app = useAppContext();
-  const [inputValue, setInputValue] = useState("");
   const [pendingUndoMessageId, setPendingUndoMessageId] = useState<
     string | null
   >(null);
@@ -78,16 +94,34 @@ export const Chat: React.FC = () => {
   const [retainedStartupImage, setRetainedStartupImage] = useState(
     app.system.startupImage,
   );
+  const [isStreamingAutoScrollEnabled, setIsStreamingAutoScrollEnabled] =
+    useState(false);
+  const [autoCollapsedMessageIds, setAutoCollapsedMessageIds] = useState<
+    Set<string>
+  >(() => new Set());
+  const [manuallyExpandedMessageIds, setManuallyExpandedMessageIds] = useState<
+    Set<string>
+  >(() => new Set());
+  const [loadedMessageCount, setLoadedMessageCount] = useState(
+    MESSAGE_WINDOW_CHUNK,
+  );
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
 
   // Refs
   const headerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomAnchorRef = useRef<HTMLDivElement>(null);
+  const scrollToBottomButtonRef = useRef<HTMLButtonElement>(null);
   const wasAtBottomRef = useRef(false);
-  const pendingReloadBottomSyncRef = useRef(true);
-  const bottomStableSinceRef = useRef<number | null>(null);
-  const lastObservedScrollYRef = useRef<number | null>(null);
   const imageProgressTurnIdRef = useRef<string | null>(null);
+  const isProgrammaticScrollRef = useRef(false);
+  const previousCommittedMessageIdsRef = useRef<string[]>([]);
+  const collapseAllOnLoadRef = useRef(true);
+  const pendingHistoryPrependRef = useRef<{ previousScrollHeight: number } | null>(
+    null,
+  );
+  const historyLoadTimerRef = useRef<number | null>(null);
+  const latestCommittedMessageCountRef = useRef(app.chat.messages.length);
 
   // Hooks
   const error = app.chat.error || app.system.systemError;
@@ -159,9 +193,39 @@ export const Chat: React.FC = () => {
     bottomAnchorRef,
     wasAtBottomRef,
   });
-  const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
-  const [isContentMounted, setIsContentMounted] = useState(false);
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(
+    isNavigationLoading,
+  );
+  const [isContentMounted, setIsContentMounted] = useState(
+    !isNavigationLoading,
+  );
   const deferredMessages = useDeferredValue(app.chat.messages);
+  const [pendingAssistantTurnBridge, setPendingAssistantTurnBridge] = useState(
+    app.chat.pendingAssistantTurn,
+  );
+  const lastPendingAssistantTurnRef = useRef(app.chat.pendingAssistantTurn);
+  const effectivePendingAssistantTurn =
+    app.chat.pendingAssistantTurn ?? pendingAssistantTurnBridge;
+  const shouldUseDeferredMessages =
+    !!effectivePendingAssistantTurn &&
+    deferredMessages.length <= app.chat.messages.length &&
+    deferredMessages.every(
+      (message, index) => message.id === app.chat.messages[index]?.id,
+    );
+  const visibleMessages = shouldUseDeferredMessages
+    ? deferredMessages
+    : app.chat.messages;
+  const clampedLoadedMessageCount = Math.max(
+    MESSAGE_WINDOW_CHUNK,
+    loadedMessageCount,
+  );
+  const messageWindowStartIndex = Math.max(
+    0,
+    visibleMessages.length - clampedLoadedMessageCount,
+  );
+  const visibleWindowedMessages = visibleMessages.slice(messageWindowStartIndex);
+  const hasOlderHiddenMessages =
+    app.chat.messages.length > visibleWindowedMessages.length;
   const showScrollToBottomButton =
     !isSpinnerVisible &&
     !showLoadingOverlay &&
@@ -173,8 +237,14 @@ export const Chat: React.FC = () => {
       const container = scrollContainerRef.current;
       if (!container) return;
 
+      isProgrammaticScrollRef.current = true;
       const maxY = Math.max(0, container.scrollHeight - container.clientHeight);
       container.scrollTo({ top: maxY, behavior });
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          isProgrammaticScrollRef.current = false;
+        });
+      });
     },
     [],
   );
@@ -191,8 +261,230 @@ export const Chat: React.FC = () => {
 
   const handleScrollToBottom = useCallback(() => {
     wasAtBottomRef.current = true;
-    scrollBottomIntoView("smooth");
-  }, [scrollBottomIntoView]);
+    if (app.chat.pendingAssistantTurn) {
+      setIsStreamingAutoScrollEnabled(true);
+      scrollBottomIntoView("auto");
+      return;
+    }
+    scrollBottomIntoView(showLoadingOverlay ? "auto" : "smooth");
+  }, [app.chat.pendingAssistantTurn, scrollBottomIntoView, showLoadingOverlay]);
+
+  const triggerScrollToBottomButton = useCallback(() => {
+    const button = scrollToBottomButtonRef.current;
+    if (button) {
+      button.click();
+      return;
+    }
+
+    handleScrollToBottom();
+  }, [handleScrollToBottom]);
+
+  useEffect(() => {
+    latestCommittedMessageCountRef.current = app.chat.messages.length;
+  }, [app.chat.messages.length]);
+
+  useEffect(() => {
+    if (!app.chat.pendingAssistantTurn) {
+      setIsStreamingAutoScrollEnabled(false);
+    }
+  }, [app.chat.pendingAssistantTurn]);
+
+  useEffect(() => {
+    const livePendingTurn = app.chat.pendingAssistantTurn;
+
+    if (livePendingTurn) {
+      lastPendingAssistantTurnRef.current = livePendingTurn;
+      setPendingAssistantTurnBridge((previous) =>
+        previous ? null : previous,
+      );
+      return;
+    }
+
+    const lastPendingTurn = lastPendingAssistantTurnRef.current;
+    if (!lastPendingTurn) {
+      setPendingAssistantTurnBridge((previous) =>
+        previous ? null : previous,
+      );
+      return;
+    }
+
+    const wasCompletingTurn =
+      lastPendingTurn.phase === "complete" || lastPendingTurn.phase === "stopped";
+    const hasCommittedTurn = app.chat.messages.some(
+      (message) => message.id === lastPendingTurn.id,
+    );
+
+    if (wasCompletingTurn && !hasCommittedTurn) {
+      setPendingAssistantTurnBridge((previous) =>
+        previous?.id === lastPendingTurn.id ? previous : lastPendingTurn,
+      );
+      return;
+    }
+
+    setPendingAssistantTurnBridge((previous) =>
+      previous ? null : previous,
+    );
+    lastPendingAssistantTurnRef.current = null;
+  }, [app.chat.messages, app.chat.pendingAssistantTurn]);
+
+  useEffect(() => {
+    setIsStreamingAutoScrollEnabled(false);
+  }, [app.chatHistory.activeSessionId]);
+
+  useEffect(() => {
+    if (historyLoadTimerRef.current !== null) {
+      window.clearTimeout(historyLoadTimerRef.current);
+      historyLoadTimerRef.current = null;
+    }
+    setAutoCollapsedMessageIds(new Set());
+    setManuallyExpandedMessageIds(new Set());
+    setLoadedMessageCount(MESSAGE_WINDOW_CHUNK);
+    setIsLoadingOlderMessages(false);
+    previousCommittedMessageIdsRef.current = [];
+    collapseAllOnLoadRef.current = true;
+    pendingHistoryPrependRef.current = null;
+  }, [app.chatHistory.activeSessionId]);
+
+  useEffect(() => {
+    const currentMessages = app.chat.messages;
+    const currentIds = new Set(currentMessages.map((message) => message.id));
+    const previousIds = previousCommittedMessageIdsRef.current;
+    const previousIdSet = new Set(previousIds);
+    const newlyAddedMessages = currentMessages.filter(
+      (message) => !previousIdSet.has(message.id),
+    );
+
+    const prunedAutoCollapsed = new Set(
+      Array.from(autoCollapsedMessageIds).filter((id) => currentIds.has(id)),
+    );
+    const prunedManualExpanded = new Set(
+      Array.from(manuallyExpandedMessageIds).filter((id) => currentIds.has(id)),
+    );
+
+    const shouldCollapseAllOnLoad =
+      collapseAllOnLoadRef.current &&
+      previousIds.length === 0 &&
+      currentMessages.length > 0 &&
+      !app.chat.pendingAssistantTurn;
+
+    if (shouldCollapseAllOnLoad) {
+      for (const message of currentMessages) {
+        if (message.role === "user" || message.role === "model") {
+          prunedAutoCollapsed.add(message.id);
+        }
+      }
+      collapseAllOnLoadRef.current = false;
+    } else {
+      for (const message of newlyAddedMessages) {
+        if (message.role === "user") {
+          prunedAutoCollapsed.add(message.id);
+        }
+      }
+
+      const hasNewBotMessage = newlyAddedMessages.some(
+        (message) => message.role === "model",
+      );
+      if (hasNewBotMessage) {
+        const allBotMessages = currentMessages.filter(
+          (message) => message.role === "model",
+        );
+        const latestBotId =
+          allBotMessages.length > 0
+            ? allBotMessages[allBotMessages.length - 1].id
+            : null;
+
+        for (const botMessage of allBotMessages) {
+          if (botMessage.id !== latestBotId) {
+            prunedAutoCollapsed.add(botMessage.id);
+          }
+        }
+      }
+    }
+
+    if (!areIdSetsEqual(prunedAutoCollapsed, autoCollapsedMessageIds)) {
+      setAutoCollapsedMessageIds(prunedAutoCollapsed);
+    }
+    if (!areIdSetsEqual(prunedManualExpanded, manuallyExpandedMessageIds)) {
+      setManuallyExpandedMessageIds(prunedManualExpanded);
+    }
+
+    previousCommittedMessageIdsRef.current = currentMessages.map(
+      (message) => message.id,
+    );
+  }, [
+    app.chat.messages,
+    app.chat.pendingAssistantTurn,
+    autoCollapsedMessageIds,
+    manuallyExpandedMessageIds,
+  ]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleHistoryTopLoad = () => {
+      if (isProgrammaticScrollRef.current) {
+        return;
+      }
+      if (container.scrollTop > HISTORY_LOAD_TRIGGER_TOP_PX) {
+        return;
+      }
+      if (isLoadingOlderMessages || historyLoadTimerRef.current !== null) {
+        return;
+      }
+      if (loadedMessageCount >= latestCommittedMessageCountRef.current) {
+        return;
+      }
+
+      pendingHistoryPrependRef.current = {
+        previousScrollHeight: container.scrollHeight,
+      };
+      setIsLoadingOlderMessages(true);
+      historyLoadTimerRef.current = window.setTimeout(() => {
+        historyLoadTimerRef.current = null;
+        setLoadedMessageCount((previous) =>
+          Math.min(
+            previous + MESSAGE_WINDOW_CHUNK,
+            latestCommittedMessageCountRef.current,
+          ),
+        );
+      }, HISTORY_LOAD_DELAY_MS);
+    };
+
+    container.addEventListener("scroll", handleHistoryTopLoad, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", handleHistoryTopLoad);
+    };
+  }, [isLoadingOlderMessages, loadedMessageCount]);
+
+  useLayoutEffect(() => {
+    const pendingPrepend = pendingHistoryPrependRef.current;
+    if (!pendingPrepend) return;
+
+    const container = scrollContainerRef.current;
+    if (container) {
+      const addedHeight =
+        container.scrollHeight - pendingPrepend.previousScrollHeight;
+      if (addedHeight > 0) {
+        isProgrammaticScrollRef.current = true;
+        container.scrollTop = Math.max(0, container.scrollTop + addedHeight);
+        window.requestAnimationFrame(() => {
+          isProgrammaticScrollRef.current = false;
+        });
+      }
+    }
+
+    pendingHistoryPrependRef.current = null;
+    setIsLoadingOlderMessages(false);
+  }, [visibleWindowedMessages.length]);
+
+  useEffect(() => {
+    return () => {
+      if (historyLoadTimerRef.current !== null) {
+        window.clearTimeout(historyLoadTimerRef.current);
+      }
+    };
+  }, []);
 
   useLayoutEffect(() => {
     if (isNavigationLoading) {
@@ -203,68 +495,85 @@ export const Chat: React.FC = () => {
 
     if (!isContentMounted) {
       setIsContentMounted(true);
-      setShowLoadingOverlay(true);
       return;
     }
 
     if (isRevealPendingForActiveChat) {
-      pendingReloadBottomSyncRef.current = false;
       setShowLoadingOverlay(false);
       return;
     }
-
-    setShowLoadingOverlay(true);
-
-    let revealFrameId: number | null = null;
-    revealFrameId = window.requestAnimationFrame(() => {
-      scrollBottomIntoView("auto");
-    });
-
-    return () => {
-      if (revealFrameId !== null) {
-        window.cancelAnimationFrame(revealFrameId);
-      }
-    };
   }, [
     app.chatHistory.activeSessionId,
     isContentMounted,
     isNavigationLoading,
     isRevealPendingForActiveChat,
-    scrollBottomIntoView,
   ]);
 
   useLayoutEffect(() => {
+    const shouldFollowStreaming =
+      !!app.chat.pendingAssistantTurn && isStreamingAutoScrollEnabled;
+    const shouldKeepPinnedForNonStreaming =
+      !app.chat.pendingAssistantTurn && wasAtBottomRef.current;
+
     if (
       isNavigationLoading ||
       showLoadingOverlay ||
       isRevealPendingForActiveChat ||
-      !wasAtBottomRef.current
+      (!shouldFollowStreaming && !shouldKeepPinnedForNonStreaming)
     ) {
       return;
     }
 
     scrollBottomIntoView("auto");
   }, [
+    app.chat.messages,
     app.chat.pendingAssistantTurn,
-    deferredMessages,
     isNavigationLoading,
+    isStreamingAutoScrollEnabled,
     isRevealPendingForActiveChat,
     scrollBottomIntoView,
     showLoadingOverlay,
   ]);
 
   useEffect(() => {
-    pendingReloadBottomSyncRef.current = true;
-    bottomStableSinceRef.current = null;
-    lastObservedScrollYRef.current = null;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (!isStreamingAutoScrollEnabled || !app.chat.pendingAssistantTurn) {
+        return;
+      }
+      if (isProgrammaticScrollRef.current) {
+        return;
+      }
+
+      const maxY = Math.max(0, container.scrollHeight - container.clientHeight);
+      const y = Math.max(0, container.scrollTop);
+      if (Math.abs(maxY - y) > BOTTOM_SYNC_EPSILON_PX) {
+        setIsStreamingAutoScrollEnabled(false);
+      }
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+    };
+  }, [app.chat.pendingAssistantTurn, isStreamingAutoScrollEnabled]);
+
+  useEffect(() => {
+    if (!isNavigationLoading) {
+      return;
+    }
+
     wasAtBottomRef.current = false;
     setShowLoadingOverlay(true);
     setIsContentMounted(false);
-  }, [app.chatHistory.activeSessionId]);
+  }, [app.chatHistory.activeSessionId, isNavigationLoading]);
+
+  const isDeferredContentReady = deferredMessages === app.chat.messages;
 
   useEffect(() => {
     if (
-      !pendingReloadBottomSyncRef.current ||
       isNavigationLoading ||
       !isContentMounted ||
       isRevealPendingForActiveChat ||
@@ -273,11 +582,9 @@ export const Chat: React.FC = () => {
       return;
     }
 
-    const settleIntervalId = window.setInterval(() => {
-      if (!pendingReloadBottomSyncRef.current) {
-        return;
-      }
+    let bottomStableSince: number | null = null;
 
+    const syncOverlayToRealScrollPosition = () => {
       const container = scrollContainerRef.current;
       if (!container) {
         return;
@@ -285,41 +592,50 @@ export const Chat: React.FC = () => {
 
       const maxY = Math.max(0, container.scrollHeight - container.clientHeight);
       const y = Math.max(0, container.scrollTop);
-      const isAtBottom = Math.abs(maxY - y) <= BOTTOM_SYNC_EPSILON_PX;
+      const isAtBottomByPosition =
+        Math.abs(maxY - y) <= BOTTOM_SYNC_EPSILON_PX;
 
-      if (!isAtBottom) {
-        bottomStableSinceRef.current = null;
-        lastObservedScrollYRef.current = y;
-        scrollBottomIntoView("auto");
+      if (!isAtBottomByPosition) {
+        bottomStableSince = null;
+        triggerScrollToBottomButton();
         return;
       }
 
-      const previousY = lastObservedScrollYRef.current;
-      lastObservedScrollYRef.current = y;
-      const yChanged =
-        previousY === null || Math.abs(previousY - y) > BOTTOM_SYNC_EPSILON_PX;
-
-      if (yChanged || bottomStableSinceRef.current === null) {
-        bottomStableSinceRef.current = Date.now();
+      if (!isDeferredContentReady) {
+        bottomStableSince = null;
         return;
       }
 
-      if (Date.now() - bottomStableSinceRef.current >= BOTTOM_STABLE_MS) {
-        pendingReloadBottomSyncRef.current = false;
+      if (bottomStableSince === null) {
+        bottomStableSince = Date.now();
+        return;
+      }
+
+      if (Date.now() - bottomStableSince >= BOTTOM_STABLE_MS) {
         wasAtBottomRef.current = true;
         setShowLoadingOverlay(false);
       }
-    }, BOTTOM_SETTLE_POLL_MS);
+    };
+
+    syncOverlayToRealScrollPosition();
+
+    const settleIntervalId = window.setInterval(
+      syncOverlayToRealScrollPosition,
+      BOTTOM_SETTLE_POLL_MS,
+    );
 
     return () => {
       window.clearInterval(settleIntervalId);
     };
   }, [
+    app.chat.messages,
+    deferredMessages,
     isContentMounted,
+    isDeferredContentReady,
     isNavigationLoading,
     isRevealPendingForActiveChat,
-    scrollBottomIntoView,
     showLoadingOverlay,
+    triggerScrollToBottomButton,
   ]);
 
   // Capture listen
@@ -396,33 +712,35 @@ export const Chat: React.FC = () => {
 
   // Handlers
   const handleSend = useCallback(() => {
-    const existingPaths = new Set(parseAttachmentPaths(inputValue));
+    const existingPaths = new Set(parseAttachmentPaths(app.input));
     const imageAttachments = app.attachments.filter(
       (attachment) =>
         attachment.type === "image" && !existingPaths.has(attachment.path),
     );
-    let finalInput = inputValue;
+    let finalInput = app.input;
     if (imageAttachments.length > 0) {
       const mentions = imageAttachments
         .map((a) => buildAttachmentMention(a.path, a.name))
         .join("\n");
-      finalInput = `${inputValue}\n\n${mentions}`.trim();
+      finalInput = `${app.input}\n\n${mentions}`.trim();
     }
     if (!finalInput.trim() || app.chat.isLoading) {
       return;
     }
 
-    const parsedPromptAttachments = parseAttachmentPaths(inputValue).map((path) => {
-      const sourcePath = app.getAttachmentSourcePath(path) || undefined;
-      const originalName = sourcePath ? getBaseName(sourcePath) : undefined;
-      return attachmentFromPath(path, undefined, originalName, sourcePath);
-    });
+    const parsedPromptAttachments = parseAttachmentPaths(app.input).map(
+      (path) => {
+        const sourcePath = app.getAttachmentSourcePath(path) || undefined;
+        const originalName = sourcePath ? getBaseName(sourcePath) : undefined;
+        return attachmentFromPath(path, undefined, originalName, sourcePath);
+      },
+    );
 
     app.trackPendingPromptAttachmentAnalysis(
       dedupeAttachmentsByPath([...app.attachments, ...parsedPromptAttachments]),
     );
     app.chat.handleSend(finalInput, app.inputModel);
-    setInputValue("");
+    app.setInput("");
     app.clearAttachments();
     snapToBottomAfterSend();
   }, [
@@ -430,9 +748,10 @@ export const Chat: React.FC = () => {
     app.chat,
     app.clearAttachments,
     app.getAttachmentSourcePath,
+    app.input,
     app.inputModel,
+    app.setInput,
     app.trackPendingPromptAttachmentAnalysis,
-    inputValue,
     snapToBottomAfterSend,
   ]);
 
@@ -512,7 +831,7 @@ export const Chat: React.FC = () => {
         })
         .filter((attachment) => attachment.type === "image");
 
-      setInputValue(stripImageAttachmentMentions(targetMessage.text));
+      app.setInput(stripImageAttachmentMentions(targetMessage.text));
       app.setAttachments(restoredAttachments);
       app.chat.handleUndoMessage(messageId);
     },
@@ -524,13 +843,25 @@ export const Chat: React.FC = () => {
   }, [app.chatHistory.activeSessionId]);
 
   useEffect(() => {
-    setInputValue("");
-  }, [app.chatHistory.activeSessionId]);
-
-  useEffect(() => {
     const target = revealTarget;
     if (!target) return;
     if (app.chatHistory.activeSessionId !== target.chatId) return;
+    if (target.messageIndex >= 0) {
+      const requiredVisibleCount =
+        latestCommittedMessageCountRef.current - target.messageIndex;
+      if (
+        Number.isFinite(requiredVisibleCount) &&
+        requiredVisibleCount > loadedMessageCount
+      ) {
+        setLoadedMessageCount(
+          Math.min(
+            latestCommittedMessageCountRef.current,
+            requiredVisibleCount + MESSAGE_WINDOW_CHUNK,
+          ),
+        );
+        return;
+      }
+    }
 
     wasAtBottomRef.current = false;
 
@@ -595,7 +926,12 @@ export const Chat: React.FC = () => {
         window.clearTimeout(hideHighlightTimer);
       }
     };
-  }, [app.chatHistory.activeSessionId, app.clearSearchReveal, revealTarget]);
+  }, [
+    app.chatHistory.activeSessionId,
+    app.clearSearchReveal,
+    loadedMessageCount,
+    revealTarget,
+  ]);
 
   const isImageProgressVisible =
     !!app.system.startupImage &&
@@ -603,6 +939,9 @@ export const Chat: React.FC = () => {
     !app.chat.streamingText &&
     app.chat.isAnalyzing;
   const imageProgressText = getVisibleImageProgressText(app.chat.toolStatus);
+  const isInitialRetryTurn =
+    app.chat.pendingAssistantTurn?.requestKind === "initial" &&
+    !!app.chat.retryingMessageId;
   const delayedImageAttachmentProgressText = getAttachmentAnalysisStatusText(
     app.pendingPromptAttachmentAnalysis,
   );
@@ -610,7 +949,7 @@ export const Chat: React.FC = () => {
   useEffect(() => {
     const turnId = app.chat.pendingAssistantTurn?.id ?? null;
 
-    if (!turnId || !isImageProgressVisible) {
+    if (!turnId || !isImageProgressVisible || isInitialRetryTurn) {
       imageProgressTurnIdRef.current = null;
       setDelayedImageAttachmentStatus(null);
       return;
@@ -629,7 +968,12 @@ export const Chat: React.FC = () => {
         previous?.turnId === turnId ? previous : null,
       );
     }
-  }, [app.chat.pendingAssistantTurn?.id, imageProgressText, isImageProgressVisible]);
+  }, [
+    app.chat.pendingAssistantTurn?.id,
+    imageProgressText,
+    isImageProgressVisible,
+    isInitialRetryTurn,
+  ]);
 
   useEffect(() => {
     const turnId = app.chat.pendingAssistantTurn?.id;
@@ -637,6 +981,7 @@ export const Chat: React.FC = () => {
     if (
       !turnId ||
       !isImageProgressVisible ||
+      isInitialRetryTurn ||
       !!imageProgressText ||
       !delayedImageAttachmentProgressText ||
       imageProgressTurnIdRef.current === turnId ||
@@ -667,11 +1012,13 @@ export const Chat: React.FC = () => {
     delayedImageAttachmentStatus?.turnId,
     imageProgressText,
     isImageProgressVisible,
+    isInitialRetryTurn,
   ]);
 
   const visibleImageProgressText = imageProgressText
     ? imageProgressText
-    : isImageProgressVisible &&
+    : !isInitialRetryTurn &&
+        isImageProgressVisible &&
         delayedImageAttachmentStatus?.turnId === app.chat.pendingAssistantTurn?.id
       ? delayedImageAttachmentStatus?.text ?? null
       : null;
@@ -685,6 +1032,43 @@ export const Chat: React.FC = () => {
   const showQuickAnswer =
     !isQuickAnswerSuppressedProgressText(visibleImageProgressText) &&
     (hasRunningToolStep || hasPreStepSearchStatus);
+  const getMessageCollapseMode = useCallback(
+    (messageId: string): MessageCollapseMode => {
+      if (manuallyExpandedMessageIds.has(messageId)) {
+        return "expanded";
+      }
+      if (autoCollapsedMessageIds.has(messageId)) {
+        return "collapsed";
+      }
+      return "none";
+    },
+    [autoCollapsedMessageIds, manuallyExpandedMessageIds],
+  );
+  const handleToggleMessageCollapse = useCallback(
+    (messageId: string, nextExpanded: boolean) => {
+      if (nextExpanded) {
+        setManuallyExpandedMessageIds((previous) => {
+          if (previous.has(messageId)) {
+            return previous;
+          }
+          const next = new Set(previous);
+          next.add(messageId);
+          return next;
+        });
+        return;
+      }
+
+      setManuallyExpandedMessageIds((previous) => {
+        if (!previous.has(messageId)) {
+          return previous;
+        }
+        const next = new Set(previous);
+        next.delete(messageId);
+        return next;
+      });
+    },
+    [],
+  );
 
   return (
     <ChatLayout
@@ -696,6 +1080,7 @@ export const Chat: React.FC = () => {
       visibleStartupImage={visibleStartupImage}
       showArtifactPlaceholder={showArtifactPlaceholder}
       showLoadingState={showLoadingOverlay}
+      showHistoryLoadSpinner={isLoadingOlderMessages && hasOlderHiddenMessages}
       isContentMounted={isContentMounted}
       isNavigating={app.isNavigating}
       isImageExpanded={isImageExpanded}
@@ -717,8 +1102,8 @@ export const Chat: React.FC = () => {
       onOcrModelChange={app.system.setSessionOcrLanguage}
       isOcrScanning={app.isOcrScanning}
       onOcrScanningChange={app.setIsOcrScanning}
-      inputValue={inputValue}
-      onInputChange={setInputValue}
+      inputValue={app.input}
+      onInputChange={app.setInput}
       onSend={handleSend}
       isChatLoading={app.chat.isLoading}
       isAiTyping={app.chat.isAiTyping}
@@ -732,6 +1117,8 @@ export const Chat: React.FC = () => {
       onPreviewAttachment={app.openMediaViewer}
       rememberAttachmentSourcePath={app.rememberAttachmentSourcePath}
       showScrollToBottomButton={showScrollToBottomButton}
+      keepScrollToBottomButtonMounted={showLoadingOverlay}
+      scrollToBottomButtonRef={scrollToBottomButtonRef}
       onScrollToBottom={handleScrollToBottom}
       menuRef={menuRef}
       sliderRef={sliderRef}
@@ -751,11 +1138,13 @@ export const Chat: React.FC = () => {
         showQuickAnswer={showQuickAnswer}
         visibleImageProgressText={visibleImageProgressText}
         onQuickAnswer={app.chat.handleQuickAnswer}
-        messages={deferredMessages}
-        pendingAssistantTurn={app.chat.pendingAssistantTurn}
+        messages={visibleWindowedMessages}
+        pendingAssistantTurn={effectivePendingAssistantTurn}
         pendingPromptAttachmentAnalysis={app.pendingPromptAttachmentAnalysis}
         hideThinkingProgress={app.chat.isAnalyzing}
         selectedModel={app.inputModel}
+        getMessageCollapseMode={getMessageCollapseMode}
+        onToggleMessageCollapse={handleToggleMessageCollapse}
         onRetryMessage={handleRetryMessage}
         onUndoMessage={handleRequestUndoMessage}
         onSystemAction={app.handleSystemAction}

@@ -11,7 +11,11 @@ import {
   type AttachmentAnalysisCounts,
 } from "@/lib";
 import { MessageList } from "@/features";
-import type { Message, PendingAssistantTurn } from "./chat.types";
+import type {
+  Message,
+  MessageCollapseMode,
+  PendingAssistantTurn,
+} from "./chat.types";
 import styles from "./Chat.module.css";
 
 interface ChatContentProps {
@@ -29,6 +33,8 @@ interface ChatContentProps {
   pendingPromptAttachmentAnalysis?: AttachmentAnalysisCounts | null;
   hideThinkingProgress?: boolean;
   selectedModel: string;
+  getMessageCollapseMode?: (messageId: string) => MessageCollapseMode;
+  onToggleMessageCollapse?: (messageId: string, nextExpanded: boolean) => void;
   onRetryMessage?: (messageId: string, modelId?: string) => void;
   onUndoMessage?: (messageId: string) => void;
   onSystemAction?: (actionId: string, value?: string) => void;
@@ -49,6 +55,8 @@ const ChatContentComponent: React.FC<ChatContentProps> = ({
   pendingPromptAttachmentAnalysis,
   hideThinkingProgress = false,
   selectedModel,
+  getMessageCollapseMode,
+  onToggleMessageCollapse,
   onRetryMessage,
   onUndoMessage,
   onSystemAction,
@@ -113,6 +121,8 @@ const ChatContentComponent: React.FC<ChatContentProps> = ({
         pendingPromptAttachmentAnalysis={pendingPromptAttachmentAnalysis}
         hideThinkingProgress={hideThinkingProgress}
         selectedModel={selectedModel}
+        getMessageCollapseMode={getMessageCollapseMode}
+        onToggleMessageCollapse={onToggleMessageCollapse}
         onQuickAnswer={onQuickAnswer}
         onRetryMessage={onRetryMessage}
         onUndoMessage={onUndoMessage}
@@ -147,6 +157,8 @@ export const ChatContent = React.memo(
         nextProps.pendingPromptAttachmentAnalysis &&
       prevProps.hideThinkingProgress === nextProps.hideThinkingProgress &&
       prevProps.selectedModel === nextProps.selectedModel &&
+      prevProps.getMessageCollapseMode === nextProps.getMessageCollapseMode &&
+      prevProps.onToggleMessageCollapse === nextProps.onToggleMessageCollapse &&
       prevProps.onRetryMessage === nextProps.onRetryMessage &&
       prevProps.onUndoMessage === nextProps.onUndoMessage &&
       prevProps.onSystemAction === nextProps.onSystemAction

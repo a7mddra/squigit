@@ -26,6 +26,7 @@ interface ChatLayoutProps {
   visibleStartupImage: StartupImage;
   showArtifactPlaceholder: boolean;
   showLoadingState: boolean;
+  showHistoryLoadSpinner?: boolean;
   isContentMounted: boolean;
   isNavigating: boolean;
   isImageExpanded: boolean;
@@ -69,6 +70,8 @@ interface ChatLayoutProps {
     sourcePath: string,
   ) => void;
   showScrollToBottomButton: boolean;
+  keepScrollToBottomButtonMounted: boolean;
+  scrollToBottomButtonRef: RefObject<HTMLButtonElement | null>;
   onScrollToBottom: () => void;
   menuRef: RefObject<HTMLDivElement | null>;
   sliderRef: RefObject<HTMLDivElement | null>;
@@ -89,6 +92,7 @@ const ChatLayoutComponent: React.FC<ChatLayoutProps> = ({
   visibleStartupImage,
   showArtifactPlaceholder,
   showLoadingState,
+  showHistoryLoadSpinner = false,
   isContentMounted,
   isNavigating,
   isImageExpanded,
@@ -125,6 +129,8 @@ const ChatLayoutComponent: React.FC<ChatLayoutProps> = ({
   onPreviewAttachment,
   rememberAttachmentSourcePath,
   showScrollToBottomButton,
+  keepScrollToBottomButtonMounted,
+  scrollToBottomButtonRef,
   onScrollToBottom,
   menuRef,
   sliderRef,
@@ -197,6 +203,8 @@ const ChatLayoutComponent: React.FC<ChatLayoutProps> = ({
               onPreviewAttachment={onPreviewAttachment}
               rememberAttachmentSourcePath={rememberAttachmentSourcePath}
               showScrollToBottomButton={showScrollToBottomButton}
+              keepScrollToBottomButtonMounted={keepScrollToBottomButtonMounted}
+              scrollToBottomButtonRef={scrollToBottomButtonRef}
               onScrollToBottom={onScrollToBottom}
             />
           </div>
@@ -211,6 +219,16 @@ const ChatLayoutComponent: React.FC<ChatLayoutProps> = ({
           }
         >
           <main className={styles.scrollContent}>
+            {showHistoryLoadSpinner && (
+              <div
+                className={styles.historyLoadSpinner}
+                role="status"
+                aria-live="polite"
+                aria-label="Loading older messages"
+              >
+                <LoadingSpinner />
+              </div>
+            )}
             <div className={styles.contentViewport}>
               <div className={styles.contentStage}>
                 <div

@@ -343,6 +343,12 @@
   transform: translateX(-50%) translateY(-1px);
 }
 
+.scrollToBottomButtonHidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .voiceContainer {
   display: flex;
   align-items: center;

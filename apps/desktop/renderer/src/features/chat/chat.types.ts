@@ -64,6 +64,8 @@ export interface Message {
   toolSteps?: ToolStep[];
 }
 
+export type MessageCollapseMode = "none" | "collapsed" | "expanded";
+
 export interface AppConfig {
   google_gemini: {
     api_key: string;

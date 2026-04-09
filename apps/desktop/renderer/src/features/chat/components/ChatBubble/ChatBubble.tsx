@@ -32,6 +32,7 @@ import {
 } from "@/lib";
 import {
   Message,
+  MessageCollapseMode,
   PendingAssistantTurn,
   ToolStep,
 } from "@/features";
@@ -48,6 +49,8 @@ interface ChatBubbleProps {
   onUndo?: () => void;
   onAction?: (actionId: string, value?: string) => void;
   enableInternalLinks?: boolean;
+  collapseMode?: MessageCollapseMode;
+  onToggleCollapse?: (messageId: string, nextExpanded: boolean) => void;
 }
 
 interface MarkdownErrorBoundaryProps {
@@ -94,6 +97,10 @@ class MarkdownErrorBoundary extends React.Component<
 
 const LONG_MESSAGE_CHAR_THRESHOLD = 120_000;
 const LONG_MESSAGE_LINE_THRESHOLD = 2_000;
+const COLLAPSE_ELIGIBLE_CHAR_THRESHOLD = 3_500;
+const COLLAPSE_ELIGIBLE_LINE_THRESHOLD = 120;
+const COLLAPSE_PREVIEW_CHAR_LIMIT = 1_800;
+const COLLAPSE_PREVIEW_LINE_LIMIT = 60;
 
 function getBaseName(path: string): string {
   const lastSlash = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
@@ -192,6 +199,87 @@ function normalizeAttachmentHref(href: string): string {
   }
 }
 
+function getTextLineCount(text: string): number {
+  if (!text) return 0;
+
+  let lineCount = 1;
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] === "\n") {
+      lineCount += 1;
+    }
+  }
+  return lineCount;
+}
+
+function getPreviewCutIndex(text: string): number {
+  const charCutIndex = Math.min(text.length, COLLAPSE_PREVIEW_CHAR_LIMIT);
+  let lineCutIndex = text.length;
+  let lineCount = 1;
+
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] !== "\n") continue;
+
+    lineCount += 1;
+    if (lineCount > COLLAPSE_PREVIEW_LINE_LIMIT) {
+      lineCutIndex = i;
+      break;
+    }
+  }
+
+  return Math.min(charCutIndex, lineCutIndex);
+}
+
+function isInsideUnclosedFence(text: string): boolean {
+  let inFence = false;
+  let fenceChar = "";
+  let fenceLength = 0;
+
+  for (const line of text.split("\n")) {
+    const match = line.match(/^\s*(`{3,}|~{3,})/u);
+    if (!match) continue;
+
+    const marker = match[1];
+    if (!inFence) {
+      inFence = true;
+      fenceChar = marker[0];
+      fenceLength = marker.length;
+      continue;
+    }
+
+    if (marker[0] === fenceChar && marker.length >= fenceLength) {
+      inFence = false;
+      fenceChar = "";
+      fenceLength = 0;
+    }
+  }
+
+  return inFence;
+}
+
+function buildCollapsedPreview(text: string): {
+  text: string;
+  isRaw: boolean;
+  truncated: boolean;
+} {
+  const cutIndex = getPreviewCutIndex(text);
+  if (cutIndex >= text.length) {
+    return {
+      text,
+      isRaw: false,
+      truncated: false,
+    };
+  }
+
+  const preview = text.slice(0, cutIndex).trimEnd();
+  const isRaw = isInsideUnclosedFence(preview);
+
+  return {
+    text: isRaw ? preview : `${preview}...`,
+    isRaw,
+    truncated: true,
+  };
+}
+
 const WebsiteCitationChip: React.FC<{
   citation: NonNullable<Message["citations"]>[number];
   animate?: boolean;
@@ -249,6 +337,8 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
   onUndo,
   onAction,
   enableInternalLinks = false,
+  collapseMode = "none",
+  onToggleCollapse,
 }) => {
   const app = useAppContext();
   const isUser = message.role === "user";
@@ -326,6 +416,32 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
     !hasPendingShellContent;
   const shouldRenderBubble = !isImageOnlyEmptyCaption;
   const shouldDoubleNewlines = isUser && !isRichMarkdownUserMessage;
+  const displayTextLineCount = useMemo(
+    () => getTextLineCount(displayText),
+    [displayText],
+  );
+  const isCollapseEligible =
+    displayText.length > COLLAPSE_ELIGIBLE_CHAR_THRESHOLD ||
+    displayTextLineCount > COLLAPSE_ELIGIBLE_LINE_THRESHOLD;
+  const effectiveCollapseMode: MessageCollapseMode =
+    !isPendingAssistant &&
+    message.role !== "system" &&
+    isCollapseEligible
+      ? collapseMode
+      : "none";
+  const isCollapsed = effectiveCollapseMode === "collapsed";
+  const shouldShowCollapseToggle =
+    effectiveCollapseMode === "collapsed" || effectiveCollapseMode === "expanded";
+  const collapsedPreview = useMemo(
+    () => (isCollapsed ? buildCollapsedPreview(displayText) : null),
+    [displayText, isCollapsed],
+  );
+  const renderedText =
+    isCollapsed && collapsedPreview?.truncated
+      ? collapsedPreview.text
+      : displayText;
+  const shouldRenderCollapsedRawPreview =
+    isCollapsed && !!collapsedPreview?.truncated && collapsedPreview.isRaw;
   const isVeryLongMessage = useMemo(() => {
     if (!displayText) return false;
     if (displayText.length >= LONG_MESSAGE_CHAR_THRESHOLD) {
@@ -344,28 +460,38 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
 
     return false;
   }, [displayText]);
-  const shouldRenderPlainTextMessage = isUser && isVeryLongMessage;
+  const shouldRenderPlainTextMessage =
+    !isCollapsed && isUser && isVeryLongMessage;
   const markdownRenderText = useMemo(
     () =>
-      preprocessMarkdown(normalizeAttachmentMarkdownLinks(displayText), {
+      preprocessMarkdown(normalizeAttachmentMarkdownLinks(renderedText), {
         doubleNewlines: shouldDoubleNewlines && !shouldRenderPlainTextMessage,
       }),
-    [displayText, shouldDoubleNewlines, shouldRenderPlainTextMessage],
+    [renderedText, shouldDoubleNewlines, shouldRenderPlainTextMessage],
   );
   const markdownBoundaryFallback = useMemo(
     () => (
       <pre className={mdStyles.fallbackPlainText}>
-        {displayText}
+        {renderedText}
       </pre>
     ),
-    [displayText],
+    [renderedText],
   );
-  const markdownBoundaryKey = `${message.id}-${message.role}-${displayText.length}`;
+  const markdownBoundaryKey = `${message.id}-${message.role}-${renderedText.length}-${effectiveCollapseMode}`;
   const canCopy = !copyDisabled && hasDisplayText;
   const shouldShowRetryButton = !isUser && message.role !== "system" && !!onRetry;
   const shouldShowCopyButton = message.role !== "system";
   const isPendingEmpty = isPendingAssistant && !hasDisplayText;
   const animateCitations = isPendingAssistant;
+  const handleToggleCollapse = useCallback(() => {
+    if (!onToggleCollapse || !shouldShowCollapseToggle) return;
+    onToggleCollapse(message.id, effectiveCollapseMode === "collapsed");
+  }, [
+    effectiveCollapseMode,
+    message.id,
+    onToggleCollapse,
+    shouldShowCollapseToggle,
+  ]);
 
   const handleImageClick = useCallback(
     (attachment: (typeof imageAttachments)[number], index: number) => {
@@ -651,7 +777,11 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
                         : mdStyles.markdownContent
                     }
                   >
-                    {shouldRenderPlainTextMessage ? (
+                    {shouldRenderCollapsedRawPreview ? (
+                      <pre className={mdStyles.fallbackPlainText}>
+                        {renderedText}
+                      </pre>
+                    ) : shouldRenderPlainTextMessage ? (
                       markdownBoundaryFallback
                     ) : (
                       <MarkdownErrorBoundary
@@ -689,6 +819,20 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
                         animate={animateCitations}
                       />
                     ))}
+                  </div>
+                )}
+
+                {shouldShowCollapseToggle && (
+                  <div className={styles.inlineCollapseFooter}>
+                    <button
+                      type="button"
+                      className={styles.inlineCollapseButton}
+                      onClick={handleToggleCollapse}
+                    >
+                      {effectiveCollapseMode === "collapsed"
+                        ? "Show more"
+                        : "Show less"}
+                    </button>
                   </div>
                 )}
               </div>
@@ -772,7 +916,9 @@ export const ChatBubble = React.memo(
       prevProps.copyDisabled === nextProps.copyDisabled &&
       !!prevProps.onRetry === !!nextProps.onRetry &&
       !!prevProps.onUndo === !!nextProps.onUndo &&
-      prevProps.enableInternalLinks === nextProps.enableInternalLinks
+      prevProps.enableInternalLinks === nextProps.enableInternalLinks &&
+      prevProps.collapseMode === nextProps.collapseMode &&
+      prevProps.onToggleCollapse === nextProps.onToggleCollapse
     );
   },
 );

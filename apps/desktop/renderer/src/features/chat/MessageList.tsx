@@ -7,6 +7,7 @@
 import React from "react";
 import {
   Message,
+  MessageCollapseMode,
   PendingAssistantTurn,
 } from "./chat.types";
 import { ChatBubble } from "@/features";
@@ -28,6 +29,8 @@ interface MessageListProps {
   pendingPromptAttachmentAnalysis?: AttachmentAnalysisCounts | null;
   hideThinkingProgress?: boolean;
   selectedModel: string;
+  getMessageCollapseMode?: (messageId: string) => MessageCollapseMode;
+  onToggleMessageCollapse?: (messageId: string, nextExpanded: boolean) => void;
   onQuickAnswer?: () => void;
   onRetryMessage?: (messageId: string, modelId?: string) => void;
   onUndoMessage?: (messageId: string) => void;
@@ -61,6 +64,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   pendingPromptAttachmentAnalysis,
   hideThinkingProgress = false,
   selectedModel,
+  getMessageCollapseMode,
+  onToggleMessageCollapse,
   onQuickAnswer,
   onRetryMessage,
   onUndoMessage,
@@ -174,6 +179,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         <div key={msg.id} className={styles.item}>
           <ChatBubble
             message={msg}
+            collapseMode={getMessageCollapseMode?.(msg.id) ?? "none"}
+            onToggleCollapse={onToggleMessageCollapse}
             onRetry={
               msg.role !== "user" && onRetryMessage
                 ? () => onRetryMessage(msg.id, selectedModel)
@@ -232,6 +239,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                   stopped: pendingAssistantTurn.stopped,
                 }}
                 pendingTurn={pendingAssistantTurn}
+                collapseMode="none"
                 onRetry={onRetryMessage ? () => {} : undefined}
                 retryDisabled={true}
                 copyDisabled={pendingAssistantTurn.displayText.trim().length === 0}
@@ -253,7 +261,9 @@ export const MessageList = React.memo(
       prevProps.pendingPromptAttachmentAnalysis ===
         nextProps.pendingPromptAttachmentAnalysis &&
       prevProps.hideThinkingProgress === nextProps.hideThinkingProgress &&
-      prevProps.selectedModel === nextProps.selectedModel
+      prevProps.selectedModel === nextProps.selectedModel &&
+      prevProps.getMessageCollapseMode === nextProps.getMessageCollapseMode &&
+      prevProps.onToggleMessageCollapse === nextProps.onToggleMessageCollapse
     );
   },
 );

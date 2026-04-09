@@ -39,6 +39,23 @@ import {
   ModelType,
 } from "@/lib";
 
+const DEFAULT_THREAD_TITLE_NORMALIZED = "new thread";
+
+function normalizeThreadTitle(title: string | null | undefined): string {
+  if (!title) return "";
+
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function isUntitledThreadTitle(title: string | null | undefined): boolean {
+  const normalized = normalizeThreadTitle(title);
+  return normalized.length === 0 || normalized === DEFAULT_THREAD_TITLE_NORMALIZED;
+}
+
 export const useGeminiEngine = (config: {
   apiKey: string;
   currentModel: string;
@@ -1085,8 +1102,8 @@ export const useGeminiEngine = (config: {
 
       if (
         msgIndex === 0 &&
-        (!config.chatTitle || config.chatTitle === "New thread") &&
-        responseText.length > 50 &&
+        isUntitledThreadTitle(config.chatTitle) &&
+        responseText.trim().length > 0 &&
         config.generateTitle &&
         config.onTitleGenerated
       ) {

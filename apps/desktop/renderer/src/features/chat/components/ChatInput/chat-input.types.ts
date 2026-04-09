@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, RefObject } from "react";
 import type { Attachment } from "@/lib";
 
 export type ChatSubmitHandler = () => void;
@@ -41,5 +41,7 @@ export interface ChatInputProps {
     sourcePath: string,
   ) => void;
   showScrollToBottomButton?: boolean;
+  keepScrollToBottomButtonMounted?: boolean;
+  scrollToBottomButtonRef?: RefObject<HTMLButtonElement | null>;
   onScrollToBottom?: () => void;
 }
