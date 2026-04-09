@@ -295,7 +295,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({
           onSelectAll={() => editorRef.current?.selectAll()}
           onUndo={() => editorRef.current?.undo()}
           onRedo={() => editorRef.current?.redo()}
-          hasSelection={hasSelection}
+          hasSelection={contextMenuData.hasSelection}
         />
       )}
 

@@ -533,6 +533,19 @@ async function readClipboardImagePath(): Promise<string | null> {
   }
 }
 
+async function readClipboardTextValue(): Promise<string> {
+  try {
+    return await invoke<string>("read_clipboard_text");
+  } catch {
+    try {
+      return await navigator.clipboard.readText();
+    } catch (err) {
+      console.error("Failed to read clipboard text:", err);
+      return "";
+    }
+  }
+}
+
 export const InputTextarea = forwardRef<ChatInputEditorHandle, InputTextareaProps>(
   (
     {
@@ -639,7 +652,7 @@ export const InputTextarea = forwardRef<ChatInputEditorHandle, InputTextareaProp
         return;
       }
 
-      const text = await navigator.clipboard.readText();
+      const text = await readClipboardTextValue();
       if (!text) {
         return;
       }
@@ -854,9 +867,8 @@ export const InputTextarea = forwardRef<ChatInputEditorHandle, InputTextareaProp
                 "--chat-input-max-height": maxHeight,
               } as React.CSSProperties
             }
-            onContextMenu={onContextMenu}
           >
-            <EditorContent editor={editor} />
+            <EditorContent editor={editor} onContextMenu={onContextMenu} />
           </div>
         </div>
       </>

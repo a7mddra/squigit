@@ -116,10 +116,12 @@ export const ContextMenuItem: React.FC<ContextMenuItemProps> = ({
   className,
   variant = "default",
   shortcut,
+  type = "button",
   ...props
 }) => {
   return (
     <button
+      type={type}
       className={`${styles.contextMenuItem} ${variant === "danger" ? styles.danger : ""} ${className || ""}`}
       {...props}
     >

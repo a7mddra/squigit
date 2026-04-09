@@ -16,12 +16,12 @@ interface TextContextMenuProps {
   x: number;
   y: number;
   onClose: () => void;
-  onCopy?: () => void;
-  onPaste?: () => void;
-  onCut?: () => void;
-  onSelectAll?: () => void;
-  onUndo?: () => void;
-  onRedo?: () => void;
+  onCopy?: () => void | Promise<void>;
+  onPaste?: () => void | Promise<void>;
+  onCut?: () => void | Promise<void>;
+  onSelectAll?: () => void | Promise<void>;
+  onUndo?: () => void | Promise<void>;
+  onRedo?: () => void | Promise<void>;
   selectedText?: string;
   hasSelection?: boolean;
 }
@@ -96,8 +96,13 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
       <ContextMenuItem
         onClick={(e) => {
           e.stopPropagation();
-          onPaste?.();
-          onClose();
+          void (async () => {
+            try {
+              await onPaste?.();
+            } finally {
+              onClose();
+            }
+          })();
         }}
         disabled={!onPaste}
         shortcut={`${mod}V`}

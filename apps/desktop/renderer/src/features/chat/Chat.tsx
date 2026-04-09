@@ -238,8 +238,13 @@ export const Chat: React.FC = () => {
       if (!container) return;
 
       isProgrammaticScrollRef.current = true;
-      const maxY = Math.max(0, container.scrollHeight - container.clientHeight);
-      container.scrollTo({ top: maxY, behavior });
+      const anchor = bottomAnchorRef.current;
+      if (anchor) {
+        anchor.scrollIntoView({ behavior, block: "end", inline: "nearest" });
+      } else {
+        const maxY = Math.max(0, container.scrollHeight - container.clientHeight);
+        container.scrollTo({ top: maxY, behavior });
+      }
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
           isProgrammaticScrollRef.current = false;
@@ -251,6 +256,7 @@ export const Chat: React.FC = () => {
 
   const snapToBottomAfterSend = useCallback(() => {
     wasAtBottomRef.current = true;
+    setIsStreamingAutoScrollEnabled(true);
     scrollBottomIntoView("auto");
 
     window.requestAnimationFrame(() => {
@@ -261,8 +267,8 @@ export const Chat: React.FC = () => {
 
   const handleScrollToBottom = useCallback(() => {
     wasAtBottomRef.current = true;
+    setIsStreamingAutoScrollEnabled(true);
     if (app.chat.pendingAssistantTurn) {
-      setIsStreamingAutoScrollEnabled(true);
       scrollBottomIntoView("auto");
       return;
     }
