@@ -113,6 +113,37 @@ export const Chat: React.FC = () => {
     }
   }, [app.isNavigating, app.system.startupImage]);
 
+  useEffect(() => {
+    const lockWindowScroll = () => {
+      const html = document.documentElement;
+      const body = document.body;
+
+      if (
+        window.scrollX === 0 &&
+        window.scrollY === 0 &&
+        html.scrollTop === 0 &&
+        html.scrollLeft === 0 &&
+        body.scrollTop === 0 &&
+        body.scrollLeft === 0
+      ) {
+        return;
+      }
+
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      html.scrollTop = 0;
+      html.scrollLeft = 0;
+      body.scrollTop = 0;
+      body.scrollLeft = 0;
+    };
+
+    lockWindowScroll();
+    window.addEventListener("scroll", lockWindowScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", lockWindowScroll);
+    };
+  }, []);
+
   const visibleStartupImage =
     app.system.startupImage ?? (app.isNavigating ? retainedStartupImage : null);
   const isNavigationLoading = app.isNavigating || !app.isChatContentReady;
@@ -150,14 +181,11 @@ export const Chat: React.FC = () => {
 
   const snapToBottomAfterSend = useCallback(() => {
     wasAtBottomRef.current = true;
+    scrollBottomIntoView("auto");
 
     window.requestAnimationFrame(() => {
-      scrollBottomIntoView("smooth");
-
       // Run one more frame to catch late layout updates from streamed placeholders.
-      window.requestAnimationFrame(() => {
-        scrollBottomIntoView("auto");
-      });
+      scrollBottomIntoView("auto");
     });
   }, [scrollBottomIntoView]);
 

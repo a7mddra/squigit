@@ -19,10 +19,13 @@ type CitationChipVisual =
       fileName: string;
     };
 
+export type CitationChipVariant = "site" | "file";
+
 export interface CitationChipProps
   extends Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "children"> {
   label: string;
   visual: CitationChipVisual;
+  variant?: CitationChipVariant;
   fullWidth?: boolean;
   animate?: boolean;
 }
@@ -58,6 +61,7 @@ export const CitationChip = forwardRef<HTMLAnchorElement, CitationChipProps>(
     {
       label,
       visual,
+      variant,
       className,
       fullWidth = false,
       animate = false,
@@ -66,6 +70,7 @@ export const CitationChip = forwardRef<HTMLAnchorElement, CitationChipProps>(
     ref,
   ) => {
     const [hideFavicon, setHideFavicon] = useState(false);
+    const resolvedVariant = variant || (visual.kind === "file" ? "file" : "site");
 
     return (
       <a
@@ -73,6 +78,7 @@ export const CitationChip = forwardRef<HTMLAnchorElement, CitationChipProps>(
         {...anchorProps}
         className={[
           styles.chip,
+          resolvedVariant === "file" ? styles.fileVariant : styles.siteVariant,
           fullWidth ? styles.fullWidth : "",
           animate ? styles.reveal : "",
           className || "",

@@ -146,7 +146,7 @@
 .floatingContainer {
   background-color: var(--c-raw-012);
   border: 1px solid var(--c-raw-010);
-  box-shadow: 0 4px 16px #00000024;
+  box-shadow: 0 2px 8px #00000020;
   position: relative;
   width: var(--image-artifact-width, 95%);
   max-width: 43.5rem;

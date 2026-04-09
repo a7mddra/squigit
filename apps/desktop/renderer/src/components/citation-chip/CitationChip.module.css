@@ -7,14 +7,12 @@
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
   width: auto;
   max-width: 100%;
   min-width: 0;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  border: 1px solid var(--c-raw-043);
-  background: color-mix(in srgb, var(--c-raw-012) 70%, transparent);
+  gap: 0.35rem;
   text-decoration: none;
   color: var(--c-raw-003);
   font-size: 0.78rem;
@@ -23,9 +21,23 @@
     border-color 0.16s ease;
 }
 
-.chip:hover {
+.siteVariant,
+.fileVariant {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--c-raw-043);
+  background: color-mix(in srgb, var(--c-raw-012) 70%, transparent);
+  color: var(--c-raw-003);
+  font-size: 0.78rem;
+}
+
+.siteVariant:hover,
+.fileVariant:hover {
   background: color-mix(in srgb, var(--c-raw-012) 78%, transparent);
   border-color: color-mix(in srgb, var(--c-raw-043) 80%, var(--c-raw-003) 20%);
+}
+
+.fileVariant {
+  line-height: 1.25;
 }
 
 .chip:focus-visible {

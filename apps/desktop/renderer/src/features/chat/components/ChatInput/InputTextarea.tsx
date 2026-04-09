@@ -11,7 +11,6 @@ import React, {
   useCallback,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
 } from "react";
 import {
@@ -36,9 +35,9 @@ import { history, redo as redoHistory, undo as undoHistory } from "prosemirror-h
 import { keymap } from "prosemirror-keymap";
 import { Plugin, PluginKey, type Command } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
-import { getIcon } from "material-file-icons";
 import { invoke } from "@tauri-apps/api/core";
 import { CollapseTextareaIcon, ExpandTextareaIcon } from "@/assets";
+import { CitationChip } from "@/components";
 import {
   attachmentFromPath,
   buildAttachmentMention,
@@ -57,7 +56,6 @@ const EMPTY_DOC_JSON: JSONContent = {
   type: "doc",
   content: [{ type: "paragraph" }],
 };
-const DEFAULT_FILE_ICON_NAME = "file";
 
 interface AttachmentMentionAttrs {
   label: string;
@@ -79,6 +77,8 @@ interface InputTextareaProps {
 
 export interface ChatInputEditorHandle {
   focus: () => void;
+  blur: () => void;
+  resetScroll: () => void;
   insertRawText: (value: string) => void;
   appendRawText: (value: string) => void;
   copySelection: () => Promise<void>;
@@ -412,16 +412,6 @@ const Placeholder = Extension.create<{
   },
 });
 
-function resolveLocalFileIconMarkup(fileName: string): string {
-  const normalizedFileName = fileName.trim() || DEFAULT_FILE_ICON_NAME;
-
-  try {
-    return getIcon(normalizedFileName).svg;
-  } catch {
-    return getIcon(DEFAULT_FILE_ICON_NAME).svg;
-  }
-}
-
 const AttachmentMentionChip: React.FC<NodeViewProps> = ({ node }) => {
   const app = useAppContext();
   const path = String(node.attrs.path || "");
@@ -430,10 +420,6 @@ const AttachmentMentionChip: React.FC<NodeViewProps> = ({ node }) => {
   const attachment = attachmentFromPath(path, undefined, undefined, sourcePath);
   const fileName = sourcePath ? getBaseName(sourcePath) : attachment.name;
   const chipLabel = label || fileName;
-  const iconMarkup = useMemo(
-    () => resolveLocalFileIconMarkup(fileName),
-    [fileName],
-  );
 
   const openAttachment = useCallback(() => {
     void app.openMediaViewer({
@@ -449,10 +435,16 @@ const AttachmentMentionChip: React.FC<NodeViewProps> = ({ node }) => {
       contentEditable={false}
       data-path={path}
     >
-      <span
-        className={styles.inputAttachmentChip}
-        role="button"
+      <CitationChip
+        variant="file"
+        href={path}
+        visual={{
+          kind: "file",
+          fileName,
+        }}
+        label={chipLabel}
         tabIndex={-1}
+        draggable={false}
         title={sourcePath || path}
         onMouseDown={(event) => {
           if (event.button !== 0) {
@@ -466,14 +458,7 @@ const AttachmentMentionChip: React.FC<NodeViewProps> = ({ node }) => {
           event.stopPropagation();
           openAttachment();
         }}
-      >
-        <span
-          aria-hidden="true"
-          className={styles.inputAttachmentChipIcon}
-          dangerouslySetInnerHTML={{ __html: iconMarkup }}
-        />
-        <span className={styles.inputAttachmentChipLabel}>{chipLabel}</span>
-      </span>
+      />
     </NodeViewWrapper>
   );
 };
@@ -780,6 +765,14 @@ export const InputTextarea = forwardRef<ChatInputEditorHandle, InputTextareaProp
       editor.commands.setContent(rawTextToDocument(value), {
         emitUpdate: false,
       });
+
+      if (!value) {
+        const root = editor.view.dom as HTMLElement | null;
+        if (root) {
+          root.scrollTop = 0;
+        }
+      }
+
       onSelectionChangeRef.current(!editor.state.selection.empty);
     }, [editor, value]);
 
@@ -790,6 +783,16 @@ export const InputTextarea = forwardRef<ChatInputEditorHandle, InputTextareaProp
           editorRef.current?.commands.focus(undefined, {
             scrollIntoView: false,
           });
+        },
+        blur: () => {
+          const root = editorRef.current?.view.dom as HTMLElement | null;
+          root?.blur();
+        },
+        resetScroll: () => {
+          const root = editorRef.current?.view.dom as HTMLElement | null;
+          if (root) {
+            root.scrollTop = 0;
+          }
         },
         insertRawText: (nextValue: string) => {
           insertRawText(nextValue);

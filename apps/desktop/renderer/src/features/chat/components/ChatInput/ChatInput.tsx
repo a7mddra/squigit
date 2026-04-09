@@ -64,6 +64,7 @@ export const ChatInput: React.FC<ChatInputProps> = React.memo(({
 
   const handleSubmit = () => {
     if (!disabled && !isLoading && (value.trim().length > 0 || attachments.length > 0)) {
+      editorRef.current?.resetScroll();
       onSend();
     }
   };

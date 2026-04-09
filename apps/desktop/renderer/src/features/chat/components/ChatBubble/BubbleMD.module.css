@@ -229,6 +229,14 @@ details[open] .summary .chevron {
   max-width: 100%;
   overflow-x: auto;
 }
+
+.fallbackPlainText {
+  margin: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+  word-break: normal;
+}
 .markdownContent img {
   max-width: 100%;
   border-radius: 0.75rem;

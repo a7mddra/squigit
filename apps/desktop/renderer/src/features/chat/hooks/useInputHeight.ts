@@ -16,7 +16,9 @@ export function useInputHeight() {
     if (!el) return;
 
     const commitHeight = (rawHeight: number) => {
-      const nextHeight = Math.max(0, Math.round(rawHeight));
+      const viewportHeight = window.innerHeight || rawHeight;
+      const cappedHeight = Math.min(rawHeight, viewportHeight * 0.75);
+      const nextHeight = Math.max(0, Math.round(cappedHeight));
       if (nextHeight === lastHeightRef.current) {
         return;
       }
@@ -26,7 +28,11 @@ export function useInputHeight() {
     };
 
     const measureAndCommit = () => {
-      commitHeight(el.getBoundingClientRect().height);
+      const measured = Math.max(
+        el.offsetHeight,
+        el.getBoundingClientRect().height,
+      );
+      commitHeight(measured);
     };
 
     measureAndCommit();

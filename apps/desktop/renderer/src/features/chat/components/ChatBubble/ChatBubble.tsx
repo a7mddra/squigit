@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type ErrorInfo,
+} from "react";
 import { Check, Copy, RotateCcw, Pencil, ChevronRight } from "lucide-react";
 import { CitationChip, CitationTip, CodeBlock } from "@/components";
 import { useAppContext } from "@/providers/AppProvider";
@@ -43,6 +49,51 @@ interface ChatBubbleProps {
   onAction?: (actionId: string, value?: string) => void;
   enableInternalLinks?: boolean;
 }
+
+interface MarkdownErrorBoundaryProps {
+  children: React.ReactNode;
+  fallback: React.ReactNode;
+  resetKey: string;
+}
+
+interface MarkdownErrorBoundaryState {
+  hasError: boolean;
+}
+
+class MarkdownErrorBoundary extends React.Component<
+  MarkdownErrorBoundaryProps,
+  MarkdownErrorBoundaryState
+> {
+  state: MarkdownErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): MarkdownErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown, info: ErrorInfo) {
+    console.error("[chat] Markdown render failed:", error, info);
+  }
+
+  componentDidUpdate(prevProps: MarkdownErrorBoundaryProps) {
+    if (
+      this.state.hasError &&
+      prevProps.resetKey !== this.props.resetKey
+    ) {
+      this.setState({ hasError: false });
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+
+    return this.props.children;
+  }
+}
+
+const LONG_MESSAGE_CHAR_THRESHOLD = 120_000;
+const LONG_MESSAGE_LINE_THRESHOLD = 2_000;
 
 function getBaseName(path: string): string {
   const lastSlash = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
@@ -162,6 +213,7 @@ const WebsiteCitationChip: React.FC<{
     <>
       <CitationChip
         ref={anchorRef}
+        variant="site"
         label={citation.title || domain}
         href={citation.url}
         target="_blank"
@@ -274,6 +326,41 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
     !hasPendingShellContent;
   const shouldRenderBubble = !isImageOnlyEmptyCaption;
   const shouldDoubleNewlines = isUser && !isRichMarkdownUserMessage;
+  const isVeryLongMessage = useMemo(() => {
+    if (!displayText) return false;
+    if (displayText.length >= LONG_MESSAGE_CHAR_THRESHOLD) {
+      return true;
+    }
+
+    let lineCount = 1;
+    for (let i = 0; i < displayText.length; i += 1) {
+      if (displayText[i] === "\n") {
+        lineCount += 1;
+        if (lineCount >= LONG_MESSAGE_LINE_THRESHOLD) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }, [displayText]);
+  const shouldRenderPlainTextMessage = isUser && isVeryLongMessage;
+  const markdownRenderText = useMemo(
+    () =>
+      preprocessMarkdown(normalizeAttachmentMarkdownLinks(displayText), {
+        doubleNewlines: shouldDoubleNewlines && !shouldRenderPlainTextMessage,
+      }),
+    [displayText, shouldDoubleNewlines, shouldRenderPlainTextMessage],
+  );
+  const markdownBoundaryFallback = useMemo(
+    () => (
+      <pre className={mdStyles.fallbackPlainText}>
+        {displayText}
+      </pre>
+    ),
+    [displayText],
+  );
+  const markdownBoundaryKey = `${message.id}-${message.role}-${displayText.length}`;
   const canCopy = !copyDisabled && hasDisplayText;
   const shouldShowRetryButton = !isUser && message.role !== "system" && !!onRetry;
   const shouldShowCopyButton = message.role !== "system";
@@ -442,6 +529,7 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
 
           return (
             <CitationChip
+              variant="file"
               href={normalizedHref}
               label={label}
               visual={{
@@ -563,22 +651,28 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
                         : mdStyles.markdownContent
                     }
                   >
-                    <ReactMarkdown
-                      remarkPlugins={[
-                        remarkGfm,
-                        remarkMath,
-                        remarkDisableIndentedCode,
-                      ]}
-                      rehypePlugins={[rehypeKatex, rehypeRaw]}
-                      components={markdownComponents}
-                    >
-                      {preprocessMarkdown(
-                        normalizeAttachmentMarkdownLinks(displayText),
-                        {
-                        doubleNewlines: shouldDoubleNewlines,
-                        },
-                      )}
-                    </ReactMarkdown>
+                    {shouldRenderPlainTextMessage ? (
+                      markdownBoundaryFallback
+                    ) : (
+                      <MarkdownErrorBoundary
+                        resetKey={markdownBoundaryKey}
+                        fallback={markdownBoundaryFallback}
+                      >
+                        <ReactMarkdown
+                          remarkPlugins={[
+                            remarkGfm,
+                            remarkMath,
+                            remarkDisableIndentedCode,
+                          ]}
+                          rehypePlugins={
+                            isUser ? [rehypeKatex] : [rehypeKatex, rehypeRaw]
+                          }
+                          components={markdownComponents}
+                        >
+                          {markdownRenderText}
+                        </ReactMarkdown>
+                      </MarkdownErrorBoundary>
+                    )}
                   </div>
                 </div>
 
