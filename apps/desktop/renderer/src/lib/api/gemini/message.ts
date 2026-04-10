@@ -12,7 +12,10 @@ import { cancelCurrentRequest } from "./cancel";
 import { createStreamWatchdog } from "./streamWatchdog";
 import { setUserFirstMsg, addToHistory } from "./context";
 import { buildContextWindow, maybeCompressHistory } from "./summarize";
-import { buildRichUserHistoryContent } from "./attachmentMemory";
+import {
+  buildRichUserHistoryContent,
+  normalizeMessageForHistory,
+} from "./attachmentMemory";
 
 export const sendMessage = async (
   text: string,
@@ -29,6 +32,7 @@ export const sendMessage = async (
   }
 
   const myGenId = geminiStore.generationId;
+  const userModelText = normalizeMessageForHistory(text);
   const userHistoryText = await buildRichUserHistoryContent(text);
   setUserFirstMsg(userHistoryText);
   addToHistory("User", userHistoryText);
@@ -82,7 +86,7 @@ export const sendMessage = async (
         userFirstMsg: geminiStore.userFirstMsg,
         historyLog,
         rollingSummary,
-        userMessage: text,
+        userMessage: userModelText,
         channelId: channelId,
         userName: geminiStore.userName,
         userEmail: geminiStore.userEmail,

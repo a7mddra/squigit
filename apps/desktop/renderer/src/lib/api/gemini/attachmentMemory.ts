@@ -9,6 +9,7 @@ import { invoke } from "@tauri-apps/api/core";
 const LEGACY_ATTACHMENT_MENTION_RE = /\{\{([^}]+)\}\}/g;
 const LINK_ATTACHMENT_MENTION_RE = /\[([^\]\n]+)\]\((<[^>\n]+>|[^)\n]+)\)/g;
 const ATTACHMENT_MEMORY_TIMEOUT_MS = 1600;
+const ENABLE_ATTACHMENT_MEMORY_CONTEXT = false;
 
 type AttachmentMention = {
   path: string;
@@ -107,7 +108,7 @@ export function formatAttachmentReferences(mentions: AttachmentMention[]): strin
   if (mentions.length === 0) return "";
   const lines = mentions.map((item) => {
     const name = item.label?.trim() || basename(item.path);
-    return `- \`${name}\``;
+    return `- \`${name}\`: \`${item.path}\``;
   });
   return `[Attachment References]\n${lines.join("\n")}`;
 }
@@ -131,13 +132,18 @@ export async function buildRichUserHistoryContent(text: string): Promise<string>
   }
 
   const stripped = stripAttachmentMentionsForHistory(text);
+  const refs = formatAttachmentReferences(mentions);
+
+  if (!ENABLE_ATTACHMENT_MEMORY_CONTEXT) {
+    return stripped ? `${stripped}\n\n${refs}` : refs;
+  }
 
   try {
     const context = await Promise.race<string>([
       invoke<string>("build_attachment_memory_context", {
         attachments: mentions.map((item) => ({
           path: item.path,
-          displayName: item.label ?? null,
+          display_name: item.label ?? null,
         })),
       }),
       new Promise<string>((_, reject) => {

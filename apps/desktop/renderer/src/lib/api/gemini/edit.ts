@@ -156,6 +156,7 @@ export const retryFromMessage = async (
   if (!lastUserMsg) {
     throw new Error("No user message found before the retried message");
   }
+  const retryUserMessage = normalizeMessageForHistory(lastUserMsg.text);
 
   const channelId = `gemini-stream-${Date.now()}`;
   geminiStore.currentChannelId = channelId;
@@ -196,7 +197,7 @@ export const retryFromMessage = async (
         userFirstMsg: geminiStore.userFirstMsg,
         historyLog,
         rollingSummary,
-        userMessage: lastUserMsg.text,
+        userMessage: retryUserMessage,
         channelId,
         userName: geminiStore.userName,
         userEmail: geminiStore.userEmail,
