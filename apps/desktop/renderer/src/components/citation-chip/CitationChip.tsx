@@ -98,7 +98,9 @@ export const CitationChip = forwardRef<HTMLAnchorElement, CitationChipProps>(
         ) : (
           <LocalFileIcon fileName={visual.fileName} />
         )}
-        <span className={styles.title}>{label}</span>
+        <span className={styles.title}>
+          <bdi className={styles.titleText}>{label}</bdi>
+        </span>
       </a>
     );
   },

@@ -17,6 +17,7 @@ use crate::brain::provider::gemini::agent::tool_orchestrator::{
 };
 use crate::brain::provider::gemini::attachments::{
     build_attachment_preview_context, build_interleaved_parts, extract_attachment_mentions,
+    is_gemini_document_path,
 };
 use crate::brain::provider::gemini::transport::streaming::{emit_event, stream_request_iteration};
 use crate::brain::provider::gemini::transport::types::{
@@ -235,29 +236,53 @@ pub async fn stream_gemini_chat_v2(
                     );
                 }
             }
-            let attachment_paths = attachment_mentions
-                .iter()
-                .map(|mention| mention.path.clone())
-                .collect::<Vec<_>>();
-            if let Some(preview_block) = build_attachment_preview_context(&attachment_paths).await? {
+            let mut preview_attachment_paths = Vec::<String>::new();
+            let mut uploaded_document_parts = Vec::<GeminiPart>::new();
+            for mention in &attachment_mentions {
+                if is_gemini_document_path(&mention.path) {
+                    let file_ref = crate::brain::provider::gemini::attachments::ensure_file_uploaded(
+                        &api_key,
+                        &mention.path,
+                        &state.gemini_file_cache,
+                    )
+                    .await?;
+
+                    uploaded_document_parts.push(GeminiPart {
+                        file_data: Some(GeminiFileData {
+                            mime_type: file_ref.mime_type.clone(),
+                            file_uri: file_ref.file_uri.clone(),
+                        }),
+                        ..Default::default()
+                    });
+                } else {
+                    preview_attachment_paths.push(mention.path.clone());
+                }
+            }
+
+            if let Some(preview_block) =
+                build_attachment_preview_context(&preview_attachment_paths).await?
+            {
                 if !composed_user_message.trim().is_empty() {
                     composed_user_message.push_str("\n\n");
                 }
                 composed_user_message.push_str(&preview_block);
             }
 
+            let mut parts = vec![
+                GeminiPart {
+                    text: Some(context_prompt),
+                    ..Default::default()
+                },
+                GeminiPart {
+                    text: Some(composed_user_message),
+                    ..Default::default()
+                },
+            ];
+            parts.extend(uploaded_document_parts);
+
             vec![GeminiContent {
                 role: "user".to_string(),
-                parts: vec![
-                    GeminiPart {
-                        text: Some(context_prompt),
-                        ..Default::default()
-                    },
-                    GeminiPart {
-                        text: Some(composed_user_message),
-                        ..Default::default()
-                    },
-                ],
+                parts,
             }]
         };
 

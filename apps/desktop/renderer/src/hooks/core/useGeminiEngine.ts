@@ -211,6 +211,7 @@ export const useGeminiEngine = (config: {
       pendingCitations: [],
       visibleCitations: [],
       stopped: false,
+      isWritingCode: false,
     } satisfies PendingAssistantTurn);
     resetLegacyStreamingState();
     setIsStreaming(true);
@@ -528,13 +529,14 @@ export const useGeminiEngine = (config: {
       clearPlaybackTimeout();
       if (!turn.transportDone) return;
 
-      const { text: visibleText } = getRenderableStreamingText(
+      const { text: visibleText, isWritingCode } = getRenderableStreamingText(
         turn.rawText.slice(0, playbackCursorRef.current),
       );
 
       updatePendingAssistantTurn((currentTurn) => ({
         ...currentTurn,
         displayText: visibleText,
+        isWritingCode,
         phase: "complete",
         visibleCitations: currentTurn.pendingCitations,
       }));
@@ -565,12 +567,13 @@ export const useGeminiEngine = (config: {
 
       if (backlogWords === 0) {
         if (latest.transportDone) {
-          const { text: visibleText } = getRenderableStreamingText(
+          const { text: visibleText, isWritingCode } = getRenderableStreamingText(
             latest.rawText.slice(0, playbackCursorRef.current),
           );
           updatePendingAssistantTurn((currentTurn) => ({
             ...currentTurn,
             displayText: visibleText,
+            isWritingCode,
             phase: "complete",
             visibleCitations: currentTurn.pendingCitations,
           }));
@@ -585,7 +588,7 @@ export const useGeminiEngine = (config: {
       );
       playbackCursorRef.current = nextCursor;
 
-      const { text: nextDisplayText } = getRenderableStreamingText(
+      const { text: nextDisplayText, isWritingCode } = getRenderableStreamingText(
         latest.rawText.slice(0, nextCursor),
       );
       const isBufferDrained = nextCursor >= latest.rawText.length;
@@ -593,6 +596,7 @@ export const useGeminiEngine = (config: {
       updatePendingAssistantTurn((currentTurn) => ({
         ...currentTurn,
         displayText: nextDisplayText,
+        isWritingCode,
         phase:
           isBufferDrained && currentTurn.transportDone
             ? "complete"

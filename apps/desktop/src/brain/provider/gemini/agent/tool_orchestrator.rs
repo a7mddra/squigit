@@ -80,7 +80,8 @@ pub(crate) fn build_system_instruction_with_tool_policy(
         instruction.push_str(
             "\n\n## Tool Usage Policy\n\
              - If the user asks for current, time-sensitive, or uncertain facts, call `web_search`.\n\
-             - If the user asks about the content of local files they attached, call `read_local_attachment_context`.\n\
+             - If the user asks about attached local text or code content, call `read_local_attachment_context`.\n\
+             - For PDF, Word, spreadsheet, slide, and similar document attachments, rely on the attached Gemini file directly (do not call `read_local_attachment_context` for documents).\n\
              - If greeting/chit-chat, do not call tools.\n\
              - Never invent URLs or sources.\n\
              - When using `url`, only fetch URLs from prior search results in this turn.\n\

@@ -61,11 +61,6 @@ pub(crate) async fn build_interleaved_parts(
         >,
     >,
 ) -> Result<Vec<GeminiPart>, String> {
-    enum PreparedAttachment {
-        Uploaded(crate::brain::provider::gemini::attachments::GeminiFileRef),
-        InlineText(String),
-    }
-
     let re = Regex::new(
         r"(?x)
         (\{\{(?P<legacy_path>[^}]+)\}\})
@@ -128,18 +123,7 @@ pub(crate) async fn build_interleaved_parts(
     unique_paths.dedup();
 
     let prepare_futures = unique_paths.iter().map(|p| async {
-        if crate::brain::provider::gemini::attachments::is_docx_path(p) {
-            let extracted_text =
-                crate::brain::provider::gemini::attachments::extract_docx_text_for_prompt(p)
-                    .await?;
-            Ok::<PreparedAttachment, String>(PreparedAttachment::InlineText(extracted_text))
-        } else {
-            let file_ref = crate::brain::provider::gemini::attachments::ensure_file_uploaded(
-                api_key, p, cache,
-            )
-            .await?;
-            Ok::<PreparedAttachment, String>(PreparedAttachment::Uploaded(file_ref))
-        }
+        crate::brain::provider::gemini::attachments::ensure_file_uploaded(api_key, p, cache).await
     });
 
     let results = join_all(prepare_futures).await;
@@ -157,32 +141,14 @@ pub(crate) async fn build_interleaved_parts(
     let mut parts = Vec::new();
     for (is_file, content) in text_chunks {
         if is_file {
-            if let Some(prepared) = prepared_attachments.get(&content) {
-                match prepared {
-                    PreparedAttachment::Uploaded(file_ref) => {
-                        parts.push(GeminiPart {
-                            file_data: Some(GeminiFileData {
-                                mime_type: file_ref.mime_type.clone(),
-                                file_uri: file_ref.file_uri.clone(),
-                            }),
-                            ..Default::default()
-                        });
-                    }
-                    PreparedAttachment::InlineText(extracted_text) => {
-                        let file_name = std::path::Path::new(&content)
-                            .file_name()
-                            .and_then(|s| s.to_str())
-                            .unwrap_or("attachment.docx");
-                        let docx_block = format!(
-                            "[Attachment: {} | format: docx | content: extracted text]\n{}\n[End attachment]",
-                            file_name, extracted_text
-                        );
-                        parts.push(GeminiPart {
-                            text: Some(docx_block),
-                            ..Default::default()
-                        });
-                    }
-                }
+            if let Some(file_ref) = prepared_attachments.get(&content) {
+                parts.push(GeminiPart {
+                    file_data: Some(GeminiFileData {
+                        mime_type: file_ref.mime_type.clone(),
+                        file_uri: file_ref.file_uri.clone(),
+                    }),
+                    ..Default::default()
+                });
             }
         } else {
             parts.push(GeminiPart {

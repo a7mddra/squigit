@@ -2,7 +2,7 @@
   "functionDeclarations": [
     {
       "name": "read_local_attachment_context",
-      "description": "Read local context from a CAS-backed attachment path available on this device.",
+      "description": "Read local context from a CAS-backed text or code attachment path available on this device. Document files are handled via Gemini file attachments.",
       "parameters": {
         "type": "object",
         "properties": {

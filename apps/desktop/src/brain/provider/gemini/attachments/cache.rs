@@ -19,7 +19,12 @@ pub async fn ensure_file_uploaded(
     cas_path: &str,
     cache: &Mutex<HashMap<String, GeminiFileRef>>,
 ) -> Result<GeminiFileRef, String> {
-    let cas_hash = std::path::Path::new(cas_path)
+    let resolved_path =
+        crate::brain::provider::gemini::attachments::paths::resolve_attachment_path_internal(
+            cas_path,
+        )?;
+
+    let cas_hash = resolved_path
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("unknown")
@@ -34,14 +39,15 @@ pub async fn ensure_file_uploaded(
         }
     }
 
-    let ext = std::path::Path::new(cas_path)
+    let ext = resolved_path
         .extension()
         .and_then(|s| s.to_str())
         .unwrap_or("");
     let mime_type = mime_from_extension(ext);
     let display_name = format!("{}.{}", cas_hash.chars().take(8).collect::<String>(), ext);
 
-    let new_ref = upload_file_to_gemini(api_key, cas_path, mime_type, &display_name).await?;
+    let resolved_str = resolved_path.to_string_lossy().to_string();
+    let new_ref = upload_file_to_gemini(api_key, &resolved_str, mime_type, &display_name).await?;
 
     let mut cache_lock = cache.lock().await;
     cache_lock.insert(cas_hash, new_ref.clone());

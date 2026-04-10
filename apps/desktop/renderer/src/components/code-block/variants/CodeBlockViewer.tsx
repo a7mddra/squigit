@@ -33,7 +33,7 @@ export const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
 
   const { isCopied, copy } = useCopyToClipboard(1000);
 
-  const { highlightedHtml, isLoading } = useCodeHighlighter(
+  const { highlightedHtml } = useCodeHighlighter(
     value,
     language,
     !hideCodeContent && !isPlain,
@@ -43,7 +43,7 @@ export const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
   const lineCount = Math.max(1, value.split("\n").length);
   const hiddenLines = Math.max(1, hiddenCodeLineCount ?? lineCount);
   const hiddenLineLabel = hiddenLines === 1 ? "line" : "lines";
-  const shouldShowPlain = isPlain || isLoading;
+  const shouldShowPlain = isPlain || !highlightedHtml;
 
   return (
     <div

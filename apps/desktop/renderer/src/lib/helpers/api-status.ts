@@ -28,6 +28,7 @@ export const API_STATUS_TEXT = {
   MODEL_BUSY_RETRYING:
     "Things are a bit slow right now. Reconnecting",
   QUICK_ANSWER_BUTTON: "Quick Answer",
+  WRITING_CODE: "Writing code",
 } as const;
 
 export const getAttachmentAnalysisStatusText = (

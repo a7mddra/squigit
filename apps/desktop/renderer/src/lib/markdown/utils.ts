@@ -116,3 +116,65 @@ export function preprocessMarkdown(
 
   return resultLines.join("\n");
 }
+
+export function splitMarkdownAfterLastClosedFence(markdown: string): {
+  stable: string;
+  tail: string;
+} {
+  if (!markdown) {
+    return {
+      stable: "",
+      tail: "",
+    };
+  }
+
+  const lines = markdown.split("\n");
+  let inFence = false;
+  let fenceChar = "";
+  let fenceLength = 0;
+  let offset = 0;
+  let lastClosedFenceEndOffset = 0;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})(.*)$/u);
+    const lineTerminatorLength = i < lines.length - 1 ? 1 : 0;
+
+    if (fenceMatch) {
+      const marker = fenceMatch[1];
+      const suffix = fenceMatch[2];
+
+      if (!inFence) {
+        inFence = true;
+        fenceChar = marker[0];
+        fenceLength = marker.length;
+      } else if (
+        marker[0] === fenceChar &&
+        marker.length >= fenceLength &&
+        suffix.trim().length === 0
+      ) {
+        inFence = false;
+        fenceChar = "";
+        fenceLength = 0;
+        lastClosedFenceEndOffset = offset + line.length + lineTerminatorLength;
+      }
+    }
+
+    offset += line.length + lineTerminatorLength;
+  }
+
+  if (
+    lastClosedFenceEndOffset <= 0 ||
+    lastClosedFenceEndOffset >= markdown.length
+  ) {
+    return {
+      stable: markdown,
+      tail: "",
+    };
+  }
+
+  return {
+    stable: markdown.slice(0, lastClosedFenceEndOffset),
+    tail: markdown.slice(lastClosedFenceEndOffset),
+  };
+}

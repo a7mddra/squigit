@@ -6,14 +6,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::brain::context::loader::{interpolate, load_attachment_preview_context};
-
-const SUPPORTED_TEXT_EXTENSIONS: &[&str] = &[
-    "txt", "md", "markdown", "rst", "csv", "tsv", "json", "jsonl", "yaml", "yml", "toml", "xml",
-    "html", "htm", "css", "scss", "sass", "less", "js", "jsx", "mjs", "cjs", "ts", "tsx", "py",
-    "rs", "go", "java", "kt", "kts", "swift", "php", "rb", "c", "h", "cpp", "hpp", "cc", "hh",
-    "cs", "sql", "sh", "bash", "zsh", "fish", "ps1", "bat", "cmd", "ini", "conf", "cfg", "env",
-    "log",
-];
+use crate::brain::provider::gemini::attachments::{is_gemini_document_path, is_text_like_path};
 
 pub(crate) const PREVIEW_MAX_FILES: usize = 6;
 pub(crate) const PREVIEW_SOFT_MAX_CHARS_PER_FILE: usize = 2_000;
@@ -91,17 +84,20 @@ fn extension_lower(path: &Path) -> String {
 }
 
 fn parse_kind(path: &Path) -> Result<&'static str, String> {
-    let ext = extension_lower(path);
+    let raw = path.to_string_lossy();
 
-    if ext == "docx" {
-        return Ok("docx");
-    }
-    if ext == "pdf" {
-        return Ok("pdf");
-    }
-    if SUPPORTED_TEXT_EXTENSIONS.contains(&ext.as_str()) {
+    if is_text_like_path(&raw) {
         return Ok("text");
     }
+
+    if is_gemini_document_path(&raw) {
+        return Err(
+            "This document type is not supported by the local context reader. It is attached via Gemini Files."
+                .to_string(),
+        );
+    }
+
+    let ext = extension_lower(path);
 
     Err(format!("Unsupported file type: .{}", ext))
 }
@@ -178,16 +174,6 @@ pub(crate) async fn read_local_attachment_context(
 
     let extracted = match kind {
         "text" => read_text_lossy(&resolved).await,
-        "docx" => crate::brain::provider::gemini::attachments::extract_docx_text(
-            &resolved.to_string_lossy(),
-        )
-        .await
-        .map_err(|e| format!("DOCX parse error: {}", e)),
-        "pdf" => crate::brain::provider::gemini::attachments::extract_pdf_text(
-            &resolved.to_string_lossy(),
-        )
-        .await
-        .map_err(|e| format!("PDF parse error: {}", e)),
         _ => Err("Unsupported attachment kind".to_string()),
     };
 
@@ -203,7 +189,7 @@ pub(crate) async fn read_local_attachment_context(
         }
     };
 
-    if extracted.trim().is_empty() && kind != "text" {
+    if extracted.trim().is_empty() {
         return empty_text_error(trimmed_path, kind);
     }
 
@@ -331,20 +317,25 @@ mod tests {
     }
 
     #[test]
-    fn text_extensions_are_supported() {
+    fn text_extensions_are_supported_via_path_helper() {
         assert_eq!(parse_kind(Path::new("a.rs")).expect("kind"), "text");
         assert_eq!(parse_kind(Path::new("a.md")).expect("kind"), "text");
     }
 
     #[test]
-    fn docx_and_pdf_are_supported() {
-        assert_eq!(parse_kind(Path::new("a.docx")).expect("kind"), "docx");
-        assert_eq!(parse_kind(Path::new("a.pdf")).expect("kind"), "pdf");
+    fn office_documents_are_not_supported_locally() {
+        for path in [
+            "a.pdf", "a.docx", "a.doc", "a.xlsx", "a.xls", "a.pptx", "a.ppt", "a.rtf", "a.odt",
+            "a.ods", "a.odp",
+        ] {
+            let err = parse_kind(Path::new(path)).expect_err("document should be unsupported");
+            assert!(err.contains("not supported by the local context reader"));
+        }
     }
 
     #[test]
     fn unsupported_extension_returns_error() {
-        let err = parse_kind(Path::new("a.xlsx")).expect_err("must be unsupported");
+        let err = parse_kind(Path::new("a.bin")).expect_err("must be unsupported");
         assert!(err.contains("Unsupported file type"));
     }
 

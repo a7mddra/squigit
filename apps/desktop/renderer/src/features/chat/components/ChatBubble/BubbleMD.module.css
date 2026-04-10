@@ -66,6 +66,10 @@
   line-height: inherit;
 }
 
+.userMarkdownContent :where(p, li, blockquote, td, th) {
+  unicode-bidi: plaintext;
+}
+
 .userMarkdownContent :where(pre, table) {
   max-width: 100%;
 }
@@ -281,4 +285,9 @@ details[open] .summary .chevron {
 .typingShimmer {
   padding-top: 1rem;
   padding-bottom: 1rem;
+}
+
+.writingCodeShimmer {
+  margin-top: 0.85em;
+  opacity: 0.8;
 }

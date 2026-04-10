@@ -49,6 +49,7 @@ export interface PendingAssistantTurn {
   pendingCitations: Citation[];
   visibleCitations: Citation[];
   stopped: boolean;
+  isWritingCode: boolean;
 }
 
 export interface Message {

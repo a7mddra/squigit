@@ -62,8 +62,6 @@ tar = "0.4.44"
 thiserror = "2.0.18"
 sys-global-shortcut = { path = "../../crates/sys-global-shortcut" }
 regex = "1.12.3"
-zip = "0.6.6"
-pdf-extract = "0.7"
 rodio = { version = "0.20.1", features = ["mp3"] }
 which = "6.0"
 chrono = "0.4"

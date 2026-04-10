@@ -21,10 +21,11 @@ fn attachment_kind_from_extension(extension: &str) -> &'static str {
     match extension {
         "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "svg" => "image",
         "pdf" => "pdf",
-        "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "rtf" => "document",
+        "doc" | "docx" | "xls" | "xlsx" | "xlsm" | "ppt" | "pptx" | "pptm" | "rtf" | "odt"
+        | "ods" | "odp" => "document",
         "txt" | "md" | "csv" | "json" | "xml" | "yaml" | "yml" | "html" | "css" | "js" | "ts"
         | "jsx" | "tsx" | "py" | "rs" | "go" | "java" | "c" | "cpp" | "h" | "hpp" | "sql"
-        | "toml" | "sh" | "bash" => "text",
+        | "toml" | "sh" | "bash" | "rst" | "ini" | "cfg" | "conf" | "env" | "log" => "text",
         _ => "file",
     }
 }
@@ -144,17 +145,7 @@ pub async fn build_attachment_memory_context(
             .to_ascii_lowercase();
         let kind = attachment_kind_from_extension(&extension);
 
-        let mut summary = if extension == "docx" {
-            let resolved_path = resolved.to_string_lossy().to_string();
-            match crate::brain::provider::gemini::attachments::extract_docx_text_for_prompt(
-                &resolved_path,
-            )
-            .await
-            {
-                Ok(text) => normalize_for_memory(&text, MAX_ATTACHMENT_SNIPPET_CHARS),
-                Err(_) => String::new(),
-            }
-        } else if kind == "text" {
+        let mut summary = if kind == "text" {
             match read_text_attachment_snippet(&resolved).await {
                 Ok(text) => normalize_for_memory(&text, MAX_ATTACHMENT_SNIPPET_CHARS),
                 Err(_) => String::new(),

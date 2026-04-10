@@ -13,7 +13,7 @@ import React, {
   type ErrorInfo,
 } from "react";
 import { Check, Copy, RotateCcw, Pencil, ChevronRight } from "lucide-react";
-import { CitationChip, CitationTip, CodeBlock } from "@/components";
+import { CitationChip, CitationTip, CodeBlock, TextShimmer } from "@/components";
 import { useAppContext } from "@/providers/AppProvider";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import ReactMarkdown from "react-markdown";
@@ -28,8 +28,10 @@ import {
   normalizeAttachmentMarkdownLinks,
   parseAttachmentPaths,
   preprocessMarkdown,
+  splitMarkdownAfterLastClosedFence,
   remarkDisableIndentedCode,
   stripImageAttachmentMentions,
+  API_STATUS_TEXT,
 } from "@/lib";
 import {
   Message,
@@ -65,6 +67,36 @@ interface MarkdownErrorBoundaryProps {
 interface MarkdownErrorBoundaryState {
   hasError: boolean;
 }
+
+type MarkdownComponents = React.ComponentProps<typeof ReactMarkdown>["components"];
+
+interface MarkdownRendererProps {
+  markdown: string;
+  isUser: boolean;
+  components: MarkdownComponents;
+}
+
+const MarkdownRenderer = React.memo(
+  ({ markdown, isUser, components }: MarkdownRendererProps) => (
+    <ReactMarkdown
+      remarkPlugins={[
+        remarkGfm,
+        remarkMath,
+        remarkDisableIndentedCode,
+      ]}
+      rehypePlugins={isUser ? [rehypeKatex] : [rehypeKatex, rehypeRaw]}
+      components={components}
+    >
+      {markdown}
+    </ReactMarkdown>
+  ),
+  (prevProps, nextProps) =>
+    prevProps.markdown === nextProps.markdown &&
+    prevProps.isUser === nextProps.isUser &&
+    prevProps.components === nextProps.components,
+);
+
+MarkdownRenderer.displayName = "MarkdownRenderer";
 
 class MarkdownErrorBoundary extends React.Component<
   MarkdownErrorBoundaryProps,
@@ -346,12 +378,15 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
   roleCodeVisibilityKey = null,
 }) => {
   const app = useAppContext();
+  const getAttachmentSourcePath = app.getAttachmentSourcePath;
+  const openMediaViewer = app.openMediaViewer;
   const isUser = message.role === "user";
   const isPendingAssistant = !!pendingTurn && message.role === "model";
   const [isCopied, setIsCopied] = useState(false);
   const [revealedCodeBlockKeys, setRevealedCodeBlockKeys] = useState<
     Set<string>
   >(() => new Set());
+  const revealCodeBlockHandlersRef = useRef<Map<string, () => void>>(new Map());
   const previousRoleCodeVisibilityKeyRef = useRef<string | null>(
     roleCodeVisibilityKey,
   );
@@ -375,15 +410,19 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
     });
   }, [hideCodeBlocksByDefault, roleCodeVisibilityKey]);
 
+  useEffect(() => {
+    revealCodeBlockHandlersRef.current.clear();
+  }, [message.id]);
+
   const attachments = useMemo(() => {
     const paths = parseAttachmentPaths(message.text);
     return paths.map((path) => {
-      const sourcePath = app.getAttachmentSourcePath(path) || undefined;
+      const sourcePath = getAttachmentSourcePath(path) || undefined;
       const originalName = sourcePath ? getBaseName(sourcePath) : undefined;
 
       return attachmentFromPath(path, undefined, originalName, sourcePath);
     });
-  }, [app.getAttachmentSourcePath, message.text]);
+  }, [getAttachmentSourcePath, message.text]);
   const imageAttachments = useMemo(
     () => attachments.filter((attachment) => attachment.type === "image"),
     [attachments],
@@ -437,6 +476,8 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
       pendingTurn?.phase === "complete" ||
       pendingTurn?.phase === "stopped");
   const hasDisplayText = displayText.trim().length > 0;
+  const isWritingCode =
+    isPendingStreaming && !!pendingTurn?.isWritingCode;
   const hasImageAttachments = imageAttachments.length > 0;
   const hasPendingShellContent = isPendingAssistant && !hasDisplayText;
   const isImageOnlyEmptyCaption =
@@ -499,6 +540,19 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
       }),
     [renderedText, shouldDoubleNewlines, shouldRenderPlainTextMessage],
   );
+  const streamingMarkdownSegments = useMemo(() => {
+    if (!isPendingStreaming || !markdownRenderText) {
+      return {
+        stable: markdownRenderText,
+        tail: "",
+      };
+    }
+
+    return splitMarkdownAfterLastClosedFence(markdownRenderText);
+  }, [isPendingStreaming, markdownRenderText]);
+  const shouldSplitStreamingMarkdown =
+    streamingMarkdownSegments.stable.length > 0 &&
+    streamingMarkdownSegments.tail.length > 0;
   const markdownBoundaryFallback = useMemo(
     () => (
       <pre className={mdStyles.fallbackPlainText}>
@@ -533,10 +587,23 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
       return next;
     });
   }, []);
+  const getRevealCodeBlockHandler = useCallback(
+    (blockKey: string) => {
+      const existingHandler = revealCodeBlockHandlersRef.current.get(blockKey);
+      if (existingHandler) {
+        return existingHandler;
+      }
+
+      const nextHandler = () => revealCodeBlock(blockKey);
+      revealCodeBlockHandlersRef.current.set(blockKey, nextHandler);
+      return nextHandler;
+    },
+    [revealCodeBlock],
+  );
 
   const handleImageClick = useCallback(
     (attachment: (typeof imageAttachments)[number], index: number) => {
-      void app.openMediaViewer(attachment, {
+      void openMediaViewer(attachment, {
         isGallery: true,
         chatId: app.chatHistory.activeSessionId || undefined,
         galleryAttachments: imageAttachments,
@@ -544,15 +611,15 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
         openedFromChat: true,
       });
     },
-    [app, imageAttachments],
+    [app.chatHistory.activeSessionId, imageAttachments, openMediaViewer],
   );
 
   const handleLocalAttachmentLink = useCallback(
     (href: string, children: React.ReactNode) => {
       const normalizedHref = normalizeAttachmentHref(href);
       const sourcePath =
-        app.getAttachmentSourcePath(normalizedHref) ||
-        app.getAttachmentSourcePath(href) ||
+        getAttachmentSourcePath(normalizedHref) ||
+        getAttachmentSourcePath(href) ||
         undefined;
       const attachment = attachmentFromPath(
         normalizedHref,
@@ -564,14 +631,14 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
       const originalName =
         label || (sourcePath ? getBaseName(sourcePath) : attachment.name);
 
-      void app.openMediaViewer(
+      void openMediaViewer(
         {
           ...attachment,
           name: originalName,
         },
       );
     },
-    [app],
+    [getAttachmentSourcePath, openMediaViewer],
   );
 
   const handleCopy = () => {
@@ -635,11 +702,12 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
 
           return (
             <CodeBlock
+              key={blockKey}
               language={match ? match[1] : ""}
               value={codeText}
               hideCodeContent={shouldHideCodeBlock}
               hiddenCodeLineCount={hiddenLineCount}
-              onRevealCodeContent={() => revealCodeBlock(blockKey)}
+              onRevealCodeContent={getRevealCodeBlockHandler(blockKey)}
             />
           );
         }
@@ -695,8 +763,8 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
         if (isLocalAttachmentLink && typeof href === "string") {
           const normalizedHref = normalizeAttachmentHref(href);
           const sourcePath =
-            app.getAttachmentSourcePath(normalizedHref) ||
-            app.getAttachmentSourcePath(href) ||
+            getAttachmentSourcePath(normalizedHref) ||
+            getAttachmentSourcePath(href) ||
             undefined;
           const attachment = attachmentFromPath(
             normalizedHref,
@@ -765,11 +833,12 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
     }),
     [
       enableInternalLinks,
+      getRevealCodeBlockHandler,
+      getAttachmentSourcePath,
       handleLocalAttachmentLink,
       hideCodeBlocksByDefault,
       isPendingAssistant,
       onAction,
-      revealCodeBlock,
       revealedCodeBlockKeys,
     ],
   );
@@ -851,23 +920,44 @@ const ChatBubbleComponent: React.FC<ChatBubbleProps> = ({
                         resetKey={markdownBoundaryKey}
                         fallback={markdownBoundaryFallback}
                       >
-                        <ReactMarkdown
-                          remarkPlugins={[
-                            remarkGfm,
-                            remarkMath,
-                            remarkDisableIndentedCode,
-                          ]}
-                          rehypePlugins={
-                            isUser ? [rehypeKatex] : [rehypeKatex, rehypeRaw]
-                          }
-                          components={markdownComponents}
-                        >
-                          {markdownRenderText}
-                        </ReactMarkdown>
+                        {shouldSplitStreamingMarkdown ? (
+                          <>
+                            <MarkdownRenderer
+                              markdown={streamingMarkdownSegments.stable}
+                              isUser={isUser}
+                              components={markdownComponents}
+                            />
+                            <MarkdownRenderer
+                              markdown={streamingMarkdownSegments.tail}
+                              isUser={isUser}
+                              components={markdownComponents}
+                            />
+                          </>
+                        ) : (
+                          <MarkdownRenderer
+                            markdown={markdownRenderText}
+                            isUser={isUser}
+                            components={markdownComponents}
+                          />
+                        )}
                       </MarkdownErrorBoundary>
                     )}
                   </div>
                 </div>
+
+                {isWritingCode && (
+                  <TextShimmer
+                    text={API_STATUS_TEXT.WRITING_CODE}
+                    compact={true}
+                    duration={2}
+                    spotWidth={30}
+                    angle={90}
+                    peakWidth={3}
+                    bleedInner={8}
+                    bleedOuter={30}
+                    className={mdStyles.writingCodeShimmer}
+                  />
+                )}
 
                 {showCitations && (
                   <div
