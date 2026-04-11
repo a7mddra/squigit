@@ -6,7 +6,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { getImagePath, type ChatMetadata, type Attachment } from "@/core";
-import { useAppContext } from "@/providers/AppProvider";
+import { useAppContext } from "@/app/providers";
 import { Thumbnail } from "@/features";
 import styles from "./Gallery.module.css";
 

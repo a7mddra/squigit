@@ -11,7 +11,7 @@ import { github } from "@/core";
 import { prepareGitHubIssueReport, prepareMailReport } from "@/core";
 import { MarkGithubIcon, MailIcon, BugIcon } from "@primer/octicons-react";
 import { CodeBlock } from "@/components/ui";
-import { useAppContext } from "@/providers/AppProvider";
+import { useAppContext } from "@/app/providers";
 import styles from "./HelpSection.module.css";
 
 export const HelpSection: React.FC = () => {

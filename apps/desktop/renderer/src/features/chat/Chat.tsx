@@ -14,7 +14,7 @@ import React, {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useAppContext } from "@/providers/AppProvider";
+import { useAppContext } from "@/app/providers";
 import { useInlineMenu } from "@/hooks";
 import {
   API_STATUS_TEXT,

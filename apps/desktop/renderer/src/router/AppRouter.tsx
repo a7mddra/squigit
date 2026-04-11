@@ -17,7 +17,7 @@ import {
   MediaOverlay,
   SearchOverlay,
 } from "@/features";
-import { AppProvider, useAppContext } from "@/providers/AppProvider";
+import { AppProvider, useAppContext } from "@/app/providers";
 import { AppContextMenu } from "@/layout";
 import { MainScreen, SplashScreen } from "@/screens";
 

@@ -19,7 +19,7 @@ import {
   CodeBlock,
   TextShimmer,
 } from "@/components/ui";
-import { useAppContext } from "@/providers/AppProvider";
+import { useAppContext } from "@/app/providers";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";

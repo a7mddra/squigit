@@ -8,7 +8,7 @@ import React, { useMemo, useState } from "react";
 import { clsx } from "clsx";
 import { updateIcon } from "@/assets";
 import { OnboardingLayout } from "../OnboardingLayout";
-import { useAppContext } from "@/providers/AppProvider";
+import { useAppContext } from "@/app/providers";
 import { getPendingUpdate, markUpdateDone, usePlatform } from "@/hooks";
 import { ChevronRight, DownloadCloud } from "lucide-react";
 import { CodeBlock } from "@/components/ui";

@@ -10,7 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import styles from "./Welcome.module.css";
 import { ImageResult, storeImageFromPath } from "@/core";
-import { useAppContext } from "@/providers/AppProvider";
+import { useAppContext } from "@/app/providers";
 import { OnboardingLayout } from "../OnboardingLayout";
 import { AppLogo } from "@/components/icons";
 

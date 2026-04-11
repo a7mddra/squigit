@@ -13,7 +13,7 @@ import React, {
 } from "react";
 import { WidgetOverlay } from "@/components/ui";
 import type { ChatSearchResult } from "@/core";
-import { useAppContext } from "@/providers/AppProvider";
+import { useAppContext } from "@/app/providers";
 import { ChatsList } from "./components/ChatsList/ChatsList";
 import { SearchBar } from "./components/SearchBar/SearchBar";
 import { buildChatGroups, highlightTokensFromQuery } from "./search.utils";

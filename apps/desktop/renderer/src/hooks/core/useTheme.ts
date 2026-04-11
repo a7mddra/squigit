@@ -4,5 +4,5 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export { useTheme, ThemeContext } from "@/providers/ThemeProvider";
-export type { ThemeContextType } from "@/providers/ThemeProvider";
+export { useTheme, ThemeContext } from "@/app/providers";
+export type { ThemeContextType } from "@/app/providers";

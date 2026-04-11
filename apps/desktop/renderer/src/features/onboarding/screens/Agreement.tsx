@@ -7,7 +7,7 @@
 import React, { useMemo } from "react";
 import { usePlatform } from "@/hooks";
 import { ChatBubble, Message, SettingsSection } from "@/features";
-import { useAppContext } from "@/providers/AppProvider";
+import { useAppContext } from "@/app/providers";
 import { OnboardingLayout } from "../OnboardingLayout";
 
 import styles from "./Agreement.module.css";
@@ -32,16 +32,12 @@ const SETTINGS_LINKS: Array<{ label: string; section: SettingsSection }> = [
   { label: "Settings -> General", section: "general" },
 ];
 
-
 const linkifySettingsMentions = (raw: string): string => {
   let next = raw;
   for (const item of SETTINGS_LINKS) {
     const escaped = item.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const regex = new RegExp(escaped, "g");
-    next = next.replace(
-      regex,
-      `[${item.label}](#settings-${item.section})`,
-    );
+    next = next.replace(regex, `[${item.label}](#settings-${item.section})`);
   }
   return next;
 };
@@ -85,10 +81,10 @@ export const Agreement: React.FC = () => {
     <OnboardingLayout allowScroll contentClassName={styles.content}>
       <div className={styles.inner}>
         <div>
-          <ChatBubble 
-            message={message} 
-            enableInternalLinks={true} 
-            onAction={handleAgreementAction} 
+          <ChatBubble
+            message={message}
+            enableInternalLinks={true}
+            onAction={handleAgreementAction}
           />
         </div>
         <div className={styles.actions}>

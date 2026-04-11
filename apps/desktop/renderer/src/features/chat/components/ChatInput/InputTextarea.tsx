@@ -48,7 +48,7 @@ import {
   isAttachmentPath,
   unwrapMarkdownLinkDestination,
 } from "@/core";
-import { useAppContext } from "@/providers/AppProvider";
+import { useAppContext } from "@/app/providers";
 import styles from "./ChatInput.module.css";
 
 const ATTACHMENT_LINK_RE = /\[([^\]\n]+)\]\((<[^>\n]+>|[^)\n]+)\)/g;

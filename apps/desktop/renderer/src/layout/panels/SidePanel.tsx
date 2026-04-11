@@ -23,9 +23,12 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 
-import { SidePanelNewThreadIcon, SidePanelSquigitsIcon } from "@/components/icons";
+import {
+  SidePanelNewThreadIcon,
+  SidePanelSquigitsIcon,
+} from "@/components/icons";
 import { ChatMetadata, getDeleteMultipleChatsDialog } from "@/core";
-import { useAppContext } from "@/providers/AppProvider";
+import { useAppContext } from "@/app/providers";
 import { Dialog, LoadingSpinner } from "@/components/ui";
 import { PanelContextMenu } from "@/layout";
 import { useKeyDown, usePlatform } from "@/hooks";
