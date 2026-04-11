@@ -5,14 +5,12 @@
  */
 
 import { useState } from "react";
-import { ModelType } from "@/core";
+import { DEFAULT_MODEL_ID } from "@/core";
 
 export const useAppDrafts = () => {
   const [input, setInput] = useState("");
   const [imageInput, setImageInput] = useState("");
-  const [inputModel, setInputModel] = useState<string>(
-    ModelType.GEMINI_3_1_FLASH,
-  );
+  const [inputModel, setInputModel] = useState<string>(DEFAULT_MODEL_ID);
 
   return {
     input,

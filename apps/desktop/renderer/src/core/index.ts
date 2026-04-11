@@ -5,17 +5,7 @@
  */
 
 // brain
-export * from "./brain/client.ts";
-export * from "./brain/gemini.types.ts";
-export * from "./brain/attachmentMemory.ts";
-export * from "./brain/cancel.ts";
-export * from "./brain/chat.ts";
-export * from "./brain/context.ts";
-export * from "./brain/edit.ts";
-export * from "./brain/message.ts";
-export * from "./brain/store.ts";
-export * from "./brain/streamWatchdog.ts";
-export * from "./brain/summarize.ts";
+export * from "./brain";
 
 // api
 export * from "./api/google/lens.google.ts";

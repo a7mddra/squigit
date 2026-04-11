@@ -14,7 +14,7 @@ import { useTextContextMenu, useTextEditor } from "@/hooks";
 import styles from "./APIKeysSection.module.css";
 
 interface APIKeysSectionProps {
-  geminiKey: string;
+  providerApiKey: string;
   imgbbKey: string;
   isGuest?: boolean;
   onSetAPIKey: (
@@ -226,7 +226,7 @@ const ProviderRow = ({
   );
 };
 export const APIKeysSection: React.FC<APIKeysSectionProps> = ({
-  geminiKey,
+  providerApiKey,
   imgbbKey,
   onSetAPIKey,
   isGuest,
@@ -245,7 +245,7 @@ export const APIKeysSection: React.FC<APIKeysSectionProps> = ({
           title="Gemini"
           providerKeyName="Google AI Studio"
           description="Required for AI features"
-          currentKey={geminiKey}
+          currentKey={providerApiKey}
           dashboardUrl={google.aiStudio.key}
           onSave={(key) => onSetAPIKey("google ai studio", key)}
           isGuest={isGuest}

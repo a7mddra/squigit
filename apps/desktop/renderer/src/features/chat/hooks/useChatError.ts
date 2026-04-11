@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { parseGeminiError } from "@/core";
+import { parseBrainError } from "@/core";
 import { invoke } from "@tauri-apps/api/core";
 
 export function useChatError(
@@ -22,7 +22,7 @@ export function useChatError(
     return { isErrorOpen: false, parsedError: null, errorActions: [] };
   }
 
-  const parsedError = parseGeminiError(error);
+  const parsedError = parseBrainError(error);
   const isErrorOpen = !!error && !isErrorDismissed;
 
   const errorActions: any[] = [];

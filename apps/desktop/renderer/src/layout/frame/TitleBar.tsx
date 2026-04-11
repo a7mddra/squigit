@@ -178,7 +178,7 @@ export const TitleBar: React.FC = () => {
               autoExpandOCR={app.system.autoExpandOCR}
               ocrEnabled={app.system.ocrEnabled}
               captureType={app.system.captureType}
-              geminiKey={app.system.apiKey}
+              providerApiKey={app.system.apiKey}
               imgbbKey={app.system.imgbbKey}
               onSetAPIKey={app.system.handleSetAPIKey}
               isGuest={!app.system.activeProfile}

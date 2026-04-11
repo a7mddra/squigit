@@ -5,10 +5,10 @@
  */
 
 import { useEffect, useRef } from "react";
-import { restoreSession as apiRestoreSession } from "@/core";
+import { restoreBrainSession } from "@/core";
 import { Message } from "@/features";
 
-export const useChatLifecycle = (config: {
+export const useBrainLifecycle = (config: {
   enabled: boolean;
   chatId: string | null;
   startupImage: {
@@ -22,7 +22,7 @@ export const useChatLifecycle = (config: {
   currentModel: string;
   onMissingApiKey?: () => void;
   state: any; // from useChatState
-  engine: any; // from useGeminiEngine
+  engine: any; // from useBrainEngine
 }) => {
   const {
     messages,
@@ -150,7 +150,7 @@ export const useChatLifecycle = (config: {
           imagePath = image.path;
         }
 
-        apiRestoreSession(
+        restoreBrainSession(
           config.currentModel,
           firstMsg.text,
           firstUserMsg?.text || null,
@@ -160,7 +160,7 @@ export const useChatLifecycle = (config: {
           rollingSummary ?? null,
         );
       } catch (e) {
-        console.error("Failed to restore Gemini session:", e);
+        console.error("Failed to restore brain session:", e);
       }
     }
   };

@@ -4,14 +4,18 @@
  * spdx-license-identifier: apache-2.0
  */
 
-export enum ModelType {
-  GEMINI_3_1_FLASH = "gemini-3.1-flash-lite-preview",
-  GEMINI_3_1_PRO = "gemini-3.1-pro-preview",
-}
+export const MODEL_IDS = {
+  PRIMARY_FAST: "gemini-3.1-flash-lite-preview",
+  PRIMARY_REASONING: "gemini-3.1-pro-preview",
+} as const;
 
 export const MODELS = [
-  { id: ModelType.GEMINI_3_1_FLASH, name: "Gemini 3.1 Flash" },
-  { id: ModelType.GEMINI_3_1_PRO, name: "Gemini 3.1 Pro" },
+  { id: MODEL_IDS.PRIMARY_FAST, name: "Gemini 3.1 Flash", provider: "gemini" },
+  {
+    id: MODEL_IDS.PRIMARY_REASONING,
+    name: "Gemini 3.1 Pro",
+    provider: "gemini",
+  },
 ] as const;
 
 export const DEFAULT_MODEL_ID = MODELS[0].id;
@@ -19,7 +23,7 @@ export const DEFAULT_MODEL_ID = MODELS[0].id;
 const SUPPORTED_MODEL_ID_SET = new Set<string>(MODELS.map((model) => model.id));
 
 const LEGACY_MODEL_ID_ALIASES: Record<string, string> = {
-  "gemini-3.1-pro": ModelType.GEMINI_3_1_PRO,
+  "gemini-3.1-pro": MODEL_IDS.PRIMARY_REASONING,
 };
 
 export const isSupportedModelId = (modelId?: string | null): boolean => {

@@ -15,9 +15,12 @@
  * Inspired by OpenAI Codex's compaction architecture but adapted for chat UX.
  */
 
-import { invoke } from "@tauri-apps/api/core";
-import { geminiStore } from "./store";
+import { brainSessionStore } from "./store";
 import { normalizeMessageForHistory } from "./attachmentMemory";
+import {
+  compressConversationHistory,
+  persistConversationSummary,
+} from "../provider";
 
 /** How many messages (user+assistant pairs) to keep verbatim. */
 const VERBATIM_WINDOW_SIZE = 6;
@@ -46,7 +49,7 @@ export function buildContextWindow(): {
   historyLog: string;
   rollingSummary: string;
 } {
-  const history = geminiStore.conversationHistory;
+  const history = brainSessionStore.conversationHistory;
 
   // Format verbatim window (last N messages)
   const verbatimStart = Math.max(0, history.length - VERBATIM_WINDOW_SIZE);
@@ -62,7 +65,7 @@ export function buildContextWindow(): {
           )
           .join("\n\n");
 
-  const rollingSummary = geminiStore.conversationSummary || "";
+  const rollingSummary = brainSessionStore.conversationSummary || "";
 
   return { historyLog, rollingSummary };
 }
@@ -76,7 +79,7 @@ export function buildContextWindow(): {
  * @param chatId - Active chat ID for persisting the summary
  */
 export function maybeCompressHistory(chatId: string | null): void {
-  const history = geminiStore.conversationHistory;
+  const history = brainSessionStore.conversationHistory;
 
   // Don't compress if below threshold
   if (history.length < SUMMARIZATION_THRESHOLD) {
@@ -84,7 +87,7 @@ export function maybeCompressHistory(chatId: string | null): void {
   }
 
   // Don't compress if no API key
-  if (!geminiStore.storedApiKey) {
+  if (!brainSessionStore.storedApiKey) {
     return;
   }
 
@@ -95,7 +98,7 @@ export function maybeCompressHistory(chatId: string | null): void {
   }
 
   const toCompress = history.slice(0, compressEnd);
-  const imageBrief = geminiStore.imageBrief || "";
+  const imageBrief = brainSessionStore.imageBrief || "";
 
   // Format the turns to compress
   const historyText = toCompress
@@ -109,38 +112,38 @@ export function maybeCompressHistory(chatId: string | null): void {
   );
 
   // Fire and forget — async, non-blocking
-  invoke<string>("compress_conversation", {
-    apiKey: geminiStore.storedApiKey,
+  compressConversationHistory(
+    brainSessionStore.storedApiKey,
     imageBrief,
-    historyToCompress: historyText,
-  })
+    historyText,
+  )
     .then((summary) => {
       if (summary) {
         // Merge with existing summary if present
-        const existingSummary = geminiStore.conversationSummary;
+        const existingSummary = brainSessionStore.conversationSummary;
         if (existingSummary) {
-          geminiStore.conversationSummary = `${existingSummary}\n\n---\n\n${summary}`;
+          brainSessionStore.conversationSummary = `${existingSummary}\n\n---\n\n${summary}`;
         } else {
-          geminiStore.conversationSummary = summary;
+          brainSessionStore.conversationSummary = summary;
         }
 
         console.log(
-          `[Summarizer] Summary updated (${geminiStore.conversationSummary.length} chars)`,
+          `[Summarizer] Summary updated (${brainSessionStore.conversationSummary.length} chars)`,
         );
 
         // Trim history: keep only the verbatim window now that older turns are compressed
-        geminiStore.conversationHistory = history.slice(compressEnd);
+        brainSessionStore.conversationHistory = history.slice(compressEnd);
 
         console.log(
-          `[Summarizer] History trimmed to ${geminiStore.conversationHistory.length} messages`,
+          `[Summarizer] History trimmed to ${brainSessionStore.conversationHistory.length} messages`,
         );
 
         // Persist summary to disk
         if (chatId) {
-          invoke("save_rolling_summary", {
+          persistConversationSummary(
             chatId,
-            summary: geminiStore.conversationSummary,
-          }).catch((e) => {
+            brainSessionStore.conversationSummary,
+          ).catch((e) => {
             console.warn("[Summarizer] Failed to persist summary:", e);
           });
         }
@@ -157,12 +160,12 @@ export function maybeCompressHistory(chatId: string | null): void {
  * Set the conversation summary directly (used when restoring from saved chat).
  */
 export function setConversationSummary(summary: string | null): void {
-  geminiStore.conversationSummary = summary;
+  brainSessionStore.conversationSummary = summary;
 }
 
 /**
  * Get the current conversation summary.
  */
 export function getConversationSummary(): string | null {
-  return geminiStore.conversationSummary;
+  return brainSessionStore.conversationSummary;
 }

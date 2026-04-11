@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useBrainSession } from "@/hooks";
 import { Message } from "@/features";
-import { useChatState } from "./useChatState";
-import { useGeminiEngine, useChatLifecycle } from "@/hooks";
 
 export const useChat = ({
   apiKey,
@@ -46,85 +45,21 @@ export const useChat = ({
   userName?: string;
   userEmail?: string;
 }) => {
-  const state = useChatState(enabled);
-
-  const engine = useGeminiEngine({
+  return useBrainSession({
     apiKey,
     currentModel,
-    setCurrentModel,
-    chatId,
-    chatTitle,
     startupImage,
+    prompt,
+    setCurrentModel,
+    enabled,
     onMissingApiKey,
     onMessage,
     onOverwriteMessages,
+    chatId,
+    chatTitle,
     onTitleGenerated,
     generateTitle,
-    state,
     userName,
     userEmail,
-    userInstruction: prompt,
   });
-
-  const lifecycle = useChatLifecycle({
-    enabled,
-    chatId,
-    startupImage,
-    prompt,
-    apiKey,
-    currentModel,
-    onMissingApiKey,
-    state,
-    engine,
-  });
-
-  return {
-    messages: state.messages,
-    isLoading: state.isLoading,
-    error: state.error,
-    clearError: state.clearError,
-    isStreaming: state.isStreaming,
-    isAiTyping: state.isAiTyping,
-    setIsAiTyping: state.setIsAiTyping,
-    retryingMessageId: state.retryingMessageId,
-    streamingText: state.streamingText,
-    toolStatus: state.toolStatus,
-    streamingToolSteps: state.streamingToolSteps,
-    streamingCitations: state.streamingCitations,
-    pendingAssistantTurn: state.pendingAssistantTurn,
-    lastSentMessage: state.lastSentMessage,
-    isSearching:
-      !!state.pendingAssistantTurn &&
-      (state.pendingAssistantTurn.toolSteps.length > 0 ||
-        state.pendingAssistantTurn.pendingCitations.length > 0 ||
-        /search|source|web/i.test(state.pendingAssistantTurn.progressText)),
-    isAnalyzing:
-      !!startupImage &&
-      !!state.pendingAssistantTurn &&
-      state.pendingAssistantTurn.requestKind === "initial" &&
-      state.pendingAssistantTurn.phase === "thinking",
-    isGenerating: !!state.pendingAssistantTurn,
-    handleSend: engine.handleSend,
-    handleRetrySend: engine.handleRetrySend,
-    handleRetryMessage: engine.handleRetryMessage,
-    handleUndoMessage: engine.handleUndoMessage,
-    handleDescribeEdits: engine.handleDescribeEdits,
-    handleStreamComplete: engine.handleStreamComplete,
-    handleStopGeneration: engine.handleStopGeneration,
-    handleQuickAnswer: engine.handleQuickAnswer,
-    startSession: (
-      key: string,
-      modelId: string,
-      imgData: {
-        path: string;
-        mimeType: string;
-        imageId: string;
-        fromHistory?: boolean;
-      } | null,
-      isRetry = false,
-    ) => engine.startSession(key, modelId, imgData, isRetry),
-    getCurrentState: lifecycle.getCurrentState,
-    restoreState: lifecycle.restoreState,
-    appendErrorMessage: state.appendErrorMessage,
-  };
 };

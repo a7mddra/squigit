@@ -68,7 +68,7 @@ export interface Message {
 export type MessageCollapseMode = "none" | "collapsed" | "expanded";
 
 export interface AppConfig {
-  google_gemini: {
+  provider: {
     api_key: string;
     api_endpoint: string;
   };

@@ -7,13 +7,13 @@
 import { useState } from "react";
 
 export const useAppDialogs = () => {
-  const [showGeminiAuthDialog, setShowGeminiAuthDialog] = useState(false);
+  const [showProviderAuthDialog, setShowProviderAuthDialog] = useState(false);
   const [showLoginRequiredDialog, setShowLoginRequiredDialog] = useState(false);
   const [showCaptureDeniedDialog, setShowCaptureDeniedDialog] = useState(false);
 
   return {
-    showGeminiAuthDialog,
-    setShowGeminiAuthDialog,
+    showProviderAuthDialog,
+    setShowProviderAuthDialog,
     showLoginRequiredDialog,
     setShowLoginRequiredDialog,
     showCaptureDeniedDialog,

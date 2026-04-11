@@ -7,7 +7,7 @@
 import { listen } from "@tauri-apps/api/event";
 
 export interface TauriEventMap {
-  "gemini-stream-token":
+  "provider-stream-token":
     | { type: "token"; token: string }
     | { type: "reset" }
     | { type: "tool_status"; message: string }

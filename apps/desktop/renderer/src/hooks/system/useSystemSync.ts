@@ -9,7 +9,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
   loadPreferences,
-  initializeGemini,
+  initializeBrainProvider,
   commands,
   hasAgreedFlag,
   setAgreedFlag,
@@ -258,17 +258,17 @@ export const useSystemSync = () => {
           profileId: activeProf.id,
         });
         console.log(
-          "[useSystemSync] Gemini key retrieved:",
+          "[useSystemSync] AI provider key retrieved:",
           apiKey ? "FOUND" : "EMPTY",
         );
         if (apiKey) {
           keys.setApiKey(apiKey);
-          initializeGemini(apiKey);
+          initializeBrainProvider(apiKey);
         } else {
           keys.setApiKey("");
         }
       } catch (e) {
-        console.error("[useSystemSync] Failed to retrieve Gemini key:", e);
+        console.error("[useSystemSync] Failed to retrieve AI provider key:", e);
         keys.setApiKey("");
       }
 

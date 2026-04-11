@@ -11,32 +11,35 @@ import {
   PendingAssistantTurn,
   PendingAssistantRequestKind,
   ToolStep,
+} from "@/features";
+import {
+  startBrainSessionStream,
+  sendBrainMessage,
+  retryBrainMessage,
+  cancelActiveBrainRequest,
+  requestBrainQuickAnswer,
+  replaceLastAssistantHistory,
+  restoreBrainSession,
+  getImageDescription,
+  setImageDescription,
   STREAM_PLAYBACK_INTERVAL_MS,
   STREAM_PRIME_DELAY_MS,
   advanceStreamCursorByWords,
   countRemainingStreamWords,
   getRenderableStreamingText,
   getStreamBatchSize,
-} from "@/features";
-import {
-  startNewThreadStream,
-  sendMessage as apiSendMessage,
-  retryFromMessage as apiRetryFromMessage,
-  cancelCurrentRequest,
-  quickAnswerCurrentRequest,
-  replaceLastAssistantHistory,
-  restoreSession as apiRestoreSession,
-  getImageDescription,
-  setImageDescription,
   API_STATUS_TEXT,
   HIGH_DEMAND_RETRY_ATTEMPTS,
   HIGH_DEMAND_RETRY_DELAYS_MS,
   getHighDemandRetryStatusText,
-  getFriendlyGeminiErrorMessage,
-  getGeminiHighDemandExhaustedMessage,
-  isGeminiHighDemandError,
+  getFriendlyBrainErrorMessage,
+  getBrainHighDemandExhaustedMessage,
+  isBrainHighDemandError,
   mapToolStatusText,
-  ModelType,
+  DEFAULT_BRAIN_FALLBACK_MODEL_ID,
+  shouldFallbackToDefaultBrainModel,
+  type BrainEngineHandle,
+  type BrainStartupImage,
 } from "@/core";
 
 const DEFAULT_THREAD_TITLE_NORMALIZED = "new thread";
@@ -54,13 +57,13 @@ function isUntitledThreadTitle(title: string | null | undefined): boolean {
   );
 }
 
-export const useGeminiEngine = (config: {
+export const useBrainEngine = (config: {
   apiKey: string;
   currentModel: string;
   setCurrentModel: (model: string) => void;
   chatId: string | null;
   chatTitle: string;
-  startupImage: { path: string; mimeType: string; imageId: string } | null;
+  startupImage: BrainStartupImage | null;
   onMissingApiKey?: () => void;
   onMessage?: (message: Message, chatId: string) => void;
   onOverwriteMessages?: (messages: Message[]) => void;
@@ -70,7 +73,7 @@ export const useGeminiEngine = (config: {
   userName?: string;
   userEmail?: string;
   userInstruction?: string;
-}) => {
+}): BrainEngineHandle => {
   const {
     messages,
     setMessages,
@@ -312,7 +315,7 @@ export const useGeminiEngine = (config: {
     error: unknown,
     signal?: AbortSignal,
   ): boolean => {
-    if (isRequestAborted(signal) || !isGeminiHighDemandError(error)) {
+    if (isRequestAborted(signal) || !isBrainHighDemandError(error)) {
       return false;
     }
 
@@ -340,7 +343,7 @@ export const useGeminiEngine = (config: {
 
         if (retriesUsed >= HIGH_DEMAND_RETRY_ATTEMPTS) {
           throw new Error(
-            getGeminiHighDemandExhaustedMessage(HIGH_DEMAND_RETRY_ATTEMPTS),
+            getBrainHighDemandExhaustedMessage(HIGH_DEMAND_RETRY_ATTEMPTS),
           );
         }
 
@@ -831,12 +834,12 @@ export const useGeminiEngine = (config: {
       const toolTracker = createToolEventHandler(resetPendingRawText);
 
       console.log(
-        "[useGeminiEngine] Calling startNewThreadStream with model:",
+        "[useBrainEngine] Calling startBrainSessionStream with model:",
         modelId,
       );
       const responseText = await runWithHighDemandRetries(
         () =>
-          startNewThreadStream(
+          startBrainSessionStream(
             modelId,
             imgData.path,
             (token: string) => {
@@ -860,12 +863,12 @@ export const useGeminiEngine = (config: {
 
               hasGeneratedTitleFromBrief = true;
               console.log(
-                "[useGeminiEngine] Triggering title generation using image brief",
+                "[useBrainEngine] Triggering title generation using image brief",
               );
               config
                 .generateTitle(brief)
                 .then((title) => {
-                  console.log("[useGeminiEngine] Title generated:", title);
+                  console.log("[useBrainEngine] Title generated:", title);
                   if (!signal.aborted) config.onTitleGenerated?.(title);
                 })
                 .catch(console.error);
@@ -874,7 +877,7 @@ export const useGeminiEngine = (config: {
           ),
         signal,
       );
-      console.log("[useGeminiEngine] startNewThreadStream finished!");
+      console.log("[useBrainEngine] startBrainSessionStream finished!");
 
       if (signal.aborted) {
         clearPendingGenerationState();
@@ -893,24 +896,21 @@ export const useGeminiEngine = (config: {
       }
 
       console.error(apiError);
-      if (
-        !isRetry &&
-        (apiError.message?.includes("429") || apiError.message?.includes("503"))
-      ) {
-        if (config.currentModel !== ModelType.GEMINI_3_1_FLASH) {
+      if (!isRetry && shouldFallbackToDefaultBrainModel(config.currentModel, apiError)) {
+        if (config.currentModel !== DEFAULT_BRAIN_FALLBACK_MODEL_ID) {
           console.log("Model failed, trying lite version...");
-          config.setCurrentModel(ModelType.GEMINI_3_1_FLASH);
+          config.setCurrentModel(DEFAULT_BRAIN_FALLBACK_MODEL_ID);
           clearPendingGenerationState();
           return;
         }
       }
 
-      cancelCurrentRequest();
+      cancelActiveBrainRequest();
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
-      const errorMsg = getFriendlyGeminiErrorMessage(apiError);
+      const errorMsg = getFriendlyBrainErrorMessage(apiError);
 
       clearPendingAssistantTurn();
       appendErrorMessage(errorMsg, sessionChatIdRef.current || config.chatId);
@@ -956,7 +956,7 @@ export const useGeminiEngine = (config: {
       const toolTracker = createToolEventHandler(resetPendingRawText);
 
       const responseText = await runWithHighDemandRetries(() =>
-        startNewThreadStream(
+        startBrainSessionStream(
           config.currentModel,
           startupImage.path,
           (token: string) => {
@@ -978,7 +978,7 @@ export const useGeminiEngine = (config: {
         return;
       }
       console.error(apiError);
-      const errorMsg = getFriendlyGeminiErrorMessage(apiError);
+      const errorMsg = getFriendlyBrainErrorMessage(apiError);
 
       clearPendingAssistantTurn();
       appendErrorMessage(errorMsg, targetChatId);
@@ -1000,7 +1000,7 @@ export const useGeminiEngine = (config: {
     try {
       const toolTracker = createToolEventHandler(resetPendingRawText);
       const responseText = await runWithHighDemandRetries(() =>
-        apiSendMessage(
+        sendBrainMessage(
           lastSentMessage.text,
           undefined,
           (token: string) => {
@@ -1018,7 +1018,7 @@ export const useGeminiEngine = (config: {
         return;
       }
       clearPendingAssistantTurn();
-      appendErrorMessage(getFriendlyGeminiErrorMessage(apiError), targetChatId);
+      appendErrorMessage(getFriendlyBrainErrorMessage(apiError), targetChatId);
     }
   };
 
@@ -1048,7 +1048,7 @@ export const useGeminiEngine = (config: {
     try {
       const toolTracker = createToolEventHandler(resetPendingRawText);
       const responseText = await runWithHighDemandRetries(() =>
-        apiSendMessage(
+        sendBrainMessage(
           userText,
           modelId,
           (token: string) => {
@@ -1066,7 +1066,7 @@ export const useGeminiEngine = (config: {
         return;
       }
       clearPendingAssistantTurn();
-      appendErrorMessage(getFriendlyGeminiErrorMessage(apiError), targetChatId);
+      appendErrorMessage(getFriendlyBrainErrorMessage(apiError), targetChatId);
     }
   };
 
@@ -1107,7 +1107,7 @@ export const useGeminiEngine = (config: {
         requestStartedAtMs,
       );
       const responseText = await runWithHighDemandRetries(() =>
-        apiRetryFromMessage(
+        retryBrainMessage(
           msgIndex,
           messages,
           retryModelId,
@@ -1141,7 +1141,7 @@ export const useGeminiEngine = (config: {
         return;
       }
       console.error("Retry failed:", apiError);
-      const errorMsg = getFriendlyGeminiErrorMessage(apiError);
+      const errorMsg = getFriendlyBrainErrorMessage(apiError);
       clearPendingAssistantTurn();
       setRetryingMessageId(null);
       appendErrorMessage(errorMsg, config.chatId);
@@ -1154,7 +1154,7 @@ export const useGeminiEngine = (config: {
 
     const truncatedMessages = messages.slice(0, msgIndex);
 
-    cancelCurrentRequest();
+    cancelActiveBrainRequest();
     cleanupAbortController();
     isRequestCancelledRef.current = true;
 
@@ -1176,7 +1176,7 @@ export const useGeminiEngine = (config: {
       content: message.text,
     }));
 
-    apiRestoreSession(
+    restoreBrainSession(
       config.currentModel,
       firstAssistantMessage?.text || getImageDescription() || "",
       firstUserMessage?.text || null,
@@ -1187,7 +1187,7 @@ export const useGeminiEngine = (config: {
 
   const handleStopGeneration = () => {
     isRequestCancelledRef.current = true;
-    cancelCurrentRequest();
+    cancelActiveBrainRequest();
     cleanupAbortController();
 
     const currentPendingTurn = pendingAssistantTurnRef.current;
@@ -1231,7 +1231,7 @@ export const useGeminiEngine = (config: {
   };
 
   const handleQuickAnswer = async () => {
-    await quickAnswerCurrentRequest();
+    await requestBrainQuickAnswer();
     setToolStatus(API_STATUS_TEXT.WRAPPING_UP);
     updatePendingAssistantTurn((turn) => ({
       ...turn,

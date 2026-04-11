@@ -112,7 +112,7 @@ const AppRouterContent: React.FC = () => {
       )}
 
       <Dialog
-        isOpen={app.showGeminiAuthDialog}
+        isOpen={app.showProviderAuthDialog}
         type="GEMINI_AUTH"
         onAction={(key) => {
           let msg = "";
@@ -122,7 +122,7 @@ const AppRouterContent: React.FC = () => {
             msg = "Please configure your Gemini API key to continue.";
           }
           app.chat.appendErrorMessage(msg, app.chatHistory.activeSessionId);
-          app.setShowGeminiAuthDialog(false);
+          app.setShowProviderAuthDialog(false);
         }}
       />
 

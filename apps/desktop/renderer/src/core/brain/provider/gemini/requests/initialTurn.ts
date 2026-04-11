@@ -4,20 +4,27 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { geminiStore } from "./store";
-import { GeminiStreamEvent } from "./gemini.types";
-import { cancelCurrentRequest } from "./cancel";
-import { createStreamWatchdog } from "./streamWatchdog";
+import { brainSessionStore } from "../../../session/store";
+import type { ProviderStreamEvent } from "../../../engine/types";
 import {
   resetBrainContext,
   setUserInfo,
   setImageDescription,
   setImageBrief,
   addToHistory,
-} from "./context";
-import { saveImageBrief } from "@/core";
+} from "../../../session/context";
+import {
+  cancelCurrentRequest,
+  clearActiveProviderTransport,
+  createProviderChannelId,
+  createStreamWatchdog,
+} from "../transport";
+import {
+  generateGeminiImageBrief,
+  streamGeminiChat,
+} from "../commands";
+import { saveImageBrief } from "@/core/storage/chat";
 
 export const startNewThreadStream = async (
   modelId: string,
@@ -28,26 +35,26 @@ export const startNewThreadStream = async (
   userEmail?: string,
   userInstruction?: string,
   onBriefReady?: (brief: string) => void,
-  onEvent?: (event: GeminiStreamEvent) => void,
+  onEvent?: (event: ProviderStreamEvent) => void,
 ): Promise<string> => {
-  if (!geminiStore.storedApiKey) throw new Error("Gemini API Key not set");
+  if (!brainSessionStore.storedApiKey) throw new Error("Gemini API Key not set");
 
   cancelCurrentRequest();
-  geminiStore.currentAbortController = new AbortController();
-  geminiStore.currentModelId = modelId;
-  const myGenId = geminiStore.generationId;
+  brainSessionStore.currentAbortController = new AbortController();
+  brainSessionStore.currentModelId = modelId;
+  const myGenId = brainSessionStore.generationId;
 
   resetBrainContext();
   setUserInfo(userName, userEmail, userInstruction);
-  geminiStore.storedImagePath = imagePath;
+  brainSessionStore.storedImagePath = imagePath;
 
-  const channelId = `gemini-stream-${Date.now()}`;
-  geminiStore.currentChannelId = channelId;
+  const channelId = createProviderChannelId();
+  brainSessionStore.currentChannelId = channelId;
   let fullResponse = "";
   const streamWatchdog = createStreamWatchdog(() => cancelCurrentRequest());
 
-  const unlisten = await listen<GeminiStreamEvent>(channelId, (event) => {
-    if (geminiStore.generationId !== myGenId) return;
+  const unlisten = await listen<ProviderStreamEvent>(channelId, (event) => {
+    if (brainSessionStore.generationId !== myGenId) return;
     streamWatchdog.touch();
     const payload: any = event.payload;
     if (!payload?.type || payload.type === "token") {
@@ -59,12 +66,12 @@ export const startNewThreadStream = async (
     }
     if (payload.type === "reset") {
       fullResponse = "";
-      onEvent?.(payload as GeminiStreamEvent);
+      onEvent?.(payload as ProviderStreamEvent);
       return;
     }
-    onEvent?.(payload as GeminiStreamEvent);
+    onEvent?.(payload as ProviderStreamEvent);
   });
-  geminiStore.currentUnlisten = unlisten;
+  brainSessionStore.currentUnlisten = unlisten;
 
   try {
     console.log(`[GeminiClient] Starting New Stream`);
@@ -75,15 +82,17 @@ export const startNewThreadStream = async (
       let lastError = null;
       while (attempt < 5) {
         try {
-          const brief = await invoke<string>("generate_image_brief", {
-            apiKey: geminiStore.storedApiKey,
-            imagePath,
-          });
+            const providerApiKey = brainSessionStore.storedApiKey;
+            if (!providerApiKey) return "";
+            const brief = await generateGeminiImageBrief(
+              providerApiKey,
+              imagePath,
+            );
           if (brief) {
             if (chatId) {
               saveImageBrief(chatId, brief).catch(console.error);
             }
-            if (geminiStore.generationId === myGenId) {
+            if (brainSessionStore.generationId === myGenId) {
               setImageBrief(brief);
               if (onBriefReady) onBriefReady(brief);
             }
@@ -111,9 +120,13 @@ export const startNewThreadStream = async (
     void generateAndSaveBrief();
 
     streamWatchdog.touch();
+    const providerApiKey = brainSessionStore.storedApiKey;
+    if (!providerApiKey) {
+      throw new Error("Gemini API Key not set");
+    }
     await Promise.race([
-      invoke("stream_gemini_chat_v2", {
-        apiKey: geminiStore.storedApiKey,
+      streamGeminiChat({
+        apiKey: providerApiKey,
         model: modelId,
         isInitialTurn: true,
         imagePath,
@@ -133,14 +146,10 @@ export const startNewThreadStream = async (
     ]);
     streamWatchdog.stop();
 
-    unlisten();
-    if (geminiStore.currentUnlisten === unlisten)
-      geminiStore.currentUnlisten = null;
-    if (geminiStore.currentChannelId === channelId)
-      geminiStore.currentChannelId = null;
-    geminiStore.currentAbortController = null;
+    clearActiveProviderTransport(channelId, unlisten);
+    brainSessionStore.currentAbortController = null;
 
-    if (geminiStore.generationId !== myGenId) throw new Error("CANCELLED");
+    if (brainSessionStore.generationId !== myGenId) throw new Error("CANCELLED");
 
     setImageDescription(fullResponse);
     addToHistory("Assistant", fullResponse);
@@ -151,12 +160,8 @@ export const startNewThreadStream = async (
     return fullResponse.trim();
   } catch (error) {
     streamWatchdog.stop();
-    unlisten();
-    if (geminiStore.currentUnlisten === unlisten)
-      geminiStore.currentUnlisten = null;
-    if (geminiStore.currentChannelId === channelId)
-      geminiStore.currentChannelId = null;
-    geminiStore.currentAbortController = null;
+    clearActiveProviderTransport(channelId, unlisten);
+    brainSessionStore.currentAbortController = null;
     if (error instanceof Error && error.message === "CANCELLED") throw error;
     console.error("Backend stream error:", error);
     throw error;

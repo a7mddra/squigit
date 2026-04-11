@@ -6,7 +6,7 @@
 
 import { DEFAULT_MODEL_ID } from "@/core/config/models";
 
-interface GeminiStoreState {
+export interface BrainSessionStoreState {
   currentAbortController: AbortController | null;
   currentUnlisten: (() => void) | null;
   currentChannelId: string | null;
@@ -24,7 +24,7 @@ interface GeminiStoreState {
   conversationSummary: string | null;
 }
 
-export const geminiStore: GeminiStoreState = {
+export const brainSessionStore: BrainSessionStoreState = {
   currentAbortController: null as AbortController | null,
   currentUnlisten: null as (() => void) | null,
   currentChannelId: null as string | null,

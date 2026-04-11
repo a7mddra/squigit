@@ -4,46 +4,45 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { geminiStore } from "./store";
-import { GeminiStreamEvent } from "./gemini.types";
-import { cancelCurrentRequest } from "./cancel";
-import { createStreamWatchdog } from "./streamWatchdog";
-import { setUserFirstMsg, addToHistory } from "./context";
-import { buildContextWindow, maybeCompressHistory } from "./summarize";
+import { brainSessionStore } from "../../../session/store";
+import type { ProviderStreamEvent } from "../../../engine/types";
+import { cancelCurrentRequest, clearActiveProviderTransport, createProviderChannelId, createStreamWatchdog } from "../transport";
+import { setUserFirstMsg, addToHistory } from "../../../session/context";
+import { buildContextWindow, maybeCompressHistory } from "../../../session/summarizer";
 import {
   buildRichUserHistoryContent,
   normalizeMessageForHistory,
-} from "./attachmentMemory";
+} from "../../../session/attachmentMemory";
+import { streamGeminiChat } from "../commands";
 
 export const sendMessage = async (
   text: string,
   modelId?: string,
   onToken?: (token: string) => void,
   chatId?: string | null,
-  onEvent?: (event: GeminiStreamEvent) => void,
+  onEvent?: (event: ProviderStreamEvent) => void,
 ): Promise<string> => {
-  if (!geminiStore.storedApiKey) throw new Error("Gemini API Key not set");
-  if (!geminiStore.imageDescription) throw new Error("No active chat session");
+  if (!brainSessionStore.storedApiKey) throw new Error("Gemini API Key not set");
+  if (!brainSessionStore.imageDescription) throw new Error("No active chat session");
 
   if (modelId) {
-    geminiStore.currentModelId = modelId;
+    brainSessionStore.currentModelId = modelId;
   }
 
-  const myGenId = geminiStore.generationId;
+  const myGenId = brainSessionStore.generationId;
   const userModelText = normalizeMessageForHistory(text);
   const userHistoryText = await buildRichUserHistoryContent(text);
   setUserFirstMsg(userHistoryText);
   addToHistory("User", userHistoryText);
 
-  const channelId = `gemini-stream-${Date.now()}`;
-  geminiStore.currentChannelId = channelId;
+  const channelId = createProviderChannelId();
+  brainSessionStore.currentChannelId = channelId;
   let fullResponse = "";
   const streamWatchdog = createStreamWatchdog(() => cancelCurrentRequest());
 
-  const unlisten = await listen<GeminiStreamEvent>(channelId, (event) => {
-    if (geminiStore.generationId !== myGenId) return;
+  const unlisten = await listen<ProviderStreamEvent>(channelId, (event) => {
+    if (brainSessionStore.generationId !== myGenId) return;
     streamWatchdog.touch();
     const payload: any = event.payload;
 
@@ -57,53 +56,53 @@ export const sendMessage = async (
 
     if (payload.type === "reset") {
       fullResponse = "";
-      onEvent?.(payload as GeminiStreamEvent);
+      onEvent?.(payload as ProviderStreamEvent);
       return;
     }
 
-    onEvent?.(payload as GeminiStreamEvent);
+    onEvent?.(payload as ProviderStreamEvent);
   });
-  geminiStore.currentUnlisten = unlisten;
+  brainSessionStore.currentUnlisten = unlisten;
 
   try {
     console.log(`[GeminiClient] Sending Message`);
-    console.log(`[GeminiClient] Target Model: ${geminiStore.currentModelId}`);
+    console.log(`[GeminiClient] Target Model: ${brainSessionStore.currentModelId}`);
     console.log(`[GeminiClient] Prompt: "${text}"`);
     console.log(
-      `[GeminiClient] Image Brief Present: ${Boolean(geminiStore.imageBrief)}`,
+      `[GeminiClient] Image Brief Present: ${Boolean(brainSessionStore.imageBrief)}`,
     );
 
     const { historyLog, rollingSummary } = buildContextWindow();
+    const providerApiKey = brainSessionStore.storedApiKey;
+    if (!providerApiKey) {
+      throw new Error("Gemini API Key not set");
+    }
 
     streamWatchdog.touch();
     await Promise.race([
-      invoke("stream_gemini_chat_v2", {
-        apiKey: geminiStore.storedApiKey,
-        model: geminiStore.currentModelId,
+      streamGeminiChat({
+        apiKey: providerApiKey,
+        model: brainSessionStore.currentModelId,
         isInitialTurn: false,
         imagePath: null, // Image never re-sent, brief is used instead
-        imageDescription: geminiStore.imageDescription,
-        userFirstMsg: geminiStore.userFirstMsg,
+        imageDescription: brainSessionStore.imageDescription,
+        userFirstMsg: brainSessionStore.userFirstMsg,
         historyLog,
         rollingSummary,
         userMessage: userModelText,
         channelId: channelId,
         chatId: chatId ?? null,
-        userName: geminiStore.userName,
-        userEmail: geminiStore.userEmail,
+        userName: brainSessionStore.userName ?? undefined,
+        userEmail: brainSessionStore.userEmail ?? undefined,
         userInstruction: null, // One-time intent hook only sent on initial turn
-        imageBrief: geminiStore.imageBrief,
+        imageBrief: brainSessionStore.imageBrief,
       }),
       streamWatchdog.stallPromise,
     ]);
     streamWatchdog.stop();
-    unlisten();
-    if (geminiStore.currentUnlisten === unlisten)
-      geminiStore.currentUnlisten = null;
-    if (geminiStore.currentChannelId === channelId)
-      geminiStore.currentChannelId = null;
+    clearActiveProviderTransport(channelId, unlisten);
 
-    if (geminiStore.generationId !== myGenId) throw new Error("CANCELLED");
+    if (brainSessionStore.generationId !== myGenId) throw new Error("CANCELLED");
 
     addToHistory("Assistant", fullResponse);
 
@@ -116,11 +115,7 @@ export const sendMessage = async (
     return fullResponse;
   } catch (error) {
     streamWatchdog.stop();
-    unlisten();
-    if (geminiStore.currentUnlisten === unlisten)
-      geminiStore.currentUnlisten = null;
-    if (geminiStore.currentChannelId === channelId)
-      geminiStore.currentChannelId = null;
+    clearActiveProviderTransport(channelId, unlisten);
     if (error instanceof Error && error.message === "CANCELLED") throw error;
     console.error("SendMessage error:", error);
     throw error;

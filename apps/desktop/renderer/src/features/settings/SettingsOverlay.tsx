@@ -50,7 +50,7 @@ interface SettingsOverlayProps {
   autoExpandOCR: boolean;
   ocrEnabled: boolean;
   captureType: "rectangular" | "squiggle";
-  geminiKey: string;
+  providerApiKey: string;
   imgbbKey: string;
   onSetAPIKey: (
     provider: "google ai studio" | "imgbb",
@@ -73,7 +73,7 @@ export const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
   autoExpandOCR,
   ocrEnabled,
   captureType,
-  geminiKey,
+  providerApiKey,
   imgbbKey,
   onSetAPIKey,
   isGuest = false,
@@ -198,7 +198,7 @@ export const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         )}
         {activeSection === "apikeys" && (
           <APIKeysSection
-            geminiKey={geminiKey}
+            providerApiKey={providerApiKey}
             imgbbKey={imgbbKey}
             onSetAPIKey={onSetAPIKey}
             isGuest={isGuest}

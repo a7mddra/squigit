@@ -4,16 +4,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { geminiStore } from "./store";
-import { GeminiStreamEvent } from "./gemini.types";
-import { cancelCurrentRequest } from "./cancel";
-import { createStreamWatchdog } from "./streamWatchdog";
-import { setImageDescription, setImageBrief, addToHistory } from "./context";
-import { buildContextWindow } from "./summarize";
-import { normalizeMessageForHistory } from "./attachmentMemory";
-import { saveImageBrief } from "@/core";
+import { brainSessionStore } from "../../../session/store";
+import type { ProviderStreamEvent } from "../../../engine/types";
+import { cancelCurrentRequest, clearActiveProviderTransport, createProviderChannelId, createStreamWatchdog } from "../transport";
+import { setImageDescription, setImageBrief, addToHistory } from "../../../session/context";
+import { buildContextWindow } from "../../../session/summarizer";
+import { normalizeMessageForHistory } from "../../../session/attachmentMemory";
+import {
+  generateGeminiImageBrief,
+  streamGeminiChat,
+} from "../commands";
+import { saveImageBrief } from "@/core/storage/chat";
 
 export const retryFromMessage = async (
   messageIndex: number,
@@ -23,33 +25,33 @@ export const retryFromMessage = async (
   onToken?: (token: string) => void,
   fallbackImagePath?: string,
   onBriefReady?: (brief: string) => void,
-  onEvent?: (event: GeminiStreamEvent) => void,
+  onEvent?: (event: ProviderStreamEvent) => void,
 ): Promise<string> => {
-  if (!geminiStore.storedApiKey) throw new Error("Gemini API Key not set");
+  if (!brainSessionStore.storedApiKey) throw new Error("Gemini API Key not set");
 
-  geminiStore.currentModelId = modelId;
-  const myGenId = geminiStore.generationId;
+  brainSessionStore.currentModelId = modelId;
+  const myGenId = brainSessionStore.generationId;
 
-  if (!geminiStore.storedImagePath && fallbackImagePath) {
-    geminiStore.storedImagePath = fallbackImagePath;
+  if (!brainSessionStore.storedImagePath && fallbackImagePath) {
+    brainSessionStore.storedImagePath = fallbackImagePath;
   }
 
   if (messageIndex === 0) {
-    if (!geminiStore.storedImagePath) {
+    if (!brainSessionStore.storedImagePath) {
       throw new Error("Image not found");
     }
 
-    geminiStore.imageDescription = null;
-    geminiStore.userFirstMsg = null;
-    geminiStore.conversationHistory = [];
+    brainSessionStore.imageDescription = null;
+    brainSessionStore.userFirstMsg = null;
+    brainSessionStore.conversationHistory = [];
 
-    const channelId = `gemini-stream-${Date.now()}`;
-    geminiStore.currentChannelId = channelId;
+    const channelId = createProviderChannelId();
+    brainSessionStore.currentChannelId = channelId;
     let fullResponse = "";
     const streamWatchdog = createStreamWatchdog(() => cancelCurrentRequest());
 
-    const unlisten = await listen<GeminiStreamEvent>(channelId, (event) => {
-      if (geminiStore.generationId !== myGenId) return;
+    const unlisten = await listen<ProviderStreamEvent>(channelId, (event) => {
+      if (brainSessionStore.generationId !== myGenId) return;
       streamWatchdog.touch();
       const payload: any = event.payload;
       if (!payload?.type || payload.type === "token") {
@@ -61,12 +63,12 @@ export const retryFromMessage = async (
       }
       if (payload.type === "reset") {
         fullResponse = "";
-        onEvent?.(payload as GeminiStreamEvent);
+        onEvent?.(payload as ProviderStreamEvent);
         return;
       }
-      onEvent?.(payload as GeminiStreamEvent);
+      onEvent?.(payload as ProviderStreamEvent);
     });
-    geminiStore.currentUnlisten = unlisten;
+    brainSessionStore.currentUnlisten = unlisten;
 
     try {
       const generateAndSaveBrief = async () => {
@@ -74,15 +76,18 @@ export const retryFromMessage = async (
         let lastError = null;
         while (attempt < 5) {
           try {
-            const brief = await invoke<string>("generate_image_brief", {
-              apiKey: geminiStore.storedApiKey,
-              imagePath: geminiStore.storedImagePath,
-            });
+            const providerApiKey = brainSessionStore.storedApiKey;
+            const storedImagePath = brainSessionStore.storedImagePath;
+            if (!providerApiKey || !storedImagePath) return "";
+            const brief = await generateGeminiImageBrief(
+              providerApiKey,
+              storedImagePath,
+            );
             if (brief) {
               if (chatId) {
                 saveImageBrief(chatId, brief).catch(console.error);
               }
-              if (geminiStore.generationId === myGenId) {
+              if (brainSessionStore.generationId === myGenId) {
                 setImageBrief(brief);
                 if (onBriefReady) onBriefReady(brief);
               }
@@ -113,12 +118,16 @@ export const retryFromMessage = async (
       void generateAndSaveBrief();
 
       streamWatchdog.touch();
+      const providerApiKey = brainSessionStore.storedApiKey;
+      if (!providerApiKey) {
+        throw new Error("Gemini API Key not set");
+      }
       await Promise.race([
-        invoke("stream_gemini_chat_v2", {
-          apiKey: geminiStore.storedApiKey,
-          model: geminiStore.currentModelId,
+        streamGeminiChat({
+          apiKey: providerApiKey,
+          model: brainSessionStore.currentModelId,
           isInitialTurn: true,
-          imagePath: geminiStore.storedImagePath,
+          imagePath: brainSessionStore.storedImagePath,
           imageDescription: null,
           userFirstMsg: null,
           historyLog: null,
@@ -126,48 +135,40 @@ export const retryFromMessage = async (
           userMessage: "",
           channelId,
           chatId: chatId ?? null,
-          userName: geminiStore.userName,
-          userEmail: geminiStore.userEmail,
-          userInstruction: geminiStore.userInstruction,
+          userName: brainSessionStore.userName ?? undefined,
+          userEmail: brainSessionStore.userEmail ?? undefined,
+          userInstruction: brainSessionStore.userInstruction,
           imageBrief: "",
         }),
         streamWatchdog.stallPromise,
       ]);
       streamWatchdog.stop();
 
-      unlisten();
-      if (geminiStore.currentUnlisten === unlisten)
-        geminiStore.currentUnlisten = null;
-      if (geminiStore.currentChannelId === channelId)
-        geminiStore.currentChannelId = null;
+      clearActiveProviderTransport(channelId, unlisten);
 
-      if (geminiStore.generationId !== myGenId) throw new Error("CANCELLED");
+      if (brainSessionStore.generationId !== myGenId) throw new Error("CANCELLED");
 
       setImageDescription(fullResponse);
-      geminiStore.conversationHistory = [
+      brainSessionStore.conversationHistory = [
         { role: "Assistant", content: fullResponse },
       ];
 
       return fullResponse;
     } catch (error) {
       streamWatchdog.stop();
-      unlisten();
-      if (geminiStore.currentUnlisten === unlisten)
-        geminiStore.currentUnlisten = null;
-      if (geminiStore.currentChannelId === channelId)
-        geminiStore.currentChannelId = null;
+      clearActiveProviderTransport(channelId, unlisten);
       throw error;
     }
   }
 
-  const imgDesc = allMessages[0]?.text || geminiStore.imageDescription || "";
-  geminiStore.imageDescription = imgDesc;
+  const imgDesc = allMessages[0]?.text || brainSessionStore.imageDescription || "";
+  brainSessionStore.imageDescription = imgDesc;
 
   const messagesBefore = allMessages.slice(0, messageIndex);
   const firstUser = messagesBefore.find((m) => m.role === "user");
-  geminiStore.userFirstMsg = firstUser?.text || null;
+  brainSessionStore.userFirstMsg = firstUser?.text || null;
 
-  geminiStore.conversationHistory = messagesBefore.map((m) => ({
+  brainSessionStore.conversationHistory = messagesBefore.map((m) => ({
     role: m.role === "user" ? "User" : "Assistant",
     content: normalizeMessageForHistory(m.text),
   }));
@@ -181,13 +182,13 @@ export const retryFromMessage = async (
   }
   const retryUserMessage = normalizeMessageForHistory(lastUserMsg.text);
 
-  const channelId = `gemini-stream-${Date.now()}`;
-  geminiStore.currentChannelId = channelId;
+  const channelId = createProviderChannelId();
+  brainSessionStore.currentChannelId = channelId;
   let fullResponse = "";
   const streamWatchdog = createStreamWatchdog(() => cancelCurrentRequest());
 
-  const unlisten = await listen<GeminiStreamEvent>(channelId, (event) => {
-    if (geminiStore.generationId !== myGenId) return;
+  const unlisten = await listen<ProviderStreamEvent>(channelId, (event) => {
+    if (brainSessionStore.generationId !== myGenId) return;
     streamWatchdog.touch();
     const payload: any = event.payload;
     if (!payload?.type || payload.type === "token") {
@@ -199,57 +200,53 @@ export const retryFromMessage = async (
     }
     if (payload.type === "reset") {
       fullResponse = "";
-      onEvent?.(payload as GeminiStreamEvent);
+      onEvent?.(payload as ProviderStreamEvent);
       return;
     }
-    onEvent?.(payload as GeminiStreamEvent);
+    onEvent?.(payload as ProviderStreamEvent);
   });
-  geminiStore.currentUnlisten = unlisten;
+  brainSessionStore.currentUnlisten = unlisten;
 
   try {
     const { historyLog, rollingSummary } = buildContextWindow();
+    const providerApiKey = brainSessionStore.storedApiKey;
+    if (!providerApiKey) {
+      throw new Error("Gemini API Key not set");
+    }
 
     streamWatchdog.touch();
     await Promise.race([
-      invoke("stream_gemini_chat_v2", {
-        apiKey: geminiStore.storedApiKey,
-        model: geminiStore.currentModelId,
+      streamGeminiChat({
+        apiKey: providerApiKey,
+        model: brainSessionStore.currentModelId,
         isInitialTurn: false,
         imagePath: null, // Image never re-sent, brief is used instead
         imageDescription: imgDesc,
-        userFirstMsg: geminiStore.userFirstMsg,
+        userFirstMsg: brainSessionStore.userFirstMsg,
         historyLog,
         rollingSummary,
         userMessage: retryUserMessage,
         channelId,
         chatId: chatId ?? null,
-        userName: geminiStore.userName,
-        userEmail: geminiStore.userEmail,
+        userName: brainSessionStore.userName ?? undefined,
+        userEmail: brainSessionStore.userEmail ?? undefined,
         userInstruction: null, // One-time intent hook not needed on retries
-        imageBrief: geminiStore.imageBrief,
+        imageBrief: brainSessionStore.imageBrief,
       }),
       streamWatchdog.stallPromise,
     ]);
     streamWatchdog.stop();
 
-    unlisten();
-    if (geminiStore.currentUnlisten === unlisten)
-      geminiStore.currentUnlisten = null;
-    if (geminiStore.currentChannelId === channelId)
-      geminiStore.currentChannelId = null;
+    clearActiveProviderTransport(channelId, unlisten);
 
-    if (geminiStore.generationId !== myGenId) throw new Error("CANCELLED");
+    if (brainSessionStore.generationId !== myGenId) throw new Error("CANCELLED");
 
     addToHistory("Assistant", fullResponse);
 
     return fullResponse;
   } catch (error) {
     streamWatchdog.stop();
-    unlisten();
-    if (geminiStore.currentUnlisten === unlisten)
-      geminiStore.currentUnlisten = null;
-    if (geminiStore.currentChannelId === channelId)
-      geminiStore.currentChannelId = null;
+    clearActiveProviderTransport(channelId, unlisten);
     throw error;
   }
 };

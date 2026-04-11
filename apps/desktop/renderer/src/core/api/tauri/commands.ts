@@ -53,8 +53,8 @@ export const commands = {
   cancelDownloadOcrModel: (modelId: string) =>
     invoke("cancel_download_ocr_model", { modelId }),
 
-  // Gemini Runtime Control
-  quickAnswerGeminiRequest: (channelId: string) =>
+  // AI Runtime Control
+  quickAnswerProviderRequest: (channelId: string) =>
     invoke("quick_answer_gemini_request", { channelId }),
 
   // UI audio

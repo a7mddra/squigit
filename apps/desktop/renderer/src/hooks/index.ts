@@ -6,12 +6,15 @@
 
 export * from "./app/useApp";
 export * from "./app/useAttachments";
+export * from "./app/useAppBusyGuard";
+export * from "./app/useAppCapture";
+export * from "./app/useAppMedia";
+export * from "./app/useAppNavigation";
 
 export * from "./auth/useAuth";
 
 export * from "./system/useSystemSync";
 export * from "./system/useUpdateCheck";
-export * from "./system/useChatLifecycle";
 
 export * from "./dom/useClipboard";
 export * from "./dom/useCopyToClipboard";
@@ -25,4 +28,8 @@ export * from "./editor/useTextSelection";
 
 export * from "./core/useTheme";
 export * from "./core/usePlatform";
-export * from "./core/useGeminiEngine";
+
+export * from "./brain/useBrainEngine";
+export * from "./brain/useBrainLifecycle";
+export * from "./brain/useBrainSession";
+export * from "./brain/useBrainTitle";

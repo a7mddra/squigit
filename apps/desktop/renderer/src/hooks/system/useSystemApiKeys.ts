@@ -5,7 +5,7 @@
  */
 
 import { useState } from "react";
-import { commands, initializeGemini } from "@/core";
+import { commands, initializeBrainProvider } from "@/core";
 
 export const useSystemApiKeys = (activeProfileId?: string) => {
   const [apiKey, setApiKey] = useState<string>("");
@@ -29,7 +29,7 @@ export const useSystemApiKeys = (activeProfileId?: string) => {
       await commands.setApiKey(provider, key, activeProfileId);
       if (provider === "google ai studio") {
         setApiKey(key);
-        initializeGemini(key);
+        initializeBrainProvider(key);
       } else {
         setImgbbKey(key);
       }
