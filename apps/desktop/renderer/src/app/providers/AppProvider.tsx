@@ -5,7 +5,7 @@
  */
 
 import React, { createContext, useContext, ReactNode } from "react";
-import { useApp } from "@/app/hooks";
+import { useApp } from "../hooks/useApp";
 
 type AppState = ReturnType<typeof useApp>;
 

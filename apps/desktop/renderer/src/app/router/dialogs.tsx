@@ -4,57 +4,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect } from "react";
+import React from "react";
 import { getDialogs, getUpdateAvailableDialog } from "@/core";
 import { Dialog } from "@/components/ui";
-import { usePlatform } from "@/hooks";
-import {
-  Welcome,
-  Agreement,
-  UpdateNotes,
-  Chat,
-  Gallery,
-  MediaOverlay,
-  SearchOverlay,
-} from "@/features";
-import { AppProvider, useAppContext } from "@/app/providers";
+import { MediaOverlay, SearchOverlay } from "@/features";
 import { AppContextMenu } from "@/layout";
-import { MainScreen, SplashScreen } from "@/screens";
+import { useAppContext } from "../providers";
 
-import "katex/dist/katex.min.css";
-
-const isOnboardingId = (id: string) => id.startsWith("__system_");
-
-const AppRouterContent: React.FC = () => {
+export const AppDialogs: React.FC = () => {
   const app = useAppContext();
-  const { isMac } = usePlatform();
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.isComposing) return;
-
-      const modPressed = isMac ? e.metaKey : e.ctrlKey;
-      if (!modPressed) return;
-
-      const key = e.key.toLowerCase();
-
-      if (!e.shiftKey && !e.altKey && key === "k") {
-        e.preventDefault();
-        app.openSearchOverlay();
-        return;
-      }
-
-      if (e.shiftKey && !e.altKey && key === "o") {
-        e.preventDefault();
-        app.handleNewSession();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown, { capture: true });
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown, { capture: true });
-    };
-  }, [app, isMac]);
 
   const isAgreed = app.system.hasAgreed || app.agreedToTerms;
   const baseLoginDialog = getDialogs(app.system.appName).LOGIN_REQUIRED;
@@ -65,40 +23,8 @@ const AppRouterContent: React.FC = () => {
       disabled: action.actionKey === "confirm" ? !isAgreed : action.disabled,
     })),
   };
-  const activeId = app.chatHistory.activeSessionId;
-  const hasActiveChatSession = !!activeId && !isOnboardingId(activeId);
-  const shouldRenderChatShell =
-    app.showChatShellDuringNavigation ||
-    hasActiveChatSession ||
-    !app.isImageMissing;
 
-  const renderMainContent = () => {
-    if (activeId && isOnboardingId(activeId)) {
-      if (activeId === "__system_welcome") {
-        return <Agreement />;
-      }
-      if (activeId.startsWith("__system_update")) {
-        return <UpdateNotes />;
-      }
-      if (activeId === "__system_gallery") {
-        return <Gallery />;
-      }
-    }
-
-    if (!shouldRenderChatShell) {
-      return (
-        <Welcome
-          onImageReady={app.handleImageReady}
-          isGuest={!app.system.activeProfile}
-          onLoginRequired={() => app.setShowLoginRequiredDialog(true)}
-        />
-      );
-    }
-
-    return <Chat />;
-  };
-
-  const appDialogs = (
+  return (
     <>
       {app.contextMenu && (
         <AppContextMenu
@@ -191,28 +117,5 @@ const AppRouterContent: React.FC = () => {
         onClose={app.closeSearchOverlay}
       />
     </>
-  );
-
-  if (app.isLoadingState) {
-    return <SplashScreen onContextMenu={app.handleContextMenu} />;
-  }
-
-  return (
-    <MainScreen
-      onContextMenu={app.handleContextMenu}
-      containerRef={shouldRenderChatShell ? app.containerRef : undefined}
-      isSidePanelOpen={app.isSidePanelOpen}
-      enablePanelAnimation={app.enablePanelAnimation}
-      content={renderMainContent()}
-      dialogs={appDialogs}
-    />
-  );
-};
-
-export const AppRouter: React.FC = () => {
-  return (
-    <AppProvider>
-      <AppRouterContent />
-    </AppProvider>
   );
 };
