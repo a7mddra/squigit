@@ -22,6 +22,7 @@ export const startNewThreadStream = async (
   modelId: string,
   imagePath: string,
   onToken: (token: string) => void,
+  chatId?: string | null,
   userName?: string,
   userEmail?: string,
   userInstruction?: string,
@@ -104,6 +105,7 @@ export const startNewThreadStream = async (
         rollingSummary: null,
         userMessage: "",
         channelId: channelId,
+        chatId: chatId ?? null,
         userName,
         userEmail,
         userInstruction,
@@ -146,10 +148,11 @@ export const startNewThreadStream = async (
 export const startNewThread = async (
   modelId: string,
   imagePath: string,
+  chatId?: string | null,
 ): Promise<string> => {
   let fullText = "";
   await startNewThreadStream(modelId, imagePath, (token) => {
     fullText += token;
-  });
+  }, chatId);
   return fullText;
 };

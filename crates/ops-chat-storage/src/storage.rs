@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use crate::error::{Result, StorageError};
-use crate::types::{ChatData, ChatMessage, ChatMetadata, OcrFrame, OcrRegion, StoredImage};
+use crate::types::{AttachmentRegistry, ChatData, ChatMessage, ChatMetadata, OcrFrame, OcrRegion, StoredImage};
 
 const DEFAULT_OCR_MODEL_ID: &str = "pp-ocr-v5-en";
 const AUTO_OCR_DISABLED_MODEL_ID: &str = "__meta_auto_ocr_disabled__";
@@ -366,6 +366,19 @@ impl ChatStorage {
         if let Some(ref url) = chat.imgbb_url {
             let url_path = chat_dir.join("imgbb_url.txt");
             fs::write(&url_path, url)?;
+        } else {
+            let url_path = chat_dir.join("imgbb_url.txt");
+            if url_path.exists() {
+                fs::remove_file(url_path)?;
+            }
+        }
+
+        let attachment_registry_path = chat_dir.join("attachment_registry.json");
+        if !chat.attachment_registry.is_empty() {
+            let registry_json = serde_json::to_string_pretty(&chat.attachment_registry)?;
+            fs::write(&attachment_registry_path, registry_json)?;
+        } else if attachment_registry_path.exists() {
+            fs::remove_file(&attachment_registry_path)?;
         }
 
         // Update the index
@@ -459,12 +472,21 @@ impl ChatStorage {
             None
         };
 
+        let attachment_registry_path = chat_dir.join("attachment_registry.json");
+        let attachment_registry = if attachment_registry_path.exists() {
+            let json = fs::read_to_string(&attachment_registry_path)?;
+            serde_json::from_str::<AttachmentRegistry>(&json)?
+        } else {
+            AttachmentRegistry::new()
+        };
+
         Ok(ChatData {
             metadata,
             messages,
             ocr_data,
             imgbb_url,
             rolling_summary,
+            attachment_registry,
         })
     }
 
@@ -828,6 +850,7 @@ impl ChatStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{ChatAttachmentKind, ChatAttachmentRecord};
 
     fn make_test_storage() -> (ChatStorage, PathBuf) {
         let base_dir =
@@ -877,6 +900,36 @@ mod tests {
         let result = storage.save_ocr_data("chat-1", "bogus-model", &[]);
 
         assert!(matches!(result, Err(StorageError::InvalidOcrModel(_))));
+
+        let _ = std::fs::remove_dir_all(base_dir);
+    }
+
+    #[test]
+    fn attachment_registry_round_trips_via_sidecar() {
+        let (storage, base_dir) = make_test_storage();
+        let metadata = ChatMetadata::new("Registry".to_string(), "0".repeat(64), None);
+        let mut chat = ChatData::new(metadata.clone());
+        chat.attachment_registry.insert(
+            "/tmp/chats/objects/ab/file.pdf".to_string(),
+            ChatAttachmentRecord {
+                cas_path: "/tmp/chats/objects/ab/file.pdf".to_string(),
+                display_name: "file.pdf".to_string(),
+                kind: ChatAttachmentKind::DocumentUpload,
+                mime_type: "application/pdf".to_string(),
+                source_path: None,
+                gemini_file: None,
+                last_seen_at: chrono::Utc::now(),
+                last_recalled_at: None,
+            },
+        );
+
+        storage.save_chat(&chat).expect("save chat with registry");
+
+        let loaded = storage.load_chat(&metadata.id).expect("load chat");
+        assert_eq!(loaded.attachment_registry.len(), 1);
+        assert!(loaded
+            .attachment_registry
+            .contains_key("/tmp/chats/objects/ab/file.pdf"));
 
         let _ = std::fs::remove_dir_all(base_dir);
     }

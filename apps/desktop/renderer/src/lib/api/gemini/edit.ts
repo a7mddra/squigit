@@ -18,6 +18,7 @@ export const retryFromMessage = async (
   messageIndex: number,
   allMessages: Array<{ role: string; text: string }>,
   modelId: string,
+  chatId?: string | null,
   onToken?: (token: string) => void,
   fallbackImagePath?: string,
   onBriefReady?: (brief: string) => void,
@@ -103,6 +104,7 @@ export const retryFromMessage = async (
           rollingSummary: null,
           userMessage: "",
           channelId,
+          chatId: chatId ?? null,
           userName: geminiStore.userName,
           userEmail: geminiStore.userEmail,
           userInstruction: geminiStore.userInstruction,
@@ -199,6 +201,7 @@ export const retryFromMessage = async (
         rollingSummary,
         userMessage: retryUserMessage,
         channelId,
+        chatId: chatId ?? null,
         userName: geminiStore.userName,
         userEmail: geminiStore.userEmail,
         userInstruction: null, // One-time intent hook not needed on retries

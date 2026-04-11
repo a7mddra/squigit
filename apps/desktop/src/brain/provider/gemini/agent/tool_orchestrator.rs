@@ -42,6 +42,19 @@ pub(crate) fn tool_status_text(
         return Some("Reading local attachment context".to_string());
     }
 
+    if function_call.name == "recall_chat_attachment" {
+        let target = function_call
+            .args
+            .get("target")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|v| !v.is_empty());
+        if let Some(target_value) = target {
+            return Some(format!("Recalling {}", target_value));
+        }
+        return Some("Recalling a previous attachment".to_string());
+    }
+
     let query = function_call
         .args
         .get("query")
@@ -81,6 +94,10 @@ pub(crate) fn build_system_instruction_with_tool_policy(
             "\n\n## Tool Usage Policy\n\
              - If the user asks for current, time-sensitive, or uncertain facts, call `web_search`.\n\
              - If the user asks about attached local text or code content, call `read_local_attachment_context`.\n\
+             - Secondary uploaded files from this chat may only be used when the user attaches them in this turn or when you explicitly call `recall_chat_attachment`.\n\
+             - Use the chat attachment catalog in context to pick the right prior upload for `recall_chat_attachment`.\n\
+             - If the user asks for page-specific, OCR, quote-exact, transcription, chart-reading, or slide/sheet/section-specific details from a prior uploaded image or document, you must call `recall_chat_attachment` before answering.\n\
+             - Never answer exact file-grounded questions from `image_brief`, rolling summaries, or path references alone when a prior uploaded image/document is needed.\n\
              - For PDF, Word, spreadsheet, slide, and similar document attachments, rely on the attached Gemini file directly (do not call `read_local_attachment_context` for documents).\n\
              - If greeting/chit-chat, do not call tools.\n\
              - Never invent URLs or sources.\n\

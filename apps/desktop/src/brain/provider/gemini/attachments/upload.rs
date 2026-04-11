@@ -1,8 +1,8 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 
+use chrono::{Duration, Utc};
 use reqwest::{header, Client};
-use std::time::SystemTime;
 
 use super::types::{GeminiFileObject, GeminiFileUploadFinalizeResponse};
 use super::GeminiFileRef;
@@ -111,9 +111,11 @@ pub async fn upload_file_to_gemini(
 
     Ok(GeminiFileRef {
         file_uri: uri,
+        file_name: name,
         mime_type: mime_type.to_string(),
         display_name: display_name.to_string(),
-        uploaded_at: SystemTime::now(),
+        uploaded_at: Utc::now(),
+        expires_at: Utc::now() + Duration::hours(47),
     })
 }
 

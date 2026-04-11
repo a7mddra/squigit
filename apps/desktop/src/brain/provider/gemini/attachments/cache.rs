@@ -7,11 +7,7 @@ use tokio::sync::Mutex;
 use super::{mime_from_extension, upload_file_to_gemini, GeminiFileRef};
 
 fn is_uri_expired(file_ref: &GeminiFileRef) -> bool {
-    if let Ok(elapsed) = file_ref.uploaded_at.elapsed() {
-        elapsed.as_secs() > 47 * 3600 // 47 hours
-    } else {
-        true
-    }
+    chrono::Utc::now() >= file_ref.expires_at
 }
 
 pub async fn ensure_file_uploaded(

@@ -825,6 +825,7 @@ export const useGeminiEngine = (config: {
               if (signal.aborted) return;
               appendPendingRawText(token);
             },
+            config.chatId,
             config.userName,
             config.userEmail,
             config.userInstruction,
@@ -944,6 +945,7 @@ export const useGeminiEngine = (config: {
             (token: string) => {
               appendPendingRawText(token);
             },
+            config.chatId,
             undefined,
             undefined,
             undefined,
@@ -1095,6 +1097,7 @@ export const useGeminiEngine = (config: {
             msgIndex,
             messages,
             retryModelId,
+            config.chatId,
             (token: string) => {
               appendPendingRawText(token);
             },

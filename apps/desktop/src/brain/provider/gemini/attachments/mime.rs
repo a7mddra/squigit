@@ -7,6 +7,8 @@ const TEXT_LIKE_EXTENSIONS: &[&str] = &[
     "sql", "rst", "ini", "cfg", "conf", "env", "log",
 ];
 
+const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"];
+
 const GEMINI_DOCUMENT_EXTENSIONS: &[&str] = &[
     "pdf", "doc", "docx", "docm", "xls", "xlsx", "xlsm", "ppt", "pptx", "pptm", "rtf", "odt",
     "ods", "odp",
@@ -57,9 +59,18 @@ pub fn is_text_like_path(path: &str) -> bool {
     TEXT_LIKE_EXTENSIONS.contains(&extension.as_str())
 }
 
+pub fn is_image_path(path: &str) -> bool {
+    let extension = normalized_extension(path);
+    IMAGE_EXTENSIONS.contains(&extension.as_str())
+}
+
 pub fn is_gemini_document_path(path: &str) -> bool {
     let extension = normalized_extension(path);
     GEMINI_DOCUMENT_EXTENSIONS.contains(&extension.as_str())
+}
+
+pub fn is_gemini_uploadable_path(path: &str) -> bool {
+    is_image_path(path) || is_gemini_document_path(path)
 }
 
 #[cfg(test)]
@@ -91,5 +102,19 @@ mod tests {
             );
         }
         assert!(!is_gemini_document_path("main.rs"));
+    }
+
+    #[test]
+    fn image_paths_are_detected() {
+        assert!(is_image_path("objects/ab/file.png"));
+        assert!(is_image_path("/tmp/file.webp"));
+        assert!(!is_image_path("objects/ab/file.docx"));
+    }
+
+    #[test]
+    fn uploadable_paths_include_images_and_documents() {
+        assert!(is_gemini_uploadable_path("figure.png"));
+        assert!(is_gemini_uploadable_path("report.pdf"));
+        assert!(!is_gemini_uploadable_path("main.rs"));
     }
 }

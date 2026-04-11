@@ -16,8 +16,8 @@ use crate::brain::provider::gemini::agent::tool_orchestrator::{
     build_system_instruction_with_tool_policy, tool_status_text, tool_step_id,
 };
 use crate::brain::provider::gemini::attachments::{
-    build_attachment_preview_context, build_interleaved_parts, extract_attachment_mentions,
-    is_gemini_document_path,
+    build_attachment_preview_context, build_chat_attachment_catalog, build_interleaved_parts,
+    extract_attachment_mentions, prepare_turn_attachments,
 };
 use crate::brain::provider::gemini::transport::streaming::{emit_event, stream_request_iteration};
 use crate::brain::provider::gemini::transport::types::{
@@ -134,6 +134,7 @@ pub async fn stream_gemini_chat_v2(
     // Current user message (empty on first turn for image-only analysis)
     user_message: String,
     channel_id: String,
+    chat_id: Option<String>,
     // Runtime context params (NEW)
     user_name: Option<String>,
     user_email: Option<String>,
@@ -216,7 +217,7 @@ pub async fn stream_gemini_chat_v2(
             let first_msg = user_first_msg.unwrap_or_default();
             let history = history_log.unwrap_or_default();
             let summary = rolling_summary.clone().unwrap_or_default();
-            let context_prompt = crate::brain::context::builder::build_turn_context(
+            let mut context_prompt = crate::brain::context::builder::build_turn_context(
                 &img_desc, &first_msg, &history, &summary,
             );
 
@@ -236,36 +237,26 @@ pub async fn stream_gemini_chat_v2(
                     );
                 }
             }
-            let mut preview_attachment_paths = Vec::<String>::new();
-            let mut uploaded_document_parts = Vec::<GeminiPart>::new();
-            for mention in &attachment_mentions {
-                if is_gemini_document_path(&mention.path) {
-                    let file_ref = crate::brain::provider::gemini::attachments::ensure_file_uploaded(
-                        &api_key,
-                        &mention.path,
-                        &state.gemini_file_cache,
-                    )
-                    .await?;
-
-                    uploaded_document_parts.push(GeminiPart {
-                        file_data: Some(GeminiFileData {
-                            mime_type: file_ref.mime_type.clone(),
-                            file_uri: file_ref.file_uri.clone(),
-                        }),
-                        ..Default::default()
-                    });
-                } else {
-                    preview_attachment_paths.push(mention.path.clone());
-                }
-            }
+            let prepared_attachments = prepare_turn_attachments(
+                chat_id.as_deref(),
+                &attachment_mentions,
+                &api_key,
+                &state.gemini_file_cache,
+            )
+            .await?;
 
             if let Some(preview_block) =
-                build_attachment_preview_context(&preview_attachment_paths).await?
+                build_attachment_preview_context(&prepared_attachments.preview_attachment_paths).await?
             {
                 if !composed_user_message.trim().is_empty() {
                     composed_user_message.push_str("\n\n");
                 }
                 composed_user_message.push_str(&preview_block);
+            }
+
+            if let Some(attachment_catalog) = build_chat_attachment_catalog(chat_id.as_deref())? {
+                context_prompt.push_str("\n\n");
+                context_prompt.push_str(&attachment_catalog);
             }
 
             let mut parts = vec![
@@ -278,7 +269,7 @@ pub async fn stream_gemini_chat_v2(
                     ..Default::default()
                 },
             ];
-            parts.extend(uploaded_document_parts);
+            parts.extend(prepared_attachments.uploaded_parts);
 
             vec![GeminiContent {
                 role: "user".to_string(),
@@ -393,6 +384,8 @@ pub async fn stream_gemini_chat_v2(
                 client: &client,
                 api_key: &api_key,
                 model: &model,
+                chat_id: chat_id.as_deref(),
+                gemini_file_cache: &state.gemini_file_cache,
                 request_control: &request_control,
                 web_state: &mut web_tool_state,
             };
@@ -472,6 +465,12 @@ pub async fn stream_gemini_chat_v2(
                     ..Default::default()
                 }],
             });
+            if !dispatch_result.follow_up_parts.is_empty() {
+                contents.push(GeminiContent {
+                    role: "user".to_string(),
+                    parts: dispatch_result.follow_up_parts,
+                });
+            }
         }
 
         Err("Maximum tool iterations reached without final response.".to_string())

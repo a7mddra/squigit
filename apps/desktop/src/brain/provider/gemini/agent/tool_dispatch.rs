@@ -10,7 +10,7 @@ use super::tool_orchestrator::{
     merge_allowed_sources, track_attempted_sources, wrap_query_fallback_result,
     ControlledAwaitOutcome,
 };
-use crate::brain::provider::gemini::transport::types::GeminiFunctionCall;
+use crate::brain::provider::gemini::transport::types::{GeminiFunctionCall, GeminiPart};
 use crate::brain::tools::web::suggest_fallback_urls;
 
 #[derive(Default)]
@@ -24,12 +24,19 @@ pub(crate) struct ToolDispatchContext<'a> {
     pub(crate) client: &'a reqwest::Client,
     pub(crate) api_key: &'a str,
     pub(crate) model: &'a str,
+    pub(crate) chat_id: Option<&'a str>,
+    pub(crate) gemini_file_cache: &'a std::sync::Arc<
+        tokio::sync::Mutex<
+            HashMap<String, crate::brain::provider::gemini::attachments::GeminiFileRef>,
+        >,
+    >,
     pub(crate) request_control: &'a GeminiRequestControl,
     pub(crate) web_state: &'a mut WebToolDispatchState,
 }
 
 pub(crate) struct ToolDispatchResult {
     pub(crate) response_value: serde_json::Value,
+    pub(crate) follow_up_parts: Vec<GeminiPart>,
     pub(crate) status: String,
     pub(crate) message: String,
     pub(crate) is_failure: bool,
@@ -48,12 +55,14 @@ where
         "read_local_attachment_context" => {
             Ok(execute_local_attachment_context(function_call, context).await)
         }
+        "recall_chat_attachment" => Ok(execute_recall_chat_attachment(function_call, context).await),
         _ => Ok(ToolDispatchResult {
             response_value: json!({
                 "ok": false,
                 "error_code": "unknown_tool",
                 "error_message": format!("Unsupported tool: {}", function_call.name)
             }),
+            follow_up_parts: Vec::new(),
             status: "error".to_string(),
             message: format!("Unsupported tool call `{}`.", function_call.name),
             is_failure: true,
@@ -80,6 +89,7 @@ async fn execute_local_attachment_context(
                 "error_code": "invalid_arguments",
                 "error_message": "Tool call requires `path`"
             }),
+            follow_up_parts: Vec::new(),
             status: "error".to_string(),
             message: "Local attachment read failed: missing `path`.".to_string(),
             is_failure: true,
@@ -130,6 +140,7 @@ async fn execute_local_attachment_context(
     if context.request_control.is_answer_now_requested() {
         return ToolDispatchResult {
             response_value: result.to_json_value(),
+            follow_up_parts: Vec::new(),
             status,
             message: "Answer requested while reading local context; returning current result."
                 .to_string(),
@@ -139,9 +150,89 @@ async fn execute_local_attachment_context(
 
     ToolDispatchResult {
         response_value: result.to_json_value(),
+        follow_up_parts: Vec::new(),
         status,
         message,
         is_failure,
+    }
+}
+
+async fn execute_recall_chat_attachment(
+    function_call: &GeminiFunctionCall,
+    context: &mut ToolDispatchContext<'_>,
+) -> ToolDispatchResult {
+    let Some(chat_id) = context.chat_id else {
+        return ToolDispatchResult {
+            response_value: json!({
+                "ok": false,
+                "error_code": "missing_chat_context",
+                "error_message": "Attachment recall requires an active chat session."
+            }),
+            follow_up_parts: Vec::new(),
+            status: "error".to_string(),
+            message: "Attachment recall failed: missing active chat context.".to_string(),
+            is_failure: true,
+        };
+    };
+
+    let target = function_call
+        .args
+        .get("target")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let Some(target) = target else {
+        return ToolDispatchResult {
+            response_value: json!({
+                "ok": false,
+                "error_code": "invalid_arguments",
+                "error_message": "Tool call requires `target`."
+            }),
+            follow_up_parts: Vec::new(),
+            status: "error".to_string(),
+            message: "Attachment recall failed: missing `target`.".to_string(),
+            is_failure: true,
+        };
+    };
+
+    let kind = function_call.args.get("kind").and_then(|value| value.as_str());
+    let reason = function_call
+        .args
+        .get("reason")
+        .and_then(|value| value.as_str());
+
+    match crate::brain::provider::gemini::attachments::recall_chat_attachment(
+        chat_id,
+        target,
+        kind,
+        reason,
+        context.api_key,
+        context.gemini_file_cache,
+    )
+    .await
+    {
+        Ok(outcome) => ToolDispatchResult {
+            response_value: outcome.response_value,
+            follow_up_parts: outcome.follow_up_parts,
+            status: if outcome.is_failure {
+                "error".to_string()
+            } else {
+                "done".to_string()
+            },
+            message: outcome.message,
+            is_failure: outcome.is_failure,
+        },
+        Err(error) => ToolDispatchResult {
+            response_value: json!({
+                "ok": false,
+                "error_code": "recall_failed",
+                "error_message": error,
+            }),
+            follow_up_parts: Vec::new(),
+            status: "error".to_string(),
+            message: "Attachment recall failed.".to_string(),
+            is_failure: true,
+        },
     }
 }
 
@@ -418,6 +509,7 @@ where
                         "message": "Serialization failure for tool output"
                     })
                 }),
+                follow_up_parts: Vec::new(),
                 status: "done".to_string(),
                 message: done_message,
                 is_failure: false,
@@ -431,6 +523,7 @@ where
                 "context_markdown": "",
                 "message": error_message
             }),
+            follow_up_parts: Vec::new(),
             status: "error".to_string(),
             message: "Web search step failed.".to_string(),
             is_failure: true,
@@ -451,10 +544,14 @@ mod tests {
         let client = reqwest::Client::new();
         let request_control = GeminiRequestControl::new();
         let mut web_state = WebToolDispatchState::default();
+        let gemini_file_cache =
+            std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new()));
         let mut context = ToolDispatchContext {
             client: &client,
             api_key: "k",
             model: "m",
+            chat_id: None,
+            gemini_file_cache: &gemini_file_cache,
             request_control: &request_control,
             web_state: &mut web_state,
         };
@@ -483,10 +580,14 @@ mod tests {
         let client = reqwest::Client::new();
         let request_control = GeminiRequestControl::new();
         let mut web_state = WebToolDispatchState::default();
+        let gemini_file_cache =
+            std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new()));
         let mut context = ToolDispatchContext {
             client: &client,
             api_key: "k",
             model: "m",
+            chat_id: None,
+            gemini_file_cache: &gemini_file_cache,
             request_control: &request_control,
             web_state: &mut web_state,
         };
@@ -515,10 +616,14 @@ mod tests {
         let client = reqwest::Client::new();
         let request_control = GeminiRequestControl::new();
         let mut web_state = WebToolDispatchState::default();
+        let gemini_file_cache =
+            std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new()));
         let mut context = ToolDispatchContext {
             client: &client,
             api_key: "k",
             model: "m",
+            chat_id: None,
+            gemini_file_cache: &gemini_file_cache,
             request_control: &request_control,
             web_state: &mut web_state,
         };

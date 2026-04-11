@@ -155,11 +155,19 @@ pub fn load_read_local_attachment_context_tool_declaration() -> Result<serde_jso
         .map_err(|e| format!("Failed to parse read_local_attachment_context.json: {}", e))
 }
 
+/// Load the chat attachment recall tool declaration from embedded JSON.
+pub fn load_recall_chat_attachment_tool_declaration() -> Result<serde_json::Value, String> {
+    let json_content = include_str!("../assets/helpers/recall_chat_attachment.json");
+    serde_json::from_str(json_content)
+        .map_err(|e| format!("Failed to parse recall_chat_attachment.json: {}", e))
+}
+
 /// Load all Gemini tool declarations enabled for chat turns with tools.
 pub fn load_gemini_tool_declarations() -> Result<Vec<serde_json::Value>, String> {
     Ok(vec![
         load_web_search_tool_declaration()?,
         load_read_local_attachment_context_tool_declaration()?,
+        load_recall_chat_attachment_tool_declaration()?,
     ])
 }
 
@@ -220,9 +228,22 @@ mod tests {
     }
 
     #[test]
+    fn test_load_recall_chat_attachment_tool_declaration() {
+        let declaration = load_recall_chat_attachment_tool_declaration()
+            .expect("Failed to load recall attachment tool declaration");
+        let name = declaration
+            .get("functionDeclarations")
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|v| v.get("name"))
+            .and_then(|v| v.as_str());
+        assert_eq!(name, Some("recall_chat_attachment"));
+    }
+
+    #[test]
     fn test_load_gemini_tool_declarations() {
         let declarations = load_gemini_tool_declarations().expect("Failed to load declarations");
-        assert_eq!(declarations.len(), 2);
+        assert_eq!(declarations.len(), 3);
 
         let names = declarations
             .iter()
@@ -234,7 +255,14 @@ mod tests {
                     .and_then(|v| v.as_str())
             })
             .collect::<Vec<_>>();
-        assert_eq!(names, vec!["web_search", "read_local_attachment_context"]);
+        assert_eq!(
+            names,
+            vec![
+                "web_search",
+                "read_local_attachment_context",
+                "recall_chat_attachment"
+            ]
+        );
     }
 
     #[test]

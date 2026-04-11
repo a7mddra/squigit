@@ -88,6 +88,7 @@ export const sendMessage = async (
         rollingSummary,
         userMessage: userModelText,
         channelId: channelId,
+        chatId: chatId ?? null,
         userName: geminiStore.userName,
         userEmail: geminiStore.userEmail,
         userInstruction: null, // One-time intent hook only sent on initial turn

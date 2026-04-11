@@ -4,7 +4,7 @@
 use ops_chat_storage::ChatStorage;
 use ops_profile_store::ProfileStore;
 
-fn get_active_storage() -> Result<ChatStorage, String> {
+pub(crate) fn get_active_storage() -> Result<ChatStorage, String> {
     let profile_store = ProfileStore::new().map_err(|e| e.to_string())?;
     let active_id = profile_store
         .get_active_profile_id()

@@ -5,7 +5,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
 /// Metadata for a chat session.
@@ -138,6 +138,51 @@ pub struct OcrRegion {
 /// `Some(vec)` means cached results (may be empty if no text found).
 pub type OcrFrame = HashMap<String, Option<Vec<OcrRegion>>>;
 
+fn now_utc() -> DateTime<Utc> {
+    Utc::now()
+}
+
+/// Attachment kinds tracked per chat.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatAttachmentKind {
+    TextLocal,
+    ImageUpload,
+    DocumentUpload,
+}
+
+/// Persisted Gemini Files handle for a tracked attachment.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChatAttachmentGeminiFile {
+    pub file_uri: String,
+    pub file_name: String,
+    pub mime_type: String,
+    pub uploaded_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+    #[serde(default)]
+    pub last_validated_at: Option<DateTime<Utc>>,
+}
+
+/// Per-chat tracked attachment metadata keyed by CAS path.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChatAttachmentRecord {
+    pub cas_path: String,
+    pub display_name: String,
+    pub kind: ChatAttachmentKind,
+    pub mime_type: String,
+    #[serde(default)]
+    pub source_path: Option<String>,
+    #[serde(default)]
+    pub gemini_file: Option<ChatAttachmentGeminiFile>,
+    #[serde(default = "now_utc")]
+    pub last_seen_at: DateTime<Utc>,
+    #[serde(default)]
+    pub last_recalled_at: Option<DateTime<Utc>>,
+}
+
+/// Attachment registry persisted alongside chat data.
+pub type AttachmentRegistry = BTreeMap<String, ChatAttachmentRecord>;
+
 /// Complete chat data including messages and OCR.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatData {
@@ -156,6 +201,9 @@ pub struct ChatData {
     /// Persisted so summaries survive app restarts and session switches.
     #[serde(default)]
     pub rolling_summary: Option<String>,
+    /// Per-chat tracked attachments keyed by CAS path.
+    #[serde(default)]
+    pub attachment_registry: AttachmentRegistry,
 }
 
 impl ChatData {
@@ -167,6 +215,7 @@ impl ChatData {
             ocr_data: HashMap::new(),
             imgbb_url: None,
             rolling_summary: None,
+            attachment_registry: BTreeMap::new(),
         }
     }
 }
