@@ -4,7 +4,6 @@
  * spdx-license-identifier: apache-2.0
  */
 
-/* Baseline reset retained to keep UI rendering stable. */
 *,
 *::before,
 *::after {

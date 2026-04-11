@@ -295,19 +295,7 @@
   font-size: 0.88rem;
   line-height: 1.45;
   opacity: 0;
-  animation: imageProgressReveal 180ms ease-out forwards;
-}
-
-@keyframes imageProgressReveal {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  animation: "imageProgressReveal" 180ms ease-out forwards;
 }
 
 .quickAnswerButton {

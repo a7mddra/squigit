@@ -311,3 +311,65 @@
     transform: translateY(0);
   }
 }
+
+@keyframes citationChipReveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes textShimmerSweep {
+  from {
+    background-position:
+      130% center,
+      0 0;
+  }
+
+  to {
+    background-position:
+      -30% center,
+      0 0;
+  }
+}
+
+@keyframes imageProgressReveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes progressTextReveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes citationFooterReveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

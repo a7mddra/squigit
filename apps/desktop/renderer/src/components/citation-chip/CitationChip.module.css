@@ -51,7 +51,7 @@
 }
 
 .reveal {
-  animation: citationChipReveal 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: "citationChipReveal" 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .iconImage {
@@ -91,16 +91,4 @@
   display: block;
   width: 16px;
   height: 16px;
-}
-
-@keyframes citationChipReveal {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.97);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
 }
