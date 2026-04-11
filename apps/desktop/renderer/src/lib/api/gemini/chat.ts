@@ -17,6 +17,7 @@ import {
   setImageBrief,
   addToHistory,
 } from "./context";
+import { saveImageBrief } from "../../storage/chat";
 
 export const startNewThreadStream = async (
   modelId: string,
@@ -69,28 +70,40 @@ export const startNewThreadStream = async (
     console.log(`[GeminiClient] Starting New Stream`);
     console.log(`[GeminiClient] Target Model: ${modelId}`);
 
-    // Fire image brief in parallel
-    const briefPromise = invoke<string>("generate_image_brief", {
-      apiKey: geminiStore.storedApiKey,
-      imagePath,
-    })
-      .then((brief) => {
-        if (brief && onBriefReady) {
-          onBriefReady(brief);
+    const generateAndSaveBrief = async () => {
+      let attempt = 0;
+      let lastError = null;
+      while (attempt < 5) {
+        try {
+          const brief = await invoke<string>("generate_image_brief", {
+            apiKey: geminiStore.storedApiKey,
+            imagePath,
+          });
+          if (brief) {
+            if (chatId) {
+              saveImageBrief(chatId, brief).catch(console.error);
+            }
+            if (geminiStore.generationId === myGenId) {
+              setImageBrief(brief);
+              if (onBriefReady) onBriefReady(brief);
+            }
+            return brief;
+          }
+          return "";
+        } catch (e) {
+          console.warn(`[GeminiClient] Image brief attempt ${attempt + 1} failed:`, e);
+          lastError = e;
+          attempt++;
+          if (attempt < 5) {
+            await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+          }
         }
-        return brief;
-      })
-      .catch((e) => {
-        console.warn("[GeminiClient] Image brief failed, continuing without:", e);
-        return "";
-      });
-
-    void briefPromise.then((brief) => {
-      if (geminiStore.generationId !== myGenId) return;
-      if (brief) {
-        setImageBrief(brief);
       }
-    });
+      console.warn("[GeminiClient] Image brief failed all retries.", lastError);
+      return "";
+    };
+
+    void generateAndSaveBrief();
 
     streamWatchdog.touch();
     await Promise.race([

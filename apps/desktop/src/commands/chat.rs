@@ -361,3 +361,21 @@ pub fn save_rolling_summary(chat_id: String, summary: String) -> Result<(), Stri
         .save_rolling_summary(&chat_id, &summary)
         .map_err(|e| e.to_string())
 }
+
+/// Save detected image tone for a chat.
+#[tauri::command]
+pub fn save_image_tone(chat_id: String, tone: String) -> Result<(), String> {
+    let storage = get_active_storage()?;
+    storage
+        .save_image_tone(&chat_id, &tone)
+        .map_err(|e| e.to_string())
+}
+
+/// Save image brief for a chat.
+#[tauri::command]
+pub fn save_image_brief(chat_id: String, brief: String) -> Result<(), String> {
+    let storage = get_active_storage()?;
+    storage
+        .save_image_brief(&chat_id, &brief)
+        .map_err(|e| e.to_string())
+}

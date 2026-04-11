@@ -39,6 +39,7 @@ import {
   useGoogleLens,
   generateTranslateUrl,
   resolveOcrModelId,
+  saveImageTone,
 } from "@/lib";
 
 interface OCRBox {
@@ -87,7 +88,6 @@ export interface ImageArtifactProps {
 
 const globalScanLock = new Set<string>();
 type ImageToneMode = "dark" | "light";
-const TONE_DETECTION_RUN_COUNT = 1;
 
 const normalizeToneResult = (value: string): ImageToneMode => {
   const normalized = value.trim().toLowerCase();
@@ -148,40 +148,31 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
         return;
       }
 
-      const runs: ImageToneMode[] = [];
-
-      for (let i = 1; i <= TONE_DETECTION_RUN_COUNT; i += 1) {
+      let attempt = 0;
+      while (attempt < 3 && !cancelled) {
         try {
           const raw = await invoke<string>("detect_image_tone", {
             path: startupImage.path,
           });
           const tone = normalizeToneResult(raw);
-          runs.push(tone);
-          console.log(
-            `[ToneDetector] run ${i}/${TONE_DETECTION_RUN_COUNT} image=${startupImage.imageId} tone=${tone}`,
-          );
+          
+          if (!cancelled) {
+            setImageToneMode(tone);
+            if (chatId) {
+              saveImageTone(chatId, tone).catch(console.error);
+            }
+            console.log(`[ToneDetector] Attempt ${attempt + 1}: Success, detected ${tone}`);
+            return;
+          }
         } catch (err) {
-          console.error(
-            `[ToneDetector] run ${i}/${TONE_DETECTION_RUN_COUNT} image=${startupImage.imageId} failed`,
-            err,
-          );
+          console.error(`[ToneDetector] Attempt ${attempt + 1} failed for image=${startupImage.imageId}:`, err);
+          attempt++;
+          if (attempt < 3 && !cancelled) {
+            await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt - 1)));
+          }
         }
       }
-
-      if (cancelled) {
-        return;
-      }
-
-      if (runs.length > 0) {
-        const darkCount = runs.filter((v) => v === "dark").length;
-        const lightCount = runs.length - darkCount;
-        const finalTone: ImageToneMode = lightCount >= darkCount ? "light" : "dark";
-        setImageToneMode(finalTone);
-        console.log(
-          `[ToneDetector] final image=${startupImage.imageId} dark=${darkCount} light=${lightCount} result=${finalTone}`,
-        );
-      }
-
+      console.warn(`[ToneDetector] All retries failed for image=${startupImage.imageId}`);
     };
 
     void runToneDetection();

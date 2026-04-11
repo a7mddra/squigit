@@ -1046,6 +1046,7 @@ export const useApp = () => {
             imageId: chatData.metadata.image_hash,
           },
           chatData.rolling_summary,
+          chatData.image_brief,
         );
       } catch (e) {
         console.error("Failed to load chat:", e);

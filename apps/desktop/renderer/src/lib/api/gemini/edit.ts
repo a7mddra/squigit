@@ -13,6 +13,7 @@ import { createStreamWatchdog } from "./streamWatchdog";
 import { setImageDescription, setImageBrief, addToHistory } from "./context";
 import { buildContextWindow } from "./summarize";
 import { normalizeMessageForHistory } from "./attachmentMemory";
+import { saveImageBrief } from "../../storage/chat";
 
 export const retryFromMessage = async (
   messageIndex: number,
@@ -68,28 +69,40 @@ export const retryFromMessage = async (
     geminiStore.currentUnlisten = unlisten;
 
     try {
-      // Fire image brief in parallel for index 0 retry, same as chat.ts
-      const briefPromise = invoke<string>("generate_image_brief", {
-        apiKey: geminiStore.storedApiKey,
-        imagePath: geminiStore.storedImagePath,
-      })
-        .then((brief) => {
-          if (brief && onBriefReady) {
-            onBriefReady(brief);
+      const generateAndSaveBrief = async () => {
+        let attempt = 0;
+        let lastError = null;
+        while (attempt < 5) {
+          try {
+            const brief = await invoke<string>("generate_image_brief", {
+              apiKey: geminiStore.storedApiKey,
+              imagePath: geminiStore.storedImagePath,
+            });
+            if (brief) {
+              if (chatId) {
+                saveImageBrief(chatId, brief).catch(console.error);
+              }
+              if (geminiStore.generationId === myGenId) {
+                setImageBrief(brief);
+                if (onBriefReady) onBriefReady(brief);
+              }
+              return brief;
+            }
+            return "";
+          } catch (e) {
+            console.warn(`[GeminiClient] Image brief retry attempt ${attempt + 1} failed:`, e);
+            lastError = e;
+            attempt++;
+            if (attempt < 5) {
+              await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+            }
           }
-          return brief;
-        })
-        .catch((e) => {
-          console.warn("[GeminiClient] Image brief failed during retry:", e);
-          return "";
-        });
-
-      void briefPromise.then((brief) => {
-        if (geminiStore.generationId !== myGenId) return;
-        if (brief) {
-          setImageBrief(brief);
         }
-      });
+        console.warn("[GeminiClient] Image brief failed all retries.", lastError);
+        return "";
+      };
+
+      void generateAndSaveBrief();
 
       streamWatchdog.touch();
       await Promise.race([

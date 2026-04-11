@@ -122,6 +122,7 @@ export const useChatLifecycle = (config: {
     },
     image?: { path: string; mimeType: string; imageId: string },
     rollingSummary?: string | null,
+    imageBrief?: string | null,
   ) => {
     setMessages(state.messages);
     setStreamingText(state.streamingText);
@@ -155,7 +156,7 @@ export const useChatLifecycle = (config: {
           firstUserMsg?.text || null,
           savedHistory,
           imagePath,
-          firstMsg.text, // fallback for older sessions
+          imageBrief ?? firstMsg.text, // fallback for older sessions
           rollingSummary ?? null,
         );
       } catch (e) {

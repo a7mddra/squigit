@@ -472,6 +472,14 @@ impl ChatStorage {
             None
         };
 
+        // Load image brief
+        let brief_path = chat_dir.join("image_brief.txt");
+        let image_brief = if brief_path.exists() {
+            Some(fs::read_to_string(&brief_path)?)
+        } else {
+            None
+        };
+
         let attachment_registry_path = chat_dir.join("attachment_registry.json");
         let attachment_registry = if attachment_registry_path.exists() {
             let json = fs::read_to_string(&attachment_registry_path)?;
@@ -487,7 +495,39 @@ impl ChatStorage {
             imgbb_url,
             rolling_summary,
             attachment_registry,
+            image_brief,
         })
+    }
+
+    /// Save the detected tone for a chat to its metadata directly.
+    pub fn save_image_tone(&self, chat_id: &str, tone: &str) -> Result<()> {
+        let chat_dir = self.chat_dir(chat_id);
+        if !chat_dir.exists() {
+            return Err(StorageError::ChatNotFound(chat_id.to_string()));
+        }
+        let meta_path = chat_dir.join("meta.json");
+        let meta_json = fs::read_to_string(&meta_path)?;
+        let mut metadata: ChatMetadata = serde_json::from_str(&meta_json)?;
+
+        metadata.image_tone = Some(tone.to_string());
+        metadata.updated_at = chrono::Utc::now();
+
+        let new_meta = serde_json::to_string_pretty(&metadata)?;
+        fs::write(&meta_path, new_meta)?;
+        self.update_index(&metadata)?;
+
+        Ok(())
+    }
+
+    /// Save image brief for a chat.
+    pub fn save_image_brief(&self, chat_id: &str, brief: &str) -> Result<()> {
+        let chat_dir = self.chat_dir(chat_id);
+        if !chat_dir.exists() {
+            return Err(StorageError::ChatNotFound(chat_id.to_string()));
+        }
+        let brief_path = chat_dir.join("image_brief.txt");
+        fs::write(&brief_path, brief)?;
+        Ok(())
     }
 
     /// List all chats (metadata only).

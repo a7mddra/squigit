@@ -74,6 +74,7 @@ export interface ChatData {
   ocr_data: OcrFrame;
   imgbb_url: string | null;
   rolling_summary: string | null;
+  image_brief?: string | null;
 }
 
 /** Ranked chat search hit returned by the local search engine. */
@@ -247,6 +248,26 @@ export async function saveRollingSummary(
   summary: string,
 ): Promise<void> {
   return invoke("save_rolling_summary", { chatId, summary });
+}
+
+// =============================================================================
+// Tone and Brief Commands
+// =============================================================================
+
+/** Save detected image tone for a chat. */
+export async function saveImageTone(
+  chatId: string,
+  tone: string,
+): Promise<void> {
+  return invoke("save_image_tone", { chatId, tone });
+}
+
+/** Save image brief for a chat. */
+export async function saveImageBrief(
+  chatId: string,
+  brief: string,
+): Promise<void> {
+  return invoke("save_image_brief", { chatId, brief });
 }
 
 // =============================================================================

@@ -204,6 +204,9 @@ pub struct ChatData {
     /// Per-chat tracked attachments keyed by CAS path.
     #[serde(default)]
     pub attachment_registry: AttachmentRegistry,
+    /// Generated concise text description of the session's startup image.
+    #[serde(default)]
+    pub image_brief: Option<String>,
 }
 
 impl ChatData {
@@ -216,6 +219,7 @@ impl ChatData {
             imgbb_url: None,
             rolling_summary: None,
             attachment_registry: BTreeMap::new(),
+            image_brief: None,
         }
     }
 }
