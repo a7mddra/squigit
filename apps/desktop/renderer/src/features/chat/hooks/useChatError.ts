@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { parseGeminiError } from "@/lib";
+import { parseGeminiError } from "@/core";
 import { invoke } from "@tauri-apps/api/core";
 
 export function useChatError(

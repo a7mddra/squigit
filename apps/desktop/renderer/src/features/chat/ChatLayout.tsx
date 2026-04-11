@@ -6,7 +6,7 @@
 
 import React, { type RefObject } from "react";
 import { InlineMenu, LoadingSpinner } from "@/components";
-import type { Attachment, OcrFrame } from "@/lib";
+import type { Attachment, OcrFrame } from "@/core";
 import { ChatInput, ImageArtifact } from "@/features";
 import styles from "./Chat.module.css";
 

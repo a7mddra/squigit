@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { commands } from "@/lib";
+import { commands } from "@/core";
 import styles from "./AccountSwitcher.module.css";
 
 interface AvatarProps {

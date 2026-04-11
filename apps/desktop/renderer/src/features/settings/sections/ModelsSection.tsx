@@ -7,7 +7,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import styles from "./ModelsSection.module.css";
 import { Dropdown, DropdownItem, DropdownSectionTitle } from "@/components";
-import { UserPreferences, DEFAULT_OCR_MODEL_ID, MODELS } from "@/lib";
+import { UserPreferences, DEFAULT_OCR_MODEL_ID, MODELS } from "@/core";
 import { OCRModelDownloader, useModelsStore, getModelById } from "@/features";
 
 interface ModelsSectionProps {

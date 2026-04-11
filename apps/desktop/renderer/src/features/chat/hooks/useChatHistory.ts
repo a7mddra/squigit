@@ -12,7 +12,7 @@ import {
   searchChats as searchChatsApi,
   deleteChat,
   updateChatMetadata as updateChatMeta,
-} from "@/lib";
+} from "@/core";
 const SYSTEM_PREFIX = "__system_";
 const isOnboardingId = (id: string) => id.startsWith(SYSTEM_PREFIX);
 const TOUCH_THROTTLE_MS = 1200;

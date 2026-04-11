@@ -11,7 +11,7 @@ import { Mic, Square } from "lucide-react";
 import styles from "./ChatInput.module.css";
 import { Tooltip, Dialog } from "@/components";
 import { usePlatform } from "@/hooks/core/usePlatform";
-import { type DialogContent, getMissingPackageDialog } from "@/lib";
+import { type DialogContent, getMissingPackageDialog } from "@/core";
 
 interface VoiceButtonProps {
   onTranscript: (text: string, isFinal: boolean) => void;
@@ -64,9 +64,16 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
             if (payload.message === "Failed to init model") {
               setErrorDialog({
                 title: "Missing AI Dictation Model",
-                message: "The local dictation model file is missing or corrupted. If you installed via Homebrew or a package manager, please ensure the `_internal/models/ggml-tiny.en.bin` dependency exists and rerun squigit-stt.",
+                message:
+                  "The local dictation model file is missing or corrupted. If you installed via Homebrew or a package manager, please ensure the `_internal/models/ggml-tiny.en.bin` dependency exists and rerun squigit-stt.",
                 variant: "warning",
-                actions: [{ label: "Dismiss Window", variant: "primary", actionKey: "close" }]
+                actions: [
+                  {
+                    label: "Dismiss Window",
+                    variant: "primary",
+                    actionKey: "close",
+                  },
+                ],
               });
             }
             setIsRecording(false);
@@ -115,7 +122,12 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
       } catch (err: any) {
         const errorText = err instanceof Error ? err.message : String(err);
         if (errorText.includes("ERR_MISSING_STT_PACKAGE")) {
-          setErrorDialog(getMissingPackageDialog("squigit-stt", platform.getPkgInstallCmd("squigit-stt")));
+          setErrorDialog(
+            getMissingPackageDialog(
+              "squigit-stt",
+              platform.getPkgInstallCmd("squigit-stt"),
+            ),
+          );
         } else {
           console.error("Failed to start STT:", err);
         }
@@ -127,35 +139,35 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
   return (
     <>
       <div className={styles.voiceContainer}>
-      <button
-        className={`${styles.micButton} ${isRecording ? styles.recording : ""}`}
-        onClick={toggleRecording}
-        disabled={disabled}
-        type="button"
-        ref={micButtonRef}
-        onMouseEnter={() => setShowMicButtonTooltip(true)}
-        onMouseLeave={() => setShowMicButtonTooltip(false)}
-      >
-        {isRecording ? (
-          <Square className={styles.icon} fill="currentColor" />
-        ) : (
-          <Mic className={styles.icon} />
-        )}
-      </button>
-      <Tooltip
-        text={isRecording ? "Stop recording" : "Start recording"}
-        parentRef={micButtonRef}
-        show={showMicButtonTooltip}
-        above
-      />
-    </div>
-    {errorDialog && (
-      <Dialog
-        isOpen={!!errorDialog}
-        type={errorDialog}
-        onAction={() => setErrorDialog(null)}
-      />
-    )}
-  </>
+        <button
+          className={`${styles.micButton} ${isRecording ? styles.recording : ""}`}
+          onClick={toggleRecording}
+          disabled={disabled}
+          type="button"
+          ref={micButtonRef}
+          onMouseEnter={() => setShowMicButtonTooltip(true)}
+          onMouseLeave={() => setShowMicButtonTooltip(false)}
+        >
+          {isRecording ? (
+            <Square className={styles.icon} fill="currentColor" />
+          ) : (
+            <Mic className={styles.icon} />
+          )}
+        </button>
+        <Tooltip
+          text={isRecording ? "Stop recording" : "Start recording"}
+          parentRef={micButtonRef}
+          show={showMicButtonTooltip}
+          above
+        />
+      </div>
+      {errorDialog && (
+        <Dialog
+          isOpen={!!errorDialog}
+          type={errorDialog}
+          onAction={() => setErrorDialog(null)}
+        />
+      )}
+    </>
   );
 };

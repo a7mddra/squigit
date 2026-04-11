@@ -13,7 +13,7 @@ import { createStreamWatchdog } from "./streamWatchdog";
 import { setImageDescription, setImageBrief, addToHistory } from "./context";
 import { buildContextWindow } from "./summarize";
 import { normalizeMessageForHistory } from "./attachmentMemory";
-import { saveImageBrief } from "@/lib";
+import { saveImageBrief } from "@/core";
 
 export const retryFromMessage = async (
   messageIndex: number,

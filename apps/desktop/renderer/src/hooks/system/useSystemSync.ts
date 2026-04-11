@@ -14,7 +14,7 @@ import {
   hasAgreedFlag,
   setAgreedFlag,
   resolveOcrModelId,
-} from "@/lib";
+} from "@/core";
 import { useSystemPreferences } from "./useSystemPreferences";
 import { useSystemProfile } from "./useSystemProfile";
 import { useSystemState } from "./useSystemState";

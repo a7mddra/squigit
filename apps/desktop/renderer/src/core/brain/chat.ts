@@ -17,7 +17,7 @@ import {
   setImageBrief,
   addToHistory,
 } from "./context";
-import { saveImageBrief } from "@/lib";
+import { saveImageBrief } from "@/core";
 
 export const startNewThreadStream = async (
   modelId: string,

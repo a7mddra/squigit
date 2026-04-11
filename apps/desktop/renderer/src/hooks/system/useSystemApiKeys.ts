@@ -5,7 +5,7 @@
  */
 
 import { useState } from "react";
-import { commands, initializeGemini } from "@/lib";
+import { commands, initializeGemini } from "@/core";
 
 export const useSystemApiKeys = (activeProfileId?: string) => {
   const [apiKey, setApiKey] = useState<string>("");

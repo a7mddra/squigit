@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { highlightCode } from "@/lib";
+import { highlightCode } from "@/core";
 
 const CACHE_MAX = 64;
 const highlightCache = new Map<string, string>();

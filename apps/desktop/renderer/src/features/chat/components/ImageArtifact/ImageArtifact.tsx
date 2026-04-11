@@ -40,7 +40,7 @@ import {
   generateTranslateUrl,
   resolveOcrModelId,
   saveImageTone,
-} from "@/lib";
+} from "@/core";
 
 interface OCRBox {
   text: string;
@@ -155,24 +155,33 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
             path: startupImage.path,
           });
           const tone = normalizeToneResult(raw);
-          
+
           if (!cancelled) {
             setImageToneMode(tone);
             if (chatId) {
               saveImageTone(chatId, tone).catch(console.error);
             }
-            console.log(`[ToneDetector] Attempt ${attempt + 1}: Success, detected ${tone}`);
+            console.log(
+              `[ToneDetector] Attempt ${attempt + 1}: Success, detected ${tone}`,
+            );
             return;
           }
         } catch (err) {
-          console.error(`[ToneDetector] Attempt ${attempt + 1} failed for image=${startupImage.imageId}:`, err);
+          console.error(
+            `[ToneDetector] Attempt ${attempt + 1} failed for image=${startupImage.imageId}:`,
+            err,
+          );
           attempt++;
           if (attempt < 3 && !cancelled) {
-            await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt - 1)));
+            await new Promise((r) =>
+              setTimeout(r, 500 * Math.pow(2, attempt - 1)),
+            );
           }
         }
       }
-      console.warn(`[ToneDetector] All retries failed for image=${startupImage.imageId}`);
+      console.warn(
+        `[ToneDetector] All retries failed for image=${startupImage.imageId}`,
+      );
     };
 
     void runToneDetection();
@@ -180,7 +189,12 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [isNavigating, startupImage?.imageId, startupImage?.path, startupImage?.tone]);
+  }, [
+    isNavigating,
+    startupImage?.imageId,
+    startupImage?.path,
+    startupImage?.tone,
+  ]);
 
   const scanRequestRef = useRef(0);
 
@@ -418,13 +432,18 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
         }
 
         if (errorText.includes("ERR_MISSING_OCR_PACKAGE")) {
-          setErrorDialog(getMissingPackageDialog("squigit-ocr", platform.getPkgInstallCmd("squigit-ocr")));
+          setErrorDialog(
+            getMissingPackageDialog(
+              "squigit-ocr",
+              platform.getPkgInstallCmd("squigit-ocr"),
+            ),
+          );
         } else if (errorText.includes("ERR_OUTDATED_OCR_PACKAGE")) {
           setErrorDialog(getOutdatedPackageDialog("squigit-ocr"));
         } else {
           setErrorDialog(getErrorDialog(errorText));
         }
-        
+
         if (latestOcrModelRef.current === modelToUse) {
           onOcrModelChange("");
         }
@@ -687,7 +706,9 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
         <div className={styles.barHeader}>
           <div
             className={`${styles.thumbnailWrapper} ${showThumbnailLoadingState ? styles.thumbnailLoading : ""} ${isArtifactExpanded ? styles.thumbnailExpanded : ""}`}
-            onClick={isExpandLocked || isArtifactExpanded ? undefined : toggleExpand}
+            onClick={
+              isExpandLocked || isArtifactExpanded ? undefined : toggleExpand
+            }
             title={isExpandLocked ? "Loading..." : undefined}
           >
             <img

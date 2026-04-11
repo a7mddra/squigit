@@ -7,7 +7,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import { Paperclip, ArrowUp, Square, Camera, Code2 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ACCEPTED_EXTENSIONS, MODELS } from "@/lib";
+import { ACCEPTED_EXTENSIONS, MODELS } from "@/core";
 import {
   Dropdown,
   DropdownItem,

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { DEFAULT_MODEL_ID } from "@/lib/config/models";
+import { DEFAULT_MODEL_ID } from "@/core/config/models";
 
 interface GeminiStoreState {
   currentAbortController: AbortController | null;

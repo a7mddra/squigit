@@ -6,10 +6,7 @@
 
 import React from "react";
 import { Dialog, TextShimmer } from "@/components";
-import {
-  API_STATUS_TEXT,
-  type AttachmentAnalysisCounts,
-} from "@/lib";
+import { API_STATUS_TEXT, type AttachmentAnalysisCounts } from "@/core";
 import { MessageList } from "@/features";
 import type {
   Message,

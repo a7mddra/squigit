@@ -5,7 +5,7 @@
  */
 
 import React from "react";
-import type { ChatMetadata } from "@/lib";
+import type { ChatMetadata } from "@/core";
 
 const SYSTEM_PREFIX = "__system_";
 

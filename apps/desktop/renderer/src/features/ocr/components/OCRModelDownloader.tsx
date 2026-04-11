@@ -9,7 +9,7 @@ import { Download, Check, Loader2, X } from "lucide-react";
 import { OcrCircularArcIcon } from "@/assets";
 import { useModelsStore } from "@/features";
 import { Dialog } from "@/components";
-import { getErrorDialog, DEFAULT_OCR_MODEL_ID } from "@/lib";
+import { getErrorDialog, DEFAULT_OCR_MODEL_ID } from "@/core";
 import styles from "./OCRModelDownloader.module.css";
 
 const CircularProgress: React.FC<{ progress: number }> = ({ progress }) => (

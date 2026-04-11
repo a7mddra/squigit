@@ -9,7 +9,7 @@ import { usePlatform } from "@/hooks";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import styles from "./Welcome.module.css";
-import { ImageResult, storeImageFromPath } from "@/lib";
+import { ImageResult, storeImageFromPath } from "@/core";
 import { useAppContext } from "@/providers/AppProvider";
 import { OnboardingLayout } from "../OnboardingLayout";
 import { AppLogo } from "@/assets";

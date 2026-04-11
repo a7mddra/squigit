@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 
 import { SidePanelNewThreadIcon, SidePanelSquigitsIcon } from "@/assets";
-import { ChatMetadata, getDeleteMultipleChatsDialog } from "@/lib";
+import { ChatMetadata, getDeleteMultipleChatsDialog } from "@/core";
 import { useAppContext } from "@/providers/AppProvider";
 import { Dialog, LoadingSpinner } from "@/components";
 import { PanelContextMenu } from "@/layout";
@@ -185,7 +185,11 @@ const ChatItem: React.FC<ChatItemProps> = React.memo(
                 </span>
               ) : (
                 <>
-                  <FolderOpen size={20} strokeWidth={1.5} className={styles.chatBubbleIcon} />
+                  <FolderOpen
+                    size={20}
+                    strokeWidth={1.5}
+                    className={styles.chatBubbleIcon}
+                  />
                   <button
                     type="button"
                     className={`${styles.pinLeftBtn} ${chat.is_pinned ? styles.pinActive : ""}`}

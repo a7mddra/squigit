@@ -6,7 +6,7 @@
 
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ModelType } from "@/lib";
+import { ModelType } from "@/core";
 
 const TITLE_MODEL_PRIMARY = ModelType.GEMINI_3_1_FLASH;
 const TITLE_MODEL_RETRY = ModelType.GEMINI_3_1_FLASH;

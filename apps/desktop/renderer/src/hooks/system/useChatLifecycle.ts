@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useRef } from "react";
-import { restoreSession as apiRestoreSession } from "@/lib";
+import { restoreSession as apiRestoreSession } from "@/core";
 import { Message } from "@/features";
 
 export const useChatLifecycle = (config: {

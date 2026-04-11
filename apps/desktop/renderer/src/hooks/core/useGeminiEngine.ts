@@ -37,23 +37,21 @@ import {
   isGeminiHighDemandError,
   mapToolStatusText,
   ModelType,
-} from "@/lib";
+} from "@/core";
 
 const DEFAULT_THREAD_TITLE_NORMALIZED = "new thread";
 
 function normalizeThreadTitle(title: string | null | undefined): string {
   if (!title) return "";
 
-  return title
-    .trim()
-    .toLowerCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ");
+  return title.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
 }
 
 function isUntitledThreadTitle(title: string | null | undefined): boolean {
   const normalized = normalizeThreadTitle(title);
-  return normalized.length === 0 || normalized === DEFAULT_THREAD_TITLE_NORMALIZED;
+  return (
+    normalized.length === 0 || normalized === DEFAULT_THREAD_TITLE_NORMALIZED
+  );
 }
 
 export const useGeminiEngine = (config: {
@@ -153,14 +151,19 @@ export const useGeminiEngine = (config: {
     setFirstResponseId(null);
   };
 
-  const getThoughtSecondsFromToolSteps = (steps: ToolStep[]): number | undefined => {
+  const getThoughtSecondsFromToolSteps = (
+    steps: ToolStep[],
+  ): number | undefined => {
     const seconds = steps.reduce((sum, step) => {
       if (
         typeof step.startedAtMs === "number" &&
         typeof step.endedAtMs === "number" &&
         step.endedAtMs >= step.startedAtMs
       ) {
-        return sum + Math.max(1, Math.round((step.endedAtMs - step.startedAtMs) / 1000));
+        return (
+          sum +
+          Math.max(1, Math.round((step.endedAtMs - step.startedAtMs) / 1000))
+        );
       }
       const match = step.message?.trim().match(/^Thought for (\d+)s$/i);
       if (!match) return sum;
@@ -232,7 +235,8 @@ export const useGeminiEngine = (config: {
 
     updatePendingAssistantTurn((turn) => {
       const nextRawText = `${turn.rawText}${token}`;
-      const hasFirstVisibleText = turn.rawText.trim().length === 0 && nextRawText.trim().length > 0;
+      const hasFirstVisibleText =
+        turn.rawText.trim().length === 0 && nextRawText.trim().length > 0;
 
       return {
         ...turn,
@@ -316,7 +320,7 @@ export const useGeminiEngine = (config: {
     return pendingText.length === 0;
   };
 
-  const runWithHighDemandRetries = async <T,>(
+  const runWithHighDemandRetries = async <T>(
     run: () => Promise<T>,
     signal?: AbortSignal,
   ): Promise<T> => {
@@ -353,14 +357,17 @@ export const useGeminiEngine = (config: {
   const markPendingTransportDone = (finalResponse: string) => {
     updatePendingAssistantTurn((turn) => {
       const nextRawText =
-        finalResponse.length > turn.rawText.length ? finalResponse : turn.rawText;
+        finalResponse.length > turn.rawText.length
+          ? finalResponse
+          : turn.rawText;
       const hasVisibleText = nextRawText.trim().length > 0;
 
       return {
         ...turn,
         rawText: nextRawText,
         thoughtSeconds: hasVisibleText
-          ? turn.thoughtSeconds ?? getElapsedThoughtSeconds(turn.requestStartedAtMs)
+          ? (turn.thoughtSeconds ??
+            getElapsedThoughtSeconds(turn.requestStartedAtMs))
           : turn.thoughtSeconds,
         phase:
           turn.phase === "thinking"
@@ -501,7 +508,11 @@ export const useGeminiEngine = (config: {
           }
 
           setPendingAssistantTurn((previous: PendingAssistantTurn | null) => {
-            if (!previous || previous.id !== turn.id || previous.phase !== "primed") {
+            if (
+              !previous ||
+              previous.id !== turn.id ||
+              previous.phase !== "primed"
+            ) {
               return previous;
             }
             return {
@@ -567,9 +578,10 @@ export const useGeminiEngine = (config: {
 
       if (backlogWords === 0) {
         if (latest.transportDone) {
-          const { text: visibleText, isWritingCode } = getRenderableStreamingText(
-            latest.rawText.slice(0, playbackCursorRef.current),
-          );
+          const { text: visibleText, isWritingCode } =
+            getRenderableStreamingText(
+              latest.rawText.slice(0, playbackCursorRef.current),
+            );
           updatePendingAssistantTurn((currentTurn) => ({
             ...currentTurn,
             displayText: visibleText,
@@ -588,9 +600,8 @@ export const useGeminiEngine = (config: {
       );
       playbackCursorRef.current = nextCursor;
 
-      const { text: nextDisplayText, isWritingCode } = getRenderableStreamingText(
-        latest.rawText.slice(0, nextCursor),
-      );
+      const { text: nextDisplayText, isWritingCode } =
+        getRenderableStreamingText(latest.rawText.slice(0, nextCursor));
       const isBufferDrained = nextCursor >= latest.rawText.length;
 
       updatePendingAssistantTurn((currentTurn) => ({
@@ -609,7 +620,12 @@ export const useGeminiEngine = (config: {
             : currentTurn.visibleCitations,
       }));
     }, STREAM_PLAYBACK_INTERVAL_MS);
-  }, [commitPendingAssistantTurn, pendingAssistantTurn, pendingAssistantTurnRef, setPendingAssistantTurn]);
+  }, [
+    commitPendingAssistantTurn,
+    pendingAssistantTurn,
+    pendingAssistantTurnRef,
+    setPendingAssistantTurn,
+  ]);
 
   const createToolEventHandler = (onResetText?: () => void) => {
     let steps: ToolStep[] = [];
@@ -739,7 +755,9 @@ export const useGeminiEngine = (config: {
           toolSteps: [...steps],
           pendingCitations: [...citations],
           visibleCitations:
-            turn.phase === "complete" || turn.phase === "stopped" || turn.stopped
+            turn.phase === "complete" ||
+            turn.phase === "stopped" ||
+            turn.stopped
               ? [...citations]
               : turn.visibleCitations,
         }));
@@ -937,21 +955,20 @@ export const useGeminiEngine = (config: {
 
       const toolTracker = createToolEventHandler(resetPendingRawText);
 
-      const responseText = await runWithHighDemandRetries(
-        () =>
-          startNewThreadStream(
-            config.currentModel,
-            startupImage.path,
-            (token: string) => {
-              appendPendingRawText(token);
-            },
-            config.chatId,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            toolTracker.onEvent,
-          ),
+      const responseText = await runWithHighDemandRetries(() =>
+        startNewThreadStream(
+          config.currentModel,
+          startupImage.path,
+          (token: string) => {
+            appendPendingRawText(token);
+          },
+          config.chatId,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          toolTracker.onEvent,
+        ),
       );
 
       void toolTracker;
@@ -982,17 +999,16 @@ export const useGeminiEngine = (config: {
 
     try {
       const toolTracker = createToolEventHandler(resetPendingRawText);
-      const responseText = await runWithHighDemandRetries(
-        () =>
-          apiSendMessage(
-            lastSentMessage.text,
-            undefined,
-            (token: string) => {
-              appendPendingRawText(token);
-            },
-            config.chatId,
-            toolTracker.onEvent,
-          ),
+      const responseText = await runWithHighDemandRetries(() =>
+        apiSendMessage(
+          lastSentMessage.text,
+          undefined,
+          (token: string) => {
+            appendPendingRawText(token);
+          },
+          config.chatId,
+          toolTracker.onEvent,
+        ),
       );
 
       void toolTracker;
@@ -1031,17 +1047,16 @@ export const useGeminiEngine = (config: {
 
     try {
       const toolTracker = createToolEventHandler(resetPendingRawText);
-      const responseText = await runWithHighDemandRetries(
-        () =>
-          apiSendMessage(
-            userText,
-            modelId,
-            (token: string) => {
-              appendPendingRawText(token);
-            },
-            config.chatId,
-            toolTracker.onEvent,
-          ),
+      const responseText = await runWithHighDemandRetries(() =>
+        apiSendMessage(
+          userText,
+          modelId,
+          (token: string) => {
+            appendPendingRawText(token);
+          },
+          config.chatId,
+          toolTracker.onEvent,
+        ),
       );
 
       void toolTracker;
@@ -1064,13 +1079,13 @@ export const useGeminiEngine = (config: {
     const retryModelId = modelId || config.currentModel;
 
     preRetryMessagesRef.current = [...messages];
-    
+
     // Immediately truncate messages to avoid full text flash on completion
     setMessages(truncatedMessages);
     if (config.onOverwriteMessages) {
       config.onOverwriteMessages(truncatedMessages);
     }
-    
+
     setRetryingMessageId(messageId); // Keep for "Analyzing" shimmer if needed
     setIsLoading(true);
     isRequestCancelledRef.current = false;
@@ -1091,20 +1106,19 @@ export const useGeminiEngine = (config: {
         msgIndex === 0 ? "initial" : "retry",
         requestStartedAtMs,
       );
-      const responseText = await runWithHighDemandRetries(
-        () =>
-          apiRetryFromMessage(
-            msgIndex,
-            messages,
-            retryModelId,
-            config.chatId,
-            (token: string) => {
-              appendPendingRawText(token);
-            },
-            fallbackImagePath,
-            undefined,
-            toolTracker.onEvent,
-          ),
+      const responseText = await runWithHighDemandRetries(() =>
+        apiRetryFromMessage(
+          msgIndex,
+          messages,
+          retryModelId,
+          config.chatId,
+          (token: string) => {
+            appendPendingRawText(token);
+          },
+          fallbackImagePath,
+          undefined,
+          toolTracker.onEvent,
+        ),
       );
 
       if (

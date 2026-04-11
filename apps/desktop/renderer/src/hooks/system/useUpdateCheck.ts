@@ -5,7 +5,7 @@
  */
 
 import { useEffect } from "react";
-import { github } from "@/lib";
+import { github } from "@/core";
 import packageJson from "../../../package.json";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -49,7 +49,11 @@ async function getSidecarVersion(cmd: string): Promise<string | null> {
   }
 }
 
-async function fetchReleaseNotes(url: string, currentVersion: string, component: UpdateComponent): Promise<ReleaseInfo | null> {
+async function fetchReleaseNotes(
+  url: string,
+  currentVersion: string,
+  component: UpdateComponent,
+): Promise<ReleaseInfo | null> {
   try {
     const response = await fetch(url);
     if (!response.ok) {
@@ -148,27 +152,35 @@ export function useUpdateCheck() {
       const queue: ReleaseInfo[] = [];
 
       // 1. Tauri
-      const tauriUpdate = await fetchReleaseNotes(TAURI_CHANGELOG_URL, packageJson.version, "tauri");
+      const tauriUpdate = await fetchReleaseNotes(
+        TAURI_CHANGELOG_URL,
+        packageJson.version,
+        "tauri",
+      );
       if (tauriUpdate?.hasUpdate) queue.push(tauriUpdate);
 
       // 2. OCR
-      const installedOcrVersion = await getSidecarVersion("squigit-ocr --version");
+      const installedOcrVersion = await getSidecarVersion(
+        "squigit-ocr --version",
+      );
       if (installedOcrVersion) {
         const ocrUpdate = await fetchReleaseNotes(
           "https://raw.githubusercontent.com/a7mddra/squigit/main/sidecars/paddle-ocr/CHANGELOG.md",
           installedOcrVersion,
-          "ocr"
+          "ocr",
         );
         if (ocrUpdate?.hasUpdate) queue.push(ocrUpdate);
       }
 
       // 3. STT (Future)
-      const installedSttVersion = await getSidecarVersion("squigit-stt --version");
+      const installedSttVersion = await getSidecarVersion(
+        "squigit-stt --version",
+      );
       if (installedSttVersion) {
         const sttUpdate = await fetchReleaseNotes(
           "https://raw.githubusercontent.com/a7mddra/squigit/main/sidecars/whisper-stt/CHANGELOG.md",
           installedSttVersion,
-          "stt"
+          "stt",
         );
         if (sttUpdate?.hasUpdate) queue.push(sttUpdate);
       }

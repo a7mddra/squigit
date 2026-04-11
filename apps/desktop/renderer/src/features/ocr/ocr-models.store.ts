@@ -9,7 +9,7 @@ import { OcrModelStatus, AVAILABLE_MODELS } from "./ocr-models.types";
 import { getInstalledModelIds } from "./services/modelRegistry";
 import { downloadModel } from "./services/modelDownloader";
 
-import { commands, DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@/lib";
+import { commands, DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@/core";
 
 interface DownloadProgressPayload {
   id: string;

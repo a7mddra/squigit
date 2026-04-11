@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { google } from "@/lib";
+import { google } from "@/core";
 
 /**
  * Generates a Google Translate URL for the given text.

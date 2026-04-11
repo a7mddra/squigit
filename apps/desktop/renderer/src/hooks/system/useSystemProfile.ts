@@ -5,7 +5,7 @@
  */
 
 import { useState } from "react";
-import { Profile, commands } from "@/lib";
+import { Profile, commands } from "@/core";
 
 export const useSystemProfile = () => {
   const [activeProfile, setActiveProfile] = useState<Profile | null>(null);

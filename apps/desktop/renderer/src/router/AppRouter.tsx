@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect } from "react";
-import { getDialogs, getUpdateAvailableDialog } from "@/lib";
+import { getDialogs, getUpdateAvailableDialog } from "@/core";
 import { Dialog } from "@/components";
 import { usePlatform } from "@/hooks";
 import {
@@ -68,7 +68,9 @@ const AppRouterContent: React.FC = () => {
   const activeId = app.chatHistory.activeSessionId;
   const hasActiveChatSession = !!activeId && !isOnboardingId(activeId);
   const shouldRenderChatShell =
-    app.showChatShellDuringNavigation || hasActiveChatSession || !app.isImageMissing;
+    app.showChatShellDuringNavigation ||
+    hasActiveChatSession ||
+    !app.isImageMissing;
 
   const renderMainContent = () => {
     if (activeId && isOnboardingId(activeId)) {
@@ -154,19 +156,25 @@ const AppRouterContent: React.FC = () => {
         onAction={app.handleBusyDialogAction}
       />
 
-      {app.showUpdate && app.pendingUpdate && app.pendingUpdate.component !== "tauri" && (
-        <Dialog
-          isOpen={true}
-          type={getUpdateAvailableDialog(`squigit-${app.pendingUpdate.component}`)}
-          onAction={(key) => {
-            if (key === "show_changelog" && app.pendingUpdate) {
-               app.handleSelectChat(`__system_update_${app.pendingUpdate.version}`);
-            }
-            app.setShowUpdate(false);
-            sessionStorage.setItem("update_dismissed", "1");
-          }}
-        />
-      )}
+      {app.showUpdate &&
+        app.pendingUpdate &&
+        app.pendingUpdate.component !== "tauri" && (
+          <Dialog
+            isOpen={true}
+            type={getUpdateAvailableDialog(
+              `squigit-${app.pendingUpdate.component}`,
+            )}
+            onAction={(key) => {
+              if (key === "show_changelog" && app.pendingUpdate) {
+                app.handleSelectChat(
+                  `__system_update_${app.pendingUpdate.version}`,
+                );
+              }
+              app.setShowUpdate(false);
+              sessionStorage.setItem("update_dismissed", "1");
+            }}
+          />
+        )}
 
       <MediaOverlay
         isOpen={app.mediaViewer.isOpen}

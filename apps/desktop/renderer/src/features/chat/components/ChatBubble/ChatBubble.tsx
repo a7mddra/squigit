@@ -34,7 +34,7 @@ import {
   parseAttachmentPaths,
   stripImageAttachmentMentions,
   API_STATUS_TEXT,
-} from "@/lib";
+} from "@/core";
 import {
   Message,
   ToolStep,

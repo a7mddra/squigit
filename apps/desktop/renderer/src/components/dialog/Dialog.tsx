@@ -19,7 +19,7 @@ export interface DialogAction {
   disabled?: boolean;
 }
 
-import { getDialogs, DialogContent, commands } from "@/lib";
+import { getDialogs, DialogContent, commands } from "@/core";
 
 interface DialogProps {
   variant?: DialogVariant;

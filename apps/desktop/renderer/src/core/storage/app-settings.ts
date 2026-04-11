@@ -12,7 +12,7 @@ import {
   mkdir,
 } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
-import { commands, resolveModelId, resolveOcrModelId } from "@/lib";
+import { commands, resolveModelId, resolveOcrModelId } from "@/core";
 
 export interface UserPreferences {
   model: string;

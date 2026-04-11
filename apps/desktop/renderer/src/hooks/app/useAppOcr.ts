@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { OcrFrame, saveImgbbUrl, saveOcrData } from "@/lib";
+import { OcrFrame, saveImgbbUrl, saveOcrData } from "@/core";
 
 export const useAppOcr = (activeSessionId: string | null) => {
   const [sessionLensUrl, setSessionLensUrl] = useState<string | null>(null);

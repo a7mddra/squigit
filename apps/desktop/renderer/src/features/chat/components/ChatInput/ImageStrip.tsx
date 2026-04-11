@@ -14,7 +14,7 @@ import React, {
 } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { CloseCrossIcon } from "@/assets";
-import type { Attachment } from "@/lib";
+import type { Attachment } from "@/core";
 import styles from "./ImageStrip.module.css";
 
 const MIN_THUMB_WIDTH = 30;
@@ -78,11 +78,7 @@ const RemoveButton: React.FC<{
     onClick={onRemove}
     aria-label={`Remove ${name}`}
   >
-    <CloseCrossIcon
-      size={24}
-      className={styles.cancelIcon}
-      ariaHidden
-    />
+    <CloseCrossIcon size={24} className={styles.cancelIcon} ariaHidden />
   </button>
 );
 

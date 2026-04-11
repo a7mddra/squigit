@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { commands } from "@/lib";
+import { commands } from "@/core";
 
 let hasLoggedMissingAuthConfig = false;
 

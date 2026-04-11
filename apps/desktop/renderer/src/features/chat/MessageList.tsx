@@ -17,8 +17,8 @@ import {
   ATTACHMENT_ANALYSIS_STATUS_DELAY_MS,
   getAttachmentAnalysisStatusText,
   isQuickAnswerSuppressedProgressText,
-} from "@/lib";
-import type { AttachmentAnalysisCounts } from "@/lib";
+} from "@/core";
+import type { AttachmentAnalysisCounts } from "@/core";
 import styles from "./MessageList.module.css";
 
 const THINKING_LABEL = "Thinking";
@@ -225,7 +225,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         window.cancelAnimationFrame(frameId);
       }
     };
-  }, [onPendingTurnLayoutChange, pendingAssistantTurn?.id, shouldShowThinkingLabel]);
+  }, [
+    onPendingTurnLayoutChange,
+    pendingAssistantTurn?.id,
+    shouldShowThinkingLabel,
+  ]);
 
   return (
     <div className={styles.container}>
@@ -240,7 +244,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
           msg.role === "user"
             ? roleCodeVisibilityKey !== null && msg.id !== roleCodeVisibilityKey
             : msg.role === "model"
-              ? roleCodeVisibilityKey !== null && msg.id !== roleCodeVisibilityKey
+              ? roleCodeVisibilityKey !== null &&
+                msg.id !== roleCodeVisibilityKey
               : false;
 
         return (
@@ -313,7 +318,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                 collapseMode="none"
                 onRetry={onRetryMessage ? () => {} : undefined}
                 retryDisabled={true}
-                copyDisabled={pendingAssistantTurn.displayText.trim().length === 0}
+                copyDisabled={
+                  pendingAssistantTurn.displayText.trim().length === 0
+                }
               />
             )}
           </div>

@@ -32,7 +32,7 @@ import {
   isImageExtension,
   type Attachment,
   unwrapMarkdownLinkDestination,
-} from "@/lib";
+} from "@/core";
 import {
   useSystemSync,
   useUpdateCheck,
@@ -53,7 +53,7 @@ import type {
   AttachmentAnalysisCounts,
   ChatCitation,
   ChatToolStep,
-} from "@/lib";
+} from "@/core";
 
 import { useAppDialogs } from "./useAppDialogs";
 import { useAppDrafts } from "./useAppDrafts";
@@ -102,7 +102,9 @@ const getChatOcrModel = (
     )
     .sort()[0];
 
-  return fallbackScannedModel ? resolveOcrModelId(fallbackScannedModel, "") : "";
+  return fallbackScannedModel
+    ? resolveOcrModelId(fallbackScannedModel, "")
+    : "";
 };
 
 const withNavigationOcrGuard = (frame: OcrFrame): OcrFrame => ({
@@ -204,14 +206,17 @@ function getAttachmentAnalysisCounts(
     return null;
   }
 
-  const imageCount = items.filter((attachment) => attachment.type === "image")
-    .length;
+  const imageCount = items.filter(
+    (attachment) => attachment.type === "image",
+  ).length;
   const fileCount = items.length - imageCount;
 
   return imageCount > 0 || fileCount > 0 ? { imageCount, fileCount } : null;
 }
 
-function normalizeStoredCitations(citations: ChatCitation[] | undefined): Citation[] {
+function normalizeStoredCitations(
+  citations: ChatCitation[] | undefined,
+): Citation[] {
   return Array.isArray(citations) ? citations : [];
 }
 
@@ -325,10 +330,7 @@ export const useApp = () => {
   const shouldAutoClosePanelForWelcome =
     system.hasAgreed === false && !system.activeProfile;
 
-  const panel = useAppPanel(
-    isLoadingState,
-    shouldAutoClosePanelForWelcome,
-  );
+  const panel = useAppPanel(isLoadingState, shouldAutoClosePanelForWelcome);
 
   const hasActiveOnboarding = chatHistory.activeSessionId
     ? isOnboardingId(chatHistory.activeSessionId)
@@ -694,7 +696,9 @@ export const useApp = () => {
   const openMediaViewer = useCallback(
     async (attachment: Attachment, options?: MediaViewerOpenOptions) => {
       const normalizedAttachmentPath = normalizeAttachmentPath(attachment.path);
-      const pathExtension = getExtension(normalizedAttachmentPath).toLowerCase();
+      const pathExtension = getExtension(
+        normalizedAttachmentPath,
+      ).toLowerCase();
       const extension =
         pathExtension && pathExtension !== "file"
           ? pathExtension
@@ -768,7 +772,8 @@ export const useApp = () => {
           if (resolvedGallery.length > 0) {
             galleryItems = resolvedGallery;
             const fallbackIndex = galleryAttachments.findIndex(
-              (entry) => entry.id === attachment.id || entry.path === attachment.path,
+              (entry) =>
+                entry.id === attachment.id || entry.path === attachment.path,
             );
             const initialIndex =
               typeof options?.initialIndex === "number"
@@ -1054,14 +1059,7 @@ export const useApp = () => {
         finalizeNavigationState(requestId);
       }
     },
-    [
-      chat,
-      chatHistory,
-      closeMediaViewer,
-      finalizeNavigationState,
-      ocr,
-      system,
-    ],
+    [chat, chatHistory, closeMediaViewer, finalizeNavigationState, ocr, system],
   );
 
   const performNewSession = useCallback(async () => {
@@ -1082,13 +1080,7 @@ export const useApp = () => {
     ocr.setOcrData({});
     ocr.setSessionLensUrl(null);
     finalizeNavigationState(requestId);
-  }, [
-    chatHistory,
-    closeMediaViewer,
-    finalizeNavigationState,
-    ocr,
-    system,
-  ]);
+  }, [chatHistory, closeMediaViewer, finalizeNavigationState, ocr, system]);
 
   const handleSelectChat = useCallback(
     (id: string) => {

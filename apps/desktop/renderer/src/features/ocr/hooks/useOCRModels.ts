@@ -11,7 +11,7 @@ import {
   getInstalledModelIds,
   downloadModel,
 } from "@/features";
-import { DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@/lib";
+import { DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@/core";
 
 export const useOCRModels = () => {
   const [ocrModels, setOCRModels] = useState<OcrModelStatus[]>(() =>

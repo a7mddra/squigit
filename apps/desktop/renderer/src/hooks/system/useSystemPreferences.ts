@@ -12,7 +12,7 @@ import {
   commands,
   DEFAULT_OCR_MODEL_ID,
   resolveOcrModelId,
-} from "@/lib";
+} from "@/core";
 import { useTheme } from "@/hooks";
 
 export const useSystemPreferences = () => {

@@ -31,7 +31,11 @@ import {
 } from "@tiptap/core";
 import type { Fragment, Node as ProseMirrorNode } from "prosemirror-model";
 import { baseKeymap, splitBlock } from "prosemirror-commands";
-import { history, redo as redoHistory, undo as undoHistory } from "prosemirror-history";
+import {
+  history,
+  redo as redoHistory,
+  undo as undoHistory,
+} from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import { Plugin, PluginKey, type Command } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
@@ -43,7 +47,7 @@ import {
   buildAttachmentMention,
   isAttachmentPath,
   unwrapMarkdownLinkDestination,
-} from "@/lib";
+} from "@/core";
 import { useAppContext } from "@/providers/AppProvider";
 import styles from "./ChatInput.module.css";
 
@@ -225,7 +229,10 @@ function serializeComposerDocument(doc: ProseMirrorNode): string {
   return serializeComposerFragment(doc.content);
 }
 
-function pushPendingLocalEcho(queueRef: React.MutableRefObject<string[]>, value: string) {
+function pushPendingLocalEcho(
+  queueRef: React.MutableRefObject<string[]>,
+  value: string,
+) {
   if (queueRef.current[queueRef.current.length - 1] === value) {
     return;
   }
@@ -546,7 +553,10 @@ async function readClipboardTextValue(): Promise<string> {
   }
 }
 
-export const InputTextarea = forwardRef<ChatInputEditorHandle, InputTextareaProps>(
+export const InputTextarea = forwardRef<
+  ChatInputEditorHandle,
+  InputTextareaProps
+>(
   (
     {
       value,
@@ -570,9 +580,7 @@ export const InputTextarea = forwardRef<ChatInputEditorHandle, InputTextareaProp
     const pendingLocalValuesRef = useRef<string[]>([]);
     const maxHeight = `${LINE_HEIGHT * (isExpanded ? 15 : 10) + INPUT_VERTICAL_PADDING}px`;
     const showExpandButton =
-      isExpanded ||
-      value.includes("\n") ||
-      value.length > 220;
+      isExpanded || value.includes("\n") || value.length > 220;
 
     useEffect(() => {
       onChangeRef.current = onChange;
@@ -642,7 +650,11 @@ export const InputTextarea = forwardRef<ChatInputEditorHandle, InputTextareaProp
       }
 
       await navigator.clipboard.writeText(selectedText);
-      editor.chain().focus(undefined, { scrollIntoView: false }).deleteSelection().run();
+      editor
+        .chain()
+        .focus(undefined, { scrollIntoView: false })
+        .deleteSelection()
+        .run();
     }, [getSelectedMarkdown]);
 
     const pasteFromClipboard = useCallback(async () => {
@@ -836,7 +848,9 @@ export const InputTextarea = forwardRef<ChatInputEditorHandle, InputTextareaProp
           redoHistory(nextEditor.state, nextEditor.view.dispatch);
         },
         hasSelection: () =>
-          Boolean(editorRef.current && !editorRef.current.state.selection.empty),
+          Boolean(
+            editorRef.current && !editorRef.current.state.selection.empty,
+          ),
       }),
       [copySelection, cutSelection, insertRawText, pasteFromClipboard],
     );

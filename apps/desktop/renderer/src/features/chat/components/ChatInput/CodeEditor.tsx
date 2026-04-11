@@ -9,12 +9,12 @@ import { CornerDownLeft, Eraser, FolderOpen } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
-import { CodeBlock, WidgetOverlay, WidgetOverlayIconButton } from "@/components";
 import {
-  ACCEPTED_EXTENSIONS,
-  getExtension,
-  isImageExtension,
-} from "@/lib";
+  CodeBlock,
+  WidgetOverlay,
+  WidgetOverlayIconButton,
+} from "@/components";
+import { ACCEPTED_EXTENSIONS, getExtension, isImageExtension } from "@/core";
 import styles from "./CodeEditor.module.css";
 
 const NON_CODE_IMPORT_EXTENSIONS = new Set([
@@ -114,7 +114,10 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         path: selectedPath,
       });
       if (!isText) {
-        console.warn("[CodeEditor] Selected file is not a text file:", selectedPath);
+        console.warn(
+          "[CodeEditor] Selected file is not a text file:",
+          selectedPath,
+        );
         return;
       }
 
@@ -135,13 +138,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
     } catch (error) {
       console.error("[CodeEditor] Failed to import code:", error);
     }
-  }, [
-    focusEditorAtEnd,
-    language,
-    onLanguageChange,
-    onValueChange,
-    value,
-  ]);
+  }, [focusEditorAtEnd, language, onLanguageChange, onValueChange, value]);
 
   const handleInsert = useCallback(() => {
     onInsert(language.trim() || "text", value);

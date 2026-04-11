@@ -5,7 +5,7 @@
  */
 
 import { useState } from "react";
-import { ModelType } from "@/lib";
+import { ModelType } from "@/core";
 
 export const useAppDrafts = () => {
   const [input, setInput] = useState("");

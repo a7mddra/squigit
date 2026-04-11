@@ -7,7 +7,7 @@
 import React from "react";
 import { TextContextMenu } from "@/layout";
 import { useTextEditor, useTextContextMenu } from "@/hooks";
-import { UserPreferences } from "@/lib";
+import { UserPreferences } from "@/core";
 import styles from "./PersonalizationSection.module.css";
 
 interface PersonalizationSectionProps {

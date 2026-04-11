@@ -6,7 +6,7 @@
 
 import React from "react";
 import { LoadingSpinner } from "@/components";
-import type { ChatSearchResult } from "@/lib";
+import type { ChatSearchResult } from "@/core";
 import {
   type ChatGroup,
   formatSearchRowDate,

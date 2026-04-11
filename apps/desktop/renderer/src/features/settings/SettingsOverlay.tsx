@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 import { invoke } from "@tauri-apps/api/core";
-import { UserPreferences, github } from "@/lib";
+import { UserPreferences, github } from "@/core";
 import { WidgetOverlay, WidgetOverlayIconButton } from "@/components";
 
 import {

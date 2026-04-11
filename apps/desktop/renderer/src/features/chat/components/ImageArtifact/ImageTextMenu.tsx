@@ -13,7 +13,7 @@ import React, {
   useImperativeHandle,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { generateSearchUrl, generateTranslateUrl } from "@/lib";
+import { generateSearchUrl, generateTranslateUrl } from "@/core";
 import { InlineMenu } from "@/components";
 
 interface OCRBox {

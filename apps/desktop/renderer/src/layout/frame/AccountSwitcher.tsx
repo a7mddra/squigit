@@ -5,7 +5,7 @@
  */
 
 import React, { useRef, useEffect, useState } from "react";
-import { Profile } from "@/lib";
+import { Profile } from "@/core";
 import { Dialog } from "@/components";
 import { Avatar } from "./Avatar";
 import {

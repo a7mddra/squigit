@@ -6,7 +6,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { Message, ToolStep, Citation, PendingAssistantTurn } from "@/features";
-import { appendChatMessage } from "@/lib";
+import { appendChatMessage } from "@/core";
 
 export const useChatState = (enabled: boolean) => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -32,7 +32,9 @@ export const useChatState = (enabled: boolean) => {
       value:
         | PendingAssistantTurn
         | null
-        | ((previous: PendingAssistantTurn | null) => PendingAssistantTurn | null),
+        | ((
+            previous: PendingAssistantTurn | null,
+          ) => PendingAssistantTurn | null),
     ) => {
       setPendingAssistantTurnState((previous) => {
         const next =

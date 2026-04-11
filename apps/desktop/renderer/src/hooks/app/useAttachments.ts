@@ -6,8 +6,8 @@
 
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { Attachment } from "@/lib";
-import { attachmentFromPath } from "@/lib";
+import type { Attachment } from "@/core";
+import { attachmentFromPath } from "@/core";
 
 function filterImageAttachments(attachments: Attachment[]): Attachment[] {
   return attachments.filter((attachment) => attachment.type === "image");
@@ -21,7 +21,10 @@ export function useAttachments() {
   }, []);
 
   const addAttachments = useCallback((newOnes: Attachment[]) => {
-    setAttachmentsState((prev) => [...prev, ...filterImageAttachments(newOnes)]);
+    setAttachmentsState((prev) => [
+      ...prev,
+      ...filterImageAttachments(newOnes),
+    ]);
   }, []);
 
   const removeAttachment = useCallback((id: string) => {

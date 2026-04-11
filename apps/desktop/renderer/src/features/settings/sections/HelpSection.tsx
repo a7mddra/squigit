@@ -7,8 +7,8 @@
 import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion, getTauriVersion } from "@tauri-apps/api/app";
-import { github } from "@/lib";
-import { prepareGitHubIssueReport, prepareMailReport } from "@/lib";
+import { github } from "@/core";
+import { prepareGitHubIssueReport, prepareMailReport } from "@/core";
 import { MarkGithubIcon, MailIcon, BugIcon } from "@primer/octicons-react";
 import { CodeBlock } from "@/components";
 import { useAppContext } from "@/providers/AppProvider";

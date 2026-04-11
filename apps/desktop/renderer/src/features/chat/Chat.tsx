@@ -26,7 +26,7 @@ import {
   parseAttachmentPaths,
   stripImageAttachmentMentions,
   type Attachment,
-} from "@/lib";
+} from "@/core";
 import {
   useChatScroll,
   useInputHeight,
@@ -43,7 +43,9 @@ function getBaseName(path: string): string {
   return lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
 }
 
-function getVisibleImageProgressText(text: string | null | undefined): string | null {
+function getVisibleImageProgressText(
+  text: string | null | undefined,
+): string | null {
   const trimmed = text?.trim();
   if (!trimmed || trimmed === API_STATUS_TEXT.ANALYZING_IMAGE) {
     return null;
@@ -102,9 +104,8 @@ export const Chat: React.FC = () => {
   const [manuallyExpandedMessageIds, setManuallyExpandedMessageIds] = useState<
     Set<string>
   >(() => new Set());
-  const [loadedMessageCount, setLoadedMessageCount] = useState(
-    MESSAGE_WINDOW_CHUNK,
-  );
+  const [loadedMessageCount, setLoadedMessageCount] =
+    useState(MESSAGE_WINDOW_CHUNK);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
 
   // Refs
@@ -124,9 +125,9 @@ export const Chat: React.FC = () => {
   });
   const previousCommittedMessageIdsRef = useRef<string[]>([]);
   const collapseAllOnLoadRef = useRef(true);
-  const pendingHistoryPrependRef = useRef<{ previousScrollHeight: number } | null>(
-    null,
-  );
+  const pendingHistoryPrependRef = useRef<{
+    previousScrollHeight: number;
+  } | null>(null);
   const historyLoadTimerRef = useRef<number | null>(null);
   const latestCommittedMessageCountRef = useRef(app.chat.messages.length);
 
@@ -200,12 +201,10 @@ export const Chat: React.FC = () => {
     bottomAnchorRef,
     wasAtBottomRef,
   });
-  const [showLoadingOverlay, setShowLoadingOverlay] = useState(
-    isNavigationLoading,
-  );
-  const [isContentMounted, setIsContentMounted] = useState(
-    !isNavigationLoading,
-  );
+  const [showLoadingOverlay, setShowLoadingOverlay] =
+    useState(isNavigationLoading);
+  const [isContentMounted, setIsContentMounted] =
+    useState(!isNavigationLoading);
   const deferredMessages = useDeferredValue(app.chat.messages);
   const [pendingAssistantTurnBridge, setPendingAssistantTurnBridge] = useState(
     app.chat.pendingAssistantTurn,
@@ -230,7 +229,9 @@ export const Chat: React.FC = () => {
     0,
     visibleMessages.length - clampedLoadedMessageCount,
   );
-  const visibleWindowedMessages = visibleMessages.slice(messageWindowStartIndex);
+  const visibleWindowedMessages = visibleMessages.slice(
+    messageWindowStartIndex,
+  );
   const hasOlderHiddenMessages =
     app.chat.messages.length > visibleWindowedMessages.length;
   const showScrollToBottomButton =
@@ -257,7 +258,10 @@ export const Chat: React.FC = () => {
       if (anchor) {
         anchor.scrollIntoView({ behavior, block: "end", inline: "nearest" });
       } else {
-        const maxY = Math.max(0, container.scrollHeight - container.clientHeight);
+        const maxY = Math.max(
+          0,
+          container.scrollHeight - container.clientHeight,
+        );
         container.scrollTo({ top: maxY, behavior });
       }
       window.requestAnimationFrame(() => {
@@ -339,22 +343,19 @@ export const Chat: React.FC = () => {
 
     if (livePendingTurn) {
       lastPendingAssistantTurnRef.current = livePendingTurn;
-      setPendingAssistantTurnBridge((previous) =>
-        previous ? null : previous,
-      );
+      setPendingAssistantTurnBridge((previous) => (previous ? null : previous));
       return;
     }
 
     const lastPendingTurn = lastPendingAssistantTurnRef.current;
     if (!lastPendingTurn) {
-      setPendingAssistantTurnBridge((previous) =>
-        previous ? null : previous,
-      );
+      setPendingAssistantTurnBridge((previous) => (previous ? null : previous));
       return;
     }
 
     const wasCompletingTurn =
-      lastPendingTurn.phase === "complete" || lastPendingTurn.phase === "stopped";
+      lastPendingTurn.phase === "complete" ||
+      lastPendingTurn.phase === "stopped";
     const hasCommittedTurn = app.chat.messages.some(
       (message) => message.id === lastPendingTurn.id,
     );
@@ -366,9 +367,7 @@ export const Chat: React.FC = () => {
       return;
     }
 
-    setPendingAssistantTurnBridge((previous) =>
-      previous ? null : previous,
-    );
+    setPendingAssistantTurnBridge((previous) => (previous ? null : previous));
     lastPendingAssistantTurnRef.current = null;
   }, [app.chat.messages, app.chat.pendingAssistantTurn]);
 
@@ -496,7 +495,9 @@ export const Chat: React.FC = () => {
       }, HISTORY_LOAD_DELAY_MS);
     };
 
-    container.addEventListener("scroll", handleHistoryTopLoad, { passive: true });
+    container.addEventListener("scroll", handleHistoryTopLoad, {
+      passive: true,
+    });
     return () => {
       container.removeEventListener("scroll", handleHistoryTopLoad);
     };
@@ -639,8 +640,7 @@ export const Chat: React.FC = () => {
 
       const maxY = Math.max(0, container.scrollHeight - container.clientHeight);
       const y = Math.max(0, container.scrollTop);
-      const isAtBottomByPosition =
-        Math.abs(maxY - y) <= BOTTOM_SYNC_EPSILON_PX;
+      const isAtBottomByPosition = Math.abs(maxY - y) <= BOTTOM_SYNC_EPSILON_PX;
 
       if (!isAtBottomByPosition) {
         bottomStableSince = null;
@@ -1066,8 +1066,9 @@ export const Chat: React.FC = () => {
     ? imageProgressText
     : !isInitialRetryTurn &&
         isImageProgressVisible &&
-        delayedImageAttachmentStatus?.turnId === app.chat.pendingAssistantTurn?.id
-      ? delayedImageAttachmentStatus?.text ?? null
+        delayedImageAttachmentStatus?.turnId ===
+          app.chat.pendingAssistantTurn?.id
+      ? (delayedImageAttachmentStatus?.text ?? null)
       : null;
   const hasRunningToolStep = app.chat.streamingToolSteps.some(
     (step) => step.status === "running",
