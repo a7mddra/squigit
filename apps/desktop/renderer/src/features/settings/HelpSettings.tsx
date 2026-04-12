@@ -12,9 +12,9 @@ import { prepareGitHubIssueReport, prepareMailReport } from "@/core";
 import { MarkGithubIcon, MailIcon, BugIcon } from "@primer/octicons-react";
 import { CodeBlock } from "@/components/ui";
 import { useAppContext } from "@/app/providers/AppProvider";
-import styles from "./HelpSection.module.css";
+import styles from "./HelpSettings.module.css";
 
-export const HelpSection: React.FC = () => {
+export const HelpSettings: React.FC = () => {
   const app = useAppContext();
   const [sysInfo, setSysInfo] = useState<Record<string, string>>({
     [app.system.appName]: "v0.1.0",

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { PendingAssistantRequestKind, ToolStep } from "@/features";
+import type { PendingAssistantRequestKind, ToolStep } from "@/features/chat";
 import { API_STATUS_TEXT } from "@/core/helpers/api-status";
 
 const DEFAULT_THREAD_TITLE_NORMALIZED = "new thread";

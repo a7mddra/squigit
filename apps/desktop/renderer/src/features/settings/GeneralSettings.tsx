@@ -5,11 +5,11 @@
  */
 
 import React, { useState } from "react";
-import styles from "./GeneralSection.module.css";
-import { CapturePreview } from "@/features";
+import styles from "./GeneralSettings.module.css";
+import { CapturePreview } from "./components/CapturePreview";
 import { Dropdown, DropdownItem, DropdownSectionTitle } from "@/components/ui";
 
-interface GeneralSectionProps {
+interface GeneralSettingsProps {
   themePreference: "dark" | "light" | "system";
   onSetTheme: (theme: "dark" | "light" | "system") => void;
   autoExpandOCR: boolean;
@@ -20,7 +20,7 @@ interface GeneralSectionProps {
   onCaptureTypeChange: (type: "rectangular" | "squiggle") => void;
 }
 
-export const GeneralSection: React.FC<GeneralSectionProps> = ({
+export const GeneralSettings: React.FC<GeneralSettingsProps> = ({
   themePreference,
   onSetTheme,
   autoExpandOCR,

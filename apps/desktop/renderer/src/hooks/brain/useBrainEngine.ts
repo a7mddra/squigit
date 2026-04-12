@@ -11,7 +11,7 @@ import {
   PendingAssistantTurn,
   PendingAssistantRequestKind,
   ToolStep,
-} from "@/features";
+} from "@/features/chat";
 import {
   startBrainSessionStream,
   sendBrainMessage,

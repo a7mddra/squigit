@@ -16,7 +16,7 @@ import {
   SUPPORTED_OCR_MODEL_IDS,
   resolveOcrModelId,
 } from "@/core";
-import { type Citation, type Message, type ToolStep } from "@/features";
+import { type Citation, type Message, type ToolStep } from "@/features/chat";
 import type {
   ChatCitation,
   ChatToolStep,

@@ -40,10 +40,12 @@ import {
   ToolStep,
   MessageCollapseMode,
   PendingAssistantTurn,
+} from "../../chat.types";
+import {
   preprocessMarkdown,
   splitMarkdownAfterLastClosedFence,
-  remarkDisableIndentedCode,
-} from "@/features";
+} from "../../utils/markdownUtils";
+import { remarkDisableIndentedCode } from "../../utils/markdownPlugins";
 import styles from "./ChatBubble.module.css";
 import mdStyles from "./BubbleMD.module.css";
 import { ImageCollage } from "./ImageCollage";

@@ -13,28 +13,19 @@ import {
   HelpCircle,
   Sparkles,
 } from "lucide-react";
-
 import { invoke } from "@tauri-apps/api/core";
 import { UserPreferences, github } from "@/core";
 import { WidgetOverlay, WidgetOverlayIconButton } from "@/components/ui";
-
 import {
-  GeneralSection,
-  ModelsSection,
-  APIKeysSection,
-  PersonalizationSection,
-  HelpSection,
-} from "@/features";
-import { AppContextMenu } from "@/layout";
-
+  GeneralSettings,
+  ModelSettings,
+  APIKeySettings,
+  PersonalizationSettings,
+  HelpSettings,
+  SettingsSection,
+} from "@/features/settings";
+import { AppContextMenu } from "@/app/shell/menus/AppContextMenu";
 import styles from "./SettingsOverlay.module.css";
-
-export type SettingsSection =
-  | "general"
-  | "models"
-  | "apikeys"
-  | "personalization"
-  | "help";
 
 interface SettingsOverlayProps {
   isOpen: boolean;
@@ -178,7 +169,7 @@ export const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         }
       >
         {activeSection === "general" && (
-          <GeneralSection
+          <GeneralSettings
             themePreference={themePreference}
             onSetTheme={onSetTheme}
             autoExpandOCR={autoExpandOCR}
@@ -190,14 +181,14 @@ export const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
           />
         )}
         {activeSection === "models" && (
-          <ModelsSection
+          <ModelSettings
             localModel={defaultModel}
             ocrLanguage={defaultOcrLanguage}
             updatePreferences={updatePreferences}
           />
         )}
         {activeSection === "apikeys" && (
-          <APIKeysSection
+          <APIKeySettings
             providerApiKey={providerApiKey}
             imgbbKey={imgbbKey}
             onSetAPIKey={onSetAPIKey}
@@ -205,14 +196,14 @@ export const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
           />
         )}
         {activeSection === "personalization" && (
-          <PersonalizationSection
+          <PersonalizationSettings
             localPrompt={localPrompt}
             currentPrompt={currentPrompt}
             setLocalPrompt={setLocalPrompt}
             updatePreferences={updatePreferences}
           />
         )}
-        {activeSection === "help" && <HelpSection />}
+        {activeSection === "help" && <HelpSettings />}
       </WidgetOverlay>
       {contextMenu && (
         <AppContextMenu

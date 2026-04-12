@@ -15,7 +15,7 @@ import React, {
 } from "react";
 import { Terminal } from "lucide-react";
 import { useCodeHighlighter, useTextContextMenu, useKeyDown } from "@/hooks";
-import { TextContextMenu } from "@/layout";
+import { TextContextMenu } from  "@/app/shell/menus/TextContextMenu";
 import styles from "./CodeBlock.shared.module.css";
 
 const INDENT = "  ";

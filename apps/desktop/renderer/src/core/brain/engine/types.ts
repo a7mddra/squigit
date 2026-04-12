@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Message } from "@/features";
+import type { Message } from "@/features/chat";
 import type { BrainParsedError } from "../provider";
 
 export interface BrainStartupImage {

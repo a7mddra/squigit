@@ -10,7 +10,7 @@ import {
   AVAILABLE_MODELS,
   getInstalledModelIds,
   downloadModel,
-} from "@/features";
+} from "@/features/ocr";
 import { DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@/core";
 
 export const useOCRModels = () => {

@@ -7,9 +7,10 @@
 import React from "react";
 import { ChevronUp, Loader2 } from "lucide-react";
 import { GoogleLensIcon, TranslateIcon } from "@/components/icons";
-import { TextContextMenu } from "@/layout";
+import { TextContextMenu } from "@/app/shell/menus/TextContextMenu";
 import { useTextContextMenu, useTextEditor } from "@/hooks";
-import { OCRModelSwitcher, SettingsSection } from "@/features";
+import { OCRModelSwitcher } from "@/features/ocr";
+import { SettingsSection } from "@/features/settings";
 import styles from "./ImageArtifact.module.css";
 
 interface ImageSearchInputProps {

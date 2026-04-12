@@ -7,14 +7,16 @@
 import React, { useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { WidgetOverlay } from "@/components/ui";
-import { AppContextMenu } from "@/layout";
+import { AppContextMenu } from "@/app/shell/menus/AppContextMenu";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { MediaSidebar } from "./components/MediaSidebar";
-import { MediaImageViewer } from "./components/MediaImageViewer";
-import { MediaPdfViewer } from "./components/MediaPdfViewer";
-import { MediaTextViewer } from "./components/MediaTextViewer";
-import type { MediaViewerItem } from "./media.types";
+import {
+  MediaSidebar,
+  MediaImageViewer,
+  MediaPdfViewer,
+  MediaTextViewer,
+  MediaViewerItem,
+} from "@/features/media";
 import styles from "./MediaOverlay.module.css";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;

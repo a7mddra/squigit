@@ -9,11 +9,11 @@ import { Eye, EyeOff } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { google, github } from "@/core";
 import { GlowCard } from "@/components/ui";
-import { TextContextMenu } from "@/layout";
+import { TextContextMenu } from "@/app/shell/menus/TextContextMenu";
 import { useTextContextMenu, useTextEditor } from "@/hooks";
-import styles from "./APIKeysSection.module.css";
+import styles from "./APIKeySettings.module.css";
 
-interface APIKeysSectionProps {
+interface APIKeySettingsProps {
   providerApiKey: string;
   imgbbKey: string;
   isGuest?: boolean;
@@ -225,7 +225,7 @@ const ProviderRow = ({
     </div>
   );
 };
-export const APIKeysSection: React.FC<APIKeysSectionProps> = ({
+export const APIKeySettings: React.FC<APIKeySettingsProps> = ({
   providerApiKey,
   imgbbKey,
   onSetAPIKey,

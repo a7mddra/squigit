@@ -5,7 +5,9 @@
  */
 
 import React from "react";
-import { Welcome, Agreement, UpdateNotes, Chat, Gallery } from "@/features";
+import { Welcome, Agreement, UpdateNotes } from "@/features";
+import { Gallery } from "@/features/gallery";
+import { Chat } from "@/features/chat";
 import { useAppContext } from "../providers/AppProvider";
 
 const isOnboardingId = (id: string) => id.startsWith("__system_");

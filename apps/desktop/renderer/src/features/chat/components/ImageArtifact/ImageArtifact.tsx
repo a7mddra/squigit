@@ -14,16 +14,12 @@ import React, {
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { CloseCrossIcon } from "@/components/icons";
-import {
-  ImageToolbar,
-  ImageSearchInput,
-  OCRMenu,
-  type OCRMenuHandle,
-  OCRTextCanvas,
-  useTextSelection,
-  type SettingsSection,
-} from "@/features";
-import { usePlatform } from "@/hooks/core/usePlatform";
+import { ImageToolbar } from "./ImageToolbar";
+import { ImageSearchInput } from "./ImageSearchInput";
+import { OCRMenu, type OCRMenuHandle } from "./ImageTextMenu";
+import { OCRTextCanvas } from "@/features/ocr";
+import type { SettingsSection } from "@/features/settings";
+import { usePlatform, useOCRSelection } from "@/hooks";
 import styles from "./ImageArtifact.module.css";
 import { Dialog } from "@/components/ui";
 import {
@@ -275,7 +271,7 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
     ocrData[AUTO_OCR_DISABLED_MODEL_ID],
   );
 
-  const { svgRef, handleTextMouseDown } = useTextSelection({
+  const { svgRef, handleTextMouseDown } = useOCRSelection({
     data: displayData,
     onSelectionComplete: (selection: Selection) => {
       OCRMenuRef.current?.showStandardMenu(selection);

@@ -5,18 +5,22 @@
  */
 
 import React, { useCallback, useEffect, useState } from "react";
-import styles from "./ModelsSection.module.css";
+import styles from "./ModelSettings.module.css";
 import { Dropdown, DropdownItem, DropdownSectionTitle } from "@/components/ui";
 import { UserPreferences, DEFAULT_OCR_MODEL_ID, MODELS } from "@/core";
-import { OCRModelDownloader, useModelsStore, getModelById } from "@/features";
+import {
+  OCRModelDownloader,
+  useModelsStore,
+  getModelById,
+} from "@/features/ocr";
 
-interface ModelsSectionProps {
+interface ModelSettingsProps {
   localModel: string;
   ocrLanguage: string;
   updatePreferences: (updates: Partial<UserPreferences>) => void;
 }
 
-export const ModelsSection: React.FC<ModelsSectionProps> = ({
+export const ModelSettings: React.FC<ModelSettingsProps> = ({
   localModel,
   ocrLanguage,
   updatePreferences,

@@ -10,7 +10,6 @@ import {
   MessageCollapseMode,
   PendingAssistantTurn,
 } from "./chat.types";
-import { ChatBubble } from "@/features";
 import { TextShimmer } from "@/components/ui";
 import {
   API_STATUS_TEXT,
@@ -19,6 +18,7 @@ import {
   isQuickAnswerSuppressedProgressText,
 } from "@/core";
 import type { AttachmentAnalysisCounts } from "@/core";
+import { ChatBubble } from "./components/ChatBubble/ChatBubble";
 import styles from "./MessageList.module.css";
 
 const THINKING_LABEL = "Thinking";

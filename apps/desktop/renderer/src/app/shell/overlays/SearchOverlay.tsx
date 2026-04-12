@@ -14,9 +14,12 @@ import React, {
 import { WidgetOverlay } from "@/components/ui";
 import type { ChatMetadata, ChatSearchResult } from "@/core";
 import { useNavigationContext } from "@/app/context/AppNavigation";
-import { ChatsList } from "./components/ChatsList/ChatsList";
-import { SearchBar } from "./components/SearchBar/SearchBar";
-import { buildChatGroups, highlightTokensFromQuery } from "./search.utils";
+import {
+  ChatsList,
+  SearchBar,
+  buildChatGroups,
+  highlightTokensFromQuery,
+} from "@/features/search";
 import styles from "./SearchOverlay.module.css";
 
 const SEARCH_LIMIT = 80;
@@ -26,10 +29,7 @@ interface SearchOverlayProps {
   isOpen: boolean;
   onClose: () => void;
   chats: ChatMetadata[];
-  searchChats: (
-    query: string,
-    limit: number,
-  ) => Promise<ChatSearchResult[]>;
+  searchChats: (query: string, limit: number) => Promise<ChatSearchResult[]>;
 }
 
 export const SearchOverlay: React.FC<SearchOverlayProps> = ({

@@ -5,7 +5,7 @@
  */
 
 import { useState } from "react";
-import { SettingsSection } from "@/features";
+import { SettingsSection } from "@/features/settings";
 
 export const useSystemState = () => {
   const [appName, setAppName] = useState<string>("Squigit");

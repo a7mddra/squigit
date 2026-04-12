@@ -5,23 +5,20 @@
  */
 
 import React from "react";
-import { TextContextMenu } from "@/layout";
 import { useTextEditor, useTextContextMenu } from "@/hooks";
 import { UserPreferences } from "@/core";
-import styles from "./PersonalizationSection.module.css";
+import { TextContextMenu } from "@/app/shell/menus/TextContextMenu";
+import styles from "./PersonalizationSettings.module.css";
 
-interface PersonalizationSectionProps {
+interface PersonalizationSettingsProps {
   localPrompt: string;
   currentPrompt: string;
   setLocalPrompt: (prompt: string) => void;
   updatePreferences: (updates: Partial<UserPreferences>) => void;
 }
-export const PersonalizationSection: React.FC<PersonalizationSectionProps> = ({
-  localPrompt,
-  currentPrompt,
-  setLocalPrompt,
-  updatePreferences,
-}) => {
+export const PersonalizationSettings: React.FC<
+  PersonalizationSettingsProps
+> = ({ localPrompt, currentPrompt, setLocalPrompt, updatePreferences }) => {
   React.useEffect(() => {
     if (localPrompt === currentPrompt) return;
     const handler = setTimeout(() => {

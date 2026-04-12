@@ -7,8 +7,9 @@
 import React from "react";
 import { getDialogs, getUpdateAvailableDialog } from "@/core";
 import { Dialog } from "@/components/ui";
-import { MediaOverlay, SearchOverlay } from "@/features";
-import { AppContextMenu } from "@/layout";
+import { MediaOverlay } from "../shell/overlays/MediaOverlay";
+import { SearchOverlay } from "../shell/overlays/SearchOverlay";
+import { AppContextMenu } from "../shell/menus/AppContextMenu";
 import { useAppContext } from "../providers/AppProvider";
 
 export const AppDialogs: React.FC = () => {

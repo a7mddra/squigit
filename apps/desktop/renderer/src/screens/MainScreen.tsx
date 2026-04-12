@@ -5,8 +5,8 @@
  */
 
 import React from "react";
-import { SidePanel, TitleBar } from "@/layout";
-
+import { SidePanel } from "@/app/shell/panels/SidePanel";
+import { TitleBar } from "@/app/shell/frame/TitleBar";
 import styles from "./MainScreen.module.css";
 
 type MainScreenProps = {

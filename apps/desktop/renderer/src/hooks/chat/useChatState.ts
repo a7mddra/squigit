@@ -5,7 +5,12 @@
  */
 
 import { useCallback, useRef, useState } from "react";
-import { Message, ToolStep, Citation, PendingAssistantTurn } from "@/features";
+import {
+  Message,
+  ToolStep,
+  Citation,
+  PendingAssistantTurn,
+} from "@/features/chat";
 import { appendChatMessage } from "@/core";
 
 export const useChatState = (enabled: boolean) => {

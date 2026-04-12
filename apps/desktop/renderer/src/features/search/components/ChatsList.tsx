@@ -11,8 +11,8 @@ import {
   type ChatGroup,
   formatSearchRowDate,
   renderSnippetWithHighlights,
-} from "../../search.utils";
-import { ChatRow } from "../ChatRow/ChatRow";
+} from "../search.utils";
+import { ChatRow } from "./ChatRow";
 import styles from "./ChatsList.module.css";
 
 interface ChatsListProps {

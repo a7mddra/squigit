@@ -6,7 +6,8 @@
 
 import React, { useMemo } from "react";
 import { usePlatform } from "@/hooks";
-import { ChatBubble, Message, SettingsSection } from "@/features";
+import { ChatBubble, Message } from "@/features/chat";
+import { SettingsSection } from "@/features/settings";
 import { OnboardingLayout } from "../OnboardingLayout";
 
 import styles from "./Agreement.module.css";

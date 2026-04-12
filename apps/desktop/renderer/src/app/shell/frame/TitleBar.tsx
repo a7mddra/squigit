@@ -9,14 +9,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Box, Pin } from "lucide-react";
 import { SidePanelToggleIcon } from "@/components/icons";
-import { useAppContext } from "@/app/providers/AppProvider";
 import { usePlatform } from "@/hooks";
-import { SettingsPanel, SettingsOverlay } from "@/features";
 import { TrafficLights } from "./TrafficLights";
 import { WindowControls } from "./WindowControls";
 import { AccountSwitcher } from "./AccountSwitcher";
 import { AuthButton } from "./AuthButton";
-import { TitleBarContextMenu } from "@/layout";
+import { SettingsMenu } from "./SettingsMenu";
+import { useAppContext } from "../../providers/AppProvider";
+import { TitleBarContextMenu } from "../menus/TitleBarContextMenu";
+import { SettingsOverlay } from "../overlays/SettingsOverlay";
 import styles from "./TitleBar.module.css";
 
 export const TitleBar: React.FC = () => {
@@ -159,7 +160,7 @@ export const TitleBar: React.FC = () => {
               </button>
             )}
 
-            <SettingsPanel
+            <SettingsMenu
               onOpenSettings={app.system.openSettings}
               isSettingsOpen={app.system.isSettingsOpen}
               onCloseSettings={() => app.system.setSettingsOpen(false)}

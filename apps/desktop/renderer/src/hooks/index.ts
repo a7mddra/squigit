@@ -27,3 +27,14 @@ export * from "./brain/useBrainEngine";
 export * from "./brain/useBrainLifecycle";
 export * from "./brain/useBrainSession";
 export * from "./brain/useBrainTitle";
+
+export * from "./chat/useChat";
+export * from "./chat/useChatScroll";
+export * from "./chat/useChatInputHeight";
+export * from "./chat/useChatWheel";
+export * from "./chat/useChatError";
+export * from "./chat/useChatHistory";
+export * from "./chat/useChatState";
+
+export * from "./ocr/useOCRModels";
+export * from "./ocr/useOCRSelection";

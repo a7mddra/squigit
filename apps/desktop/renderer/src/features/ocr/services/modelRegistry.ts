@@ -5,7 +5,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { OcrModel, AVAILABLE_MODELS } from "@/features";
+import { OcrModel, AVAILABLE_MODELS } from "../ocr-models.types";
 
 /**
  * Fetches the list of all model IDs that are currently installed on disk.

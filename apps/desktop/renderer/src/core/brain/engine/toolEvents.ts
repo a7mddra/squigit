@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Citation, PendingAssistantTurn, ToolStep } from "@/features";
+import type { Citation, PendingAssistantTurn, ToolStep } from "@/features/chat";
 import type { ProviderStreamEvent } from "./types";
 
 type ToolEventHandlerOptions = {

@@ -18,16 +18,16 @@ import {
   DropdownAction,
   DropdownDivider,
 } from "@/components/ui";
-import styles from "./SettingsPanel.module.css";
-import { SettingsSection } from "@/features";
+import styles from "./SettingsMenu.module.css";
+import { SettingsSection } from "@/features/settings";
 
-interface SettingsPanelProps {
+interface SettingsMenuProps {
   onOpenSettings: (section: SettingsSection) => void;
   isSettingsOpen: boolean;
   onCloseSettings: () => void;
 }
 
-export const SettingsPanel: React.FC<SettingsPanelProps> = ({
+export const SettingsMenu: React.FC<SettingsMenuProps> = ({
   onOpenSettings,
   isSettingsOpen,
   onCloseSettings,
@@ -48,7 +48,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
   return (
     <Dropdown
-      className={styles.settingsPanel}
+      className={styles.settingsMenu}
       label={
         <span
           className={`${styles.triggerIconWrap} ${isOpen ? styles.iconActive : ""}`}

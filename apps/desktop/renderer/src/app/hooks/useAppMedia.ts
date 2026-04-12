@@ -12,7 +12,7 @@ import {
   type Attachment,
   unwrapMarkdownLinkDestination,
 } from "@/core";
-import { type MediaGalleryItem, type MediaViewerItem } from "@/features";
+import { type MediaGalleryItem, type MediaViewerItem } from "@/features/media";
 
 export type MediaViewerOpenOptions = {
   isGallery?: boolean;

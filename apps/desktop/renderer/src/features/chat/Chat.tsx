@@ -15,7 +15,13 @@ import React, {
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useAppContext } from "@/app/providers/AppProvider";
-import { useInlineMenu } from "@/hooks";
+import {
+  useInlineMenu,
+  useChatScroll,
+  useChatInputHeight,
+  useChatWheel,
+  useChatError,
+} from "@/hooks";
 import {
   API_STATUS_TEXT,
   ATTACHMENT_ANALYSIS_STATUS_DELAY_MS,
@@ -27,12 +33,7 @@ import {
   stripImageAttachmentMentions,
   type Attachment,
 } from "@/core";
-import {
-  useChatScroll,
-  useInputHeight,
-  useChatWheel,
-  useChatError,
-} from "@/features";
+
 import { ChatLayout } from "./ChatLayout";
 import { ChatContent } from "./ChatContent";
 import type { MessageCollapseMode } from "./chat.types";
@@ -142,7 +143,7 @@ export const Chat: React.FC = () => {
     app.chatHistory.activeSessionId,
   );
 
-  const { inputContainerRef, inputHeight } = useInputHeight();
+  const { inputContainerRef, inputHeight } = useChatInputHeight();
 
   useEffect(() => {
     if (app.system.startupImage) {

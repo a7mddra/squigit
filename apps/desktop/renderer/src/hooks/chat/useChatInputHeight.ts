@@ -6,7 +6,7 @@
 
 import { useState, useRef, useEffect } from "react";
 
-export function useInputHeight() {
+export function useChatInputHeight() {
   const inputContainerRef = useRef<HTMLDivElement>(null);
   const [inputHeight, setInputHeight] = useState(0);
   const lastHeightRef = useRef(0);

@@ -7,7 +7,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDown } from "lucide-react";
 import { useTextContextMenu } from "@/hooks";
-import { TextContextMenu } from "@/layout";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -17,6 +16,7 @@ import {
   isAcceptedExtension,
   isImageExtension,
 } from "@/core";
+import { TextContextMenu } from  "@/app/shell/menus/TextContextMenu";
 import { InputTextarea, type ChatInputEditorHandle } from "./InputTextarea";
 import { InputActions } from "./InputActions";
 import { ImageStrip } from "./ImageStrip";

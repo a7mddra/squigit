@@ -7,7 +7,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { getImagePath, type ChatMetadata, type Attachment } from "@/core";
 import { useMediaContext } from "@/app/context/AppMedia";
-import { Thumbnail } from "@/features";
+import { Thumbnail } from "./components/Thumbnail";
 import styles from "./Gallery.module.css";
 
 const SYSTEM_GALLERY_ID = "__system_gallery";

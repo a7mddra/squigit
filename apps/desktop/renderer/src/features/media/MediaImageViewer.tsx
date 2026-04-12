@@ -4,10 +4,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Minus, Plus, RotateCcw } from "lucide-react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Minus,
+  Plus,
+  RotateCcw,
+} from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import type { MediaGalleryItem } from "../media.types";
+import type { MediaGalleryItem } from "./media.types";
 import styles from "./MediaImageViewer.module.css";
 
 interface MediaImageViewerProps {
@@ -177,7 +189,8 @@ export const MediaImageViewer: React.FC<MediaImageViewerProps> = ({
     }
   };
 
-  const clampZoom = (value: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+  const clampZoom = (value: number) =>
+    Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
 
   const updateZoom = (next: number) => {
     setZoom(clampZoom(next));
@@ -321,7 +334,11 @@ export const MediaImageViewer: React.FC<MediaImageViewerProps> = ({
       </div>
 
       {canUseGalleryNavigation && (
-        <div className={styles.thumbnailStrip} role="tablist" aria-label="Gallery thumbnails">
+        <div
+          className={styles.thumbnailStrip}
+          role="tablist"
+          aria-label="Gallery thumbnails"
+        >
           {resolvedGalleryItems.map((item, index) => (
             <button
               key={`${item.path}-${index}`}

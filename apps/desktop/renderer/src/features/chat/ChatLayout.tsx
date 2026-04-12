@@ -7,7 +7,8 @@
 import React, { type RefObject } from "react";
 import { InlineMenu, LoadingSpinner } from "@/components/ui";
 import type { Attachment, OcrFrame } from "@/core";
-import { ChatInput, ImageArtifact } from "@/features";
+import { ChatInput } from "./components/ChatInput/ChatInput";
+import { ImageArtifact } from "./components/ImageArtifact/ImageArtifact";
 import styles from "./Chat.module.css";
 
 type StartupImage = {

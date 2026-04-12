@@ -27,11 +27,11 @@ import {
   SidePanelNewThreadIcon,
   SidePanelSquigitsIcon,
 } from "@/components/icons";
-import { ChatMetadata, getDeleteMultipleChatsDialog } from "@/core";
-import { useAppContext } from "@/app/providers/AppProvider";
 import { Dialog, LoadingSpinner } from "@/components/ui";
-import { PanelContextMenu } from "@/layout";
 import { useKeyDown, usePlatform } from "@/hooks";
+import { ChatMetadata, getDeleteMultipleChatsDialog } from "@/core";
+import { PanelContextMenu } from "../menus/PanelContextMenu";
+import { useAppContext } from "../../providers/AppProvider";
 import styles from "./SidePanel.module.css";
 
 const Checkbox: React.FC<{ checked: boolean; onChange: () => void }> = ({

@@ -7,12 +7,12 @@
 import React from "react";
 import { Dialog, TextShimmer } from "@/components/ui";
 import { API_STATUS_TEXT, type AttachmentAnalysisCounts } from "@/core";
-import { MessageList } from "@/features";
 import type {
   Message,
   MessageCollapseMode,
   PendingAssistantTurn,
 } from "./chat.types";
+import { MessageList } from "./MessageList";
 import styles from "./Chat.module.css";
 
 interface ChatContentProps {

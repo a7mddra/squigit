@@ -11,15 +11,15 @@ interface OCRBox {
   box: number[][];
 }
 
-interface UseTextSelectionParams {
+interface UseOCRSelectionParams {
   data: OCRBox[];
   onSelectionComplete?: (selection: Selection) => void;
 }
 
-export const useTextSelection = ({
+export const useOCRSelection = ({
   data,
   onSelectionComplete,
-}: UseTextSelectionParams) => {
+}: UseOCRSelectionParams) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const isCustomSelectingRef = useRef(false);
   const selectionModeRef = useRef<"char" | "word" | "line">("char");

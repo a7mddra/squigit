@@ -25,8 +25,9 @@ import {
   useBrainTitle,
   useSystemSync,
   useUpdateCheck,
+  useChat,
+  useChatHistory,
 } from "@/hooks";
-import { useChat, useChatHistory } from "@/features";
 import { useAppBusyGuard } from "./useAppBusyGuard";
 import { useAppCapture } from "./useAppCapture";
 import { useAppContextMenu } from "./useAppContextMenu";
