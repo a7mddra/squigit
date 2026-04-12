@@ -193,6 +193,7 @@ export const TitleBar: React.FC = () => {
                   profiles={app.system.profiles}
                   onSwitchProfile={app.handleSwitchProfile}
                   onAddAccount={app.handleAddAccount}
+                  onCancelAuth={app.system.cancelAuth}
                   onLogout={app.performLogout}
                   onDeleteProfile={app.system.deleteProfile}
                   switchingProfileId={app.system.switchingProfileId}

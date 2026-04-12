@@ -5,10 +5,15 @@
 
 use std::fs::{self, File};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use serde::Serialize;
 
 use crate::error::{ProfileError, Result};
 use crate::types::{Profile, ProfileIndex};
+
+const APP_DIR_NAME: &str = "squigit";
 
 /// Storage directory name under the app config.
 const STORAGE_DIR: &str = "Local Storage";
@@ -40,12 +45,18 @@ impl ProfileStore {
     pub fn new() -> Result<Self> {
         let base_dir = dirs::config_dir()
             .ok_or(ProfileError::NoConfigDir)?
-            .join("Squigit".to_lowercase())
+            .join(APP_DIR_NAME)
             .join(STORAGE_DIR);
 
+        Self::with_base_dir(base_dir)
+    }
+
+    /// Create a profile store using an explicit base directory.
+    ///
+    /// This is primarily intended for tests and future CLI integration.
+    pub fn with_base_dir(base_dir: PathBuf) -> Result<Self> {
         let index_path = base_dir.join(INDEX_FILE);
 
-        // Ensure base directory exists
         fs::create_dir_all(&base_dir)?;
 
         Ok(Self {
@@ -73,6 +84,54 @@ impl ProfileStore {
         self.get_profile_dir(profile_id).join("chats")
     }
 
+    /// Get the provider key file path for a profile.
+    pub fn get_provider_key_path(&self, profile_id: &str, provider: &str) -> PathBuf {
+        self.get_profile_dir(profile_id)
+            .join(format!("{}_key.json", provider))
+    }
+
+    fn temp_path_for(&self, path: &Path) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let file_name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("temp");
+        path.with_file_name(format!(".{}.tmp-{}-{}", file_name, std::process::id(), suffix))
+    }
+
+    pub(crate) fn write_json_atomic<T: Serialize>(&self, path: &Path, value: &T) -> Result<()> {
+        let json = serde_json::to_vec_pretty(value)?;
+        self.write_bytes_atomic(path, &json)
+    }
+
+    pub(crate) fn write_bytes_atomic(&self, path: &Path, bytes: &[u8]) -> Result<()> {
+        let parent = path.parent().ok_or_else(|| {
+            ProfileError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Path has no parent: {}", path.display()),
+            ))
+        })?;
+        fs::create_dir_all(parent)?;
+
+        let temp_path = self.temp_path_for(path);
+        {
+            let mut temp_file = File::create(&temp_path)?;
+            temp_file.write_all(bytes)?;
+            temp_file.sync_all()?;
+        }
+
+        #[cfg(windows)]
+        if path.exists() {
+            fs::remove_file(path)?;
+        }
+
+        fs::rename(&temp_path, path)?;
+        Ok(())
+    }
+
     // =========================================================================
     // Index Operations
     // =========================================================================
@@ -90,10 +149,7 @@ impl ProfileStore {
 
     /// Save the profile index to disk.
     fn save_index(&self, index: &ProfileIndex) -> Result<()> {
-        let json = serde_json::to_string_pretty(index)?;
-        let mut file = File::create(&self.index_path)?;
-        file.write_all(json.as_bytes())?;
-        Ok(())
+        self.write_json_atomic(&self.index_path, index)
     }
 
     /// Get the ID of the currently active profile.
@@ -114,6 +170,7 @@ impl ProfileStore {
 
         index.active_profile_id = Some(profile_id.to_string());
         self.save_index(&index)?;
+        self.touch_profile(profile_id)?;
         Ok(())
     }
 
@@ -137,19 +194,26 @@ impl ProfileStore {
         let profile_dir = self.get_profile_dir(&profile.id);
         fs::create_dir_all(&profile_dir)?;
 
-        // Save profile data
         let profile_path = profile_dir.join(PROFILE_FILE);
-        let json = serde_json::to_string_pretty(profile)?;
-        let mut file = File::create(&profile_path)?;
-        file.write_all(json.as_bytes())?;
+        let existing = self.get_profile(&profile.id)?;
+        let mut stored_profile = profile.clone();
+        if let Some(existing_profile) = existing {
+            stored_profile.created_at = existing_profile.created_at;
+            if stored_profile.avatar.is_none() {
+                stored_profile.avatar = existing_profile.avatar;
+            }
+            if stored_profile.original_avatar.is_none() {
+                stored_profile.original_avatar = existing_profile.original_avatar;
+            }
+        }
 
-        // Update index
+        self.write_json_atomic(&profile_path, &stored_profile)?;
+
         let mut index = self.load_index()?;
-        index.add(profile.id.clone());
+        index.add(stored_profile.id.clone());
 
-        // Set as active if this is the first profile
         if index.active_profile_id.is_none() {
-            index.active_profile_id = Some(profile.id.clone());
+            index.active_profile_id = Some(stored_profile.id.clone());
         }
 
         self.save_index(&index)?;
@@ -167,6 +231,20 @@ impl ProfileStore {
         let content = fs::read_to_string(&profile_path)?;
         let profile: Profile = serde_json::from_str(&content)?;
         Ok(Some(profile))
+    }
+
+    /// Find a profile by email address.
+    ///
+    /// Profile IDs are derived from normalized email addresses, so this
+    /// performs a deterministic lookup and verifies the profile exists.
+    pub fn find_profile_by_email(&self, email: &str) -> Result<Option<Profile>> {
+        let normalized = email.trim();
+        if normalized.is_empty() {
+            return Ok(None);
+        }
+
+        let profile_id = Profile::id_from_email(normalized);
+        self.get_profile(&profile_id)
     }
 
     /// Get the currently active profile.
@@ -214,7 +292,6 @@ impl ProfileStore {
             fs::remove_dir_all(&profile_dir)?;
         }
 
-        // Update index
         index.remove(profile_id);
         self.save_index(&index)?;
 
@@ -232,22 +309,27 @@ impl ProfileStore {
         let index = self.load_index()?;
         Ok(index.profile_ids.len())
     }
+
+    fn touch_profile(&self, profile_id: &str) -> Result<()> {
+        let Some(mut profile) = self.get_profile(profile_id)? else {
+            return Ok(());
+        };
+        profile.touch();
+        let profile_path = self.get_profile_dir(profile_id).join(PROFILE_FILE);
+        self.write_json_atomic(&profile_path, &profile)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
+    use tempfile::tempdir;
 
     fn temp_store() -> ProfileStore {
-        let temp_dir = env::temp_dir().join(format!("test_{}", std::process::id()));
-        let base_dir = temp_dir.join(STORAGE_DIR);
-        fs::create_dir_all(&base_dir).unwrap();
-
-        ProfileStore {
-            base_dir: base_dir.clone(),
-            index_path: base_dir.join(INDEX_FILE),
-        }
+        let temp_dir = tempdir().unwrap();
+        let root = temp_dir.path().to_path_buf();
+        std::mem::forget(temp_dir);
+        ProfileStore::with_base_dir(root.join(STORAGE_DIR)).unwrap()
     }
 
     #[test]
@@ -268,8 +350,12 @@ mod tests {
             store.get_active_profile_id().unwrap(),
             Some(profile.id.clone())
         );
+    }
 
-        // Cleanup
-        fs::remove_dir_all(store.base_dir.parent().unwrap()).ok();
+    #[test]
+    fn test_provider_key_path() {
+        let store = temp_store();
+        let path = store.get_provider_key_path("profile1", "imgbb");
+        assert!(path.ends_with("profile1/imgbb_key.json"));
     }
 }

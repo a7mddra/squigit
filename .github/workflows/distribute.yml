@@ -119,23 +119,12 @@ jobs:
           tar -xvzf qt-capture-${{ matrix.target }}/capture-sidecar.tar.gz
           rm qt-capture-${{ matrix.target }}/capture-sidecar.tar.gz
 
-      - name: Inject Credentials
-        shell: bash
-        env:
-          CREDENTIALS_JSON: ${{ secrets['CREDENTIALS_JSON'] || '' }}
-        run: |
-          if [ -n "$CREDENTIALS_JSON" ]; then
-            echo "$CREDENTIALS_JSON" > apps/desktop/src/data/credentials.json
-          else
-            echo "CREDENTIALS_JSON secret is not set! Using example file."
-            cp apps/desktop/src/data/credentials.example.json apps/desktop/src/data/credentials.json
-          fi
-
       - name: Build Tauri Desktop
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
           NO_STRIP: "true"
           SQUIGIT_TAURI_DEBUG: "1"
+          SQUIGIT_GOOGLE_CREDENTIALS_JSON: ${{ secrets['CREDENTIALS_JSON'] || '' }}
         run: |
           echo "Build debug flags:"
           echo "  APPIMAGE_EXTRACT_AND_RUN=${APPIMAGE_EXTRACT_AND_RUN}"

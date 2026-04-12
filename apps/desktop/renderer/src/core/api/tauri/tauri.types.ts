@@ -9,12 +9,6 @@ export interface ImageResponse {
   mimeType: string;
 }
 
-export interface UserData {
-  name: string;
-  email: string;
-  avatar: string;
-}
-
 export interface Profile {
   id: string;
   name: string;

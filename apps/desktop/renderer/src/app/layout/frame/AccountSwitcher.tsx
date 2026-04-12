@@ -15,6 +15,7 @@ import {
   Check,
   Loader2,
   Trash2,
+  X,
 } from "lucide-react";
 import styles from "./AccountSwitcher.module.css";
 
@@ -24,6 +25,7 @@ interface AccountSwitcherProps {
   onSwitchProfile: (profileId: string) => void;
   onNewSession: () => void;
   onAddAccount: () => void;
+  onCancelAuth?: () => void;
   onLogout: () => void;
   onDeleteProfile: (profileId: string) => Promise<void>;
   switchingProfileId?: string | null;
@@ -34,11 +36,13 @@ export const AccountSwitcher: React.FC<AccountSwitcherProps> = ({
   profiles,
   onSwitchProfile,
   onAddAccount,
+  onCancelAuth,
   onLogout,
   onDeleteProfile,
   switchingProfileId,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isTriggerHovered, setIsTriggerHovered] = useState(false);
   const [profileToDelete, setProfileToDelete] = useState<string | null>(null);
   const [deletingProfileId, setDeletingProfileId] = useState<string | null>(
     null,
@@ -81,14 +85,30 @@ export const AccountSwitcher: React.FC<AccountSwitcherProps> = ({
     }
   };
 
-  const isSwitching = !!switchingProfileId;
+  const isAddingAccount = switchingProfileId === "creating_account";
+  const isSwitchingProfile = !!switchingProfileId && !isAddingAccount;
+  const showCancelAuth = isAddingAccount && isTriggerHovered && !!onCancelAuth;
+
+  const handleTriggerClick = () => {
+    if (showCancelAuth && onCancelAuth) {
+      onCancelAuth();
+      return;
+    }
+
+    if (!isSwitchingProfile && !isAddingAccount) {
+      setIsOpen(!isOpen);
+    }
+  };
 
   return (
     <div className={styles.accountSwitcher} ref={containerRef}>
       <button
         className={`${styles.trigger} ${styles.triggerGlobal} ${isOpen ? styles.active : ""}`}
-        onClick={() => !isSwitching && setIsOpen(!isOpen)}
-        disabled={isSwitching}
+        onClick={handleTriggerClick}
+        onMouseEnter={() => setIsTriggerHovered(true)}
+        onMouseLeave={() => setIsTriggerHovered(false)}
+        disabled={isSwitchingProfile}
+        title={showCancelAuth ? "Cancel Google sign-in" : undefined}
       >
         <div className={styles.avatar}>
           <Avatar
@@ -99,7 +119,19 @@ export const AccountSwitcher: React.FC<AccountSwitcherProps> = ({
             profileId={activeProfile?.id}
           />
         </div>
-        {isSwitching ? (
+        {isAddingAccount ? (
+          showCancelAuth ? (
+            <X
+              size={18}
+              className={`${styles.chevron} ${styles.chevronClr} ${styles.cancelIcon}`}
+            />
+          ) : (
+            <Loader2
+              size={18}
+              className={`${styles.chevron} ${styles.chevronClr} ${styles.spin}`}
+            />
+          )
+        ) : isSwitchingProfile ? (
           <Loader2
             size={18}
             className={`${styles.chevron} ${styles.chevronClr} ${styles.spin}`}
@@ -183,14 +215,24 @@ export const AccountSwitcher: React.FC<AccountSwitcherProps> = ({
 
         <div className={styles.actions}>
           <button
-            className={styles.actionButton}
+            className={`${styles.actionButton} ${isAddingAccount ? styles.actionButtonLoading : ""}`}
             onClick={() => {
-              onAddAccount();
-              setIsOpen(false);
+              if (!isAddingAccount) {
+                onAddAccount();
+                setIsOpen(false);
+              }
             }}
+            disabled={isAddingAccount || isSwitchingProfile}
+            title={isAddingAccount ? "Google sign-in is in progress" : undefined}
           >
-            <UserPlus size={16} />
-            <span>Add another account</span>
+            {isAddingAccount ? (
+              <Loader2 size={16} className={styles.spin} />
+            ) : (
+              <UserPlus size={16} />
+            )}
+            <span>
+              {isAddingAccount ? "Waiting for Google..." : "Add another account"}
+            </span>
           </button>
 
           <button

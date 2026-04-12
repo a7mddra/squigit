@@ -1,20 +1,35 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs::{self, File};
+use std::str::FromStr;
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use tauri::{AppHandle, State};
+use ops_profile_store::auth::{self, AuthFlowSettings};
+use ops_profile_store::security::ApiKeyProvider;
+use ops_profile_store::{ProfileError, ProfileStore};
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, State};
 
-use crate::services::auth;
-use crate::services::security;
 use crate::state::AppState;
-use crate::utils::get_app_config_dir;
 
 const MISSING_CREDENTIALS_PREFIX: &str = "Google authentication is not configured in this build.";
 
+#[derive(Debug, Clone, Serialize)]
+struct AuthFailureData {
+    error: String,
+    cancelled: bool,
+}
+
+fn build_auth_settings() -> AuthFlowSettings {
+    AuthFlowSettings::new(
+        crate::constants::APP_NAME,
+        Arc::new(|url| crate::utils::open_url(url).map_err(ProfileError::Auth)),
+    )
+}
+
 fn log_auth_error(error: &str) {
     if error.starts_with(MISSING_CREDENTIALS_PREFIX) {
-        // Missing credentials are already logged in services/auth.rs with
+        // Missing credentials are already logged in ops-profile-store with
         // contributor setup instructions.
         return;
     }
@@ -36,17 +51,16 @@ pub async fn start_google_auth(app: AppHandle, state: State<'_, AppState>) -> Re
     state.auth_cancelled.store(false, Ordering::SeqCst);
     let auth_lock = state.auth_running.clone();
     let auth_cancelled = state.auth_cancelled.clone();
+    let app_for_success = app.clone();
 
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let config_dir = get_app_config_dir(&app);
-        if !config_dir.exists() {
-            match fs::create_dir_all(&config_dir) {
-                Ok(_) => {}
-                Err(e) => return Err(e.to_string()),
-            }
-        }
-
-        auth::start_google_auth_flow(app, config_dir, auth_cancelled)
+    let result = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        let store = ProfileStore::new().map_err(|err| err.to_string())?;
+        let settings = build_auth_settings();
+        let user_data =
+            auth::start_google_auth_flow(&store, &settings, auth_cancelled).map_err(|err| err.to_string())?;
+        app_for_success.emit("auth-success", &user_data)
+            .map_err(|err| err.to_string())?;
+        Ok(())
     })
     .await;
 
@@ -55,6 +69,14 @@ pub async fn start_google_auth(app: AppHandle, state: State<'_, AppState>) -> Re
     let result = result.map_err(|e| e.to_string())?;
     if let Err(ref e) = result {
         log_auth_error(e);
+        let is_cancelled = e.contains("cancelled") || e.contains("expired");
+        let payload = AuthFailureData {
+            error: e.clone(),
+            cancelled: is_cancelled,
+        };
+        if let Err(emit_err) = app.emit("auth-failure", &payload) {
+            eprintln!("[auth] failed to emit auth-failure: {}", emit_err);
+        }
     }
     result
 }
@@ -67,17 +89,13 @@ pub async fn cancel_google_auth(_app: AppHandle, state: State<'_, AppState>) -> 
 
     // Mark as cancelled so late callbacks are rejected
     state.auth_cancelled.store(true, Ordering::SeqCst);
+    let cancel_url = build_auth_settings().cancel_url();
 
     // Trigger the cancellation by sending a request to the local server
-    tauri::async_runtime::spawn_blocking(|| {
+    tauri::async_runtime::spawn_blocking(move || {
         let client = reqwest::blocking::Client::new();
         // Fire and forget - if it fails, the server might already be down
-        let _ = client
-            .get(format!(
-                "http://localhost:3000/{}-cancel",
-                crate::constants::APP_NAME.to_lowercase()
-            ))
-            .send();
+        let _ = client.get(cancel_url).send();
     })
     .await
     .map_err(|e| e.to_string())?;
@@ -90,9 +108,7 @@ pub async fn cancel_google_auth(_app: AppHandle, state: State<'_, AppState>) -> 
 #[tauri::command]
 pub async fn logout(_app: AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        // Clear active profile in index (Guest mode)
-        // Profile data stays on disk for re-login
-        if let Ok(store) = ops_profile_store::ProfileStore::new() {
+        if let Ok(store) = ProfileStore::new() {
             let _ = store.clear_active_profile_id();
         }
         Ok(())
@@ -102,36 +118,19 @@ pub async fn logout(_app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn get_user_data(app: AppHandle) -> serde_json::Value {
-    let config_dir = get_app_config_dir(&app);
-    let profile_path = config_dir.join("profile.json");
-
-    if profile_path.exists() {
-        if let Ok(file) = File::open(profile_path) {
-            if let Ok(json) = serde_json::from_reader(file) {
-                return json;
-            }
-        }
-    }
-
-    serde_json::json!({
-        "name": "Guest User",
-        "email": "Not logged in",
-        "avatar": ""
-    })
-}
-
-#[tauri::command]
 pub async fn get_api_key(
-    app: AppHandle,
     provider: String,
     profile_id: String,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        security::get_decrypted_key_internal(&app, &provider, &profile_id).unwrap_or_default()
+        let store = ProfileStore::new().map_err(|err| err.to_string())?;
+        let provider = ApiKeyProvider::from_str(&provider).map_err(|err| err.to_string())?;
+        let key = ops_profile_store::security::get_decrypted_key(&store, provider, &profile_id)
+            .map_err(|err| err.to_string())?;
+        Ok::<String, String>(key.unwrap_or_default())
     })
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?
 }
 
 /// Cache an avatar image from a remote URL to local CAS storage.
@@ -143,56 +142,8 @@ pub async fn cache_avatar(
     profile_id: Option<String>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        // Download image
-        let client = reqwest::blocking::Client::new();
-        let response = client
-            .get(&url)
-            .send()
-            .map_err(|e| format!("Failed to download avatar: {}", e))?;
-
-        if !response.status().is_success() {
-            return Err(format!(
-                "Failed to download avatar: HTTP {}",
-                response.status()
-            ));
-        }
-
-        let bytes = response
-            .bytes()
-            .map_err(|e| format!("Failed to read avatar bytes: {}", e))?;
-
-        // Initialize profile store
-        let profile_store = ops_profile_store::ProfileStore::new()
-            .map_err(|e| format!("Failed to initialize profile store: {}", e))?;
-
-        // Determine target profile ID: explicit > active > error
-        let target_id = match profile_id {
-            Some(id) => id,
-            None => profile_store
-                .get_active_profile_id()
-                .map_err(|e| e.to_string())?
-                .ok_or_else(|| "No active profile and no profile ID provided.".to_string())?,
-        };
-
-        // Get storage directory for the target profile
-        let chats_dir = profile_store.get_chats_dir(&target_id);
-        let storage = ops_chat_storage::ChatStorage::with_base_dir(chats_dir)
-            .map_err(|e| format!("Failed to initialize storage: {}", e))?;
-
-        // Store image
-        let stored_image = storage
-            .store_image(&bytes, None)
-            .map_err(|e| format!("Failed to store avatar: {}", e))?;
-
-        let local_path = stored_image.path.clone();
-
-        // Update profile with new avatar path
-        if let Some(mut profile) = profile_store.get_profile(&target_id).ok().flatten() {
-            profile.avatar = Some(local_path.clone());
-            let _ = profile_store.upsert_profile(&profile);
-        }
-
-        Ok(local_path)
+        let store = ProfileStore::new().map_err(|err| err.to_string())?;
+        auth::cache_avatar(&store, &url, profile_id.as_deref()).map_err(|err| err.to_string())
     })
     .await
     .map_err(|e| e.to_string())?

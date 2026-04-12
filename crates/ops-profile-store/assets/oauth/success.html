@@ -15,7 +15,7 @@
       href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="icon" type="image/png" href="${faviconHref}" />
     <style>
       * {
         box-sizing: border-box;
@@ -87,7 +87,7 @@
         font-family: "Google Sans", "Roboto", sans-serif;
         font-size: 28px;
         font-weight: 400;
-        color: var(--title-color, #d93025);
+        color: var(--title-color, #202124);
         margin-bottom: 24px;
         letter-spacing: normal;
       }
@@ -141,6 +141,40 @@
         margin-bottom: 8px;
       }
 
+      .feedback-container {
+        margin-top: 48px;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        font-size: 14px;
+        color: #5f6368;
+      }
+      .icon-btn {
+        cursor: pointer;
+        padding: 8px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background-color 0.2s;
+        margin-left: 4px;
+        border: none;
+        background: transparent;
+        color: #5f6368;
+      }
+      .icon-btn:hover {
+        background-color: rgba(95, 99, 104, 0.08);
+      }
+      .icon-btn svg {
+        transition:
+          fill 0.2s ease,
+          stroke 0.2s ease;
+      }
+      .icon-btn.active svg {
+        fill: #5f6368;
+        stroke: #5f6368;
+      }
+
       @media (max-width: 600px) {
         .content-container {
           padding: 24px;
@@ -170,14 +204,50 @@
         <h1>${title}</h1>
 
         ${bodyContent}
+
+        <div class="feedback-container">
+          <span style="margin-right: 8px">Was this helpful?</span>
+          <button class="icon-btn" id="likeBtn" aria-label="Yes">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"
+              ></path>
+            </svg>
+          </button>
+          <button class="icon-btn" id="dislikeBtn" aria-label="No">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"
+              ></path>
+            </svg>
+          </button>
+        </div>
       </div>
     </main>
     <footer>
       <div class="footer-content">
         <p>
-          The authentication request could not be completed as expected. This
-          may happen if the request timed out or was cancelled from Squigit.
-          Please close this tab and try signing in again.
+          This page confirms that your identity has been verified securely.
+          Squigit prioritizes your data privacy and uses industry-standard
+          encryption for all tokens. Please ensure you are on a trusted network.
         </p>
         <p>
           Except as otherwise noted, the content of this application is licensed
@@ -191,5 +261,21 @@
         </p>
       </div>
     </footer>
+    <script>
+      const likeBtn = document.getElementById("likeBtn");
+      const dislikeBtn = document.getElementById("dislikeBtn");
+      if (likeBtn && dislikeBtn) {
+        likeBtn.addEventListener("click", () => {
+          const isActive = likeBtn.classList.contains("active");
+          likeBtn.classList.toggle("active", !isActive);
+          dislikeBtn.classList.remove("active");
+        });
+        dislikeBtn.addEventListener("click", () => {
+          const isActive = dislikeBtn.classList.contains("active");
+          dislikeBtn.classList.toggle("active", !isActive);
+          likeBtn.classList.remove("active");
+        });
+      }
+    </script>
   </body>
 </html>

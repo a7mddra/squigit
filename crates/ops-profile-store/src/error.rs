@@ -28,6 +28,22 @@ pub enum ProfileError {
     #[error("Invalid profile ID: {0}")]
     InvalidProfileId(String),
 
+    /// API key provider name is unknown.
+    #[error("Invalid API key provider: {0}")]
+    InvalidProvider(String),
+
+    /// Google authentication is not configured.
+    #[error("{0}")]
+    MissingCredentials(String),
+
+    /// Authentication flow failed.
+    #[error("{0}")]
+    Auth(String),
+
+    /// Security or encryption operation failed.
+    #[error("{0}")]
+    Security(String),
+
     /// IO error during file operations.
     #[error("IO error: {0}")]
     Io(#[from] io::Error),
@@ -35,4 +51,12 @@ pub enum ProfileError {
     /// JSON serialization/deserialization error.
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
+
+    /// HTTP or network failure during auth/avatar fetches.
+    #[error("Network error: {0}")]
+    Network(#[from] reqwest::Error),
+
+    /// Invalid URL encountered during auth flow construction/parsing.
+    #[error("URL error: {0}")]
+    Url(#[from] url::ParseError),
 }

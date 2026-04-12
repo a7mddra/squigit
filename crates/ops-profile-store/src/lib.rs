@@ -40,10 +40,14 @@
 //! store.set_active_profile_id(&profile.id).unwrap();
 //! ```
 
+pub mod auth;
 pub mod error;
+pub mod security;
 pub mod store;
 pub mod types;
 
 pub use error::{ProfileError, Result};
 pub use store::ProfileStore;
 pub use types::{Profile, ProfileIndex};
+pub use auth::{AuthFlowSettings, AuthSuccessData, BrowserOpener, CredentialsSource};
+pub use security::{ApiKeyProvider, validate_api_key};

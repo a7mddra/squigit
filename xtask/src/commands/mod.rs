@@ -6,4 +6,5 @@ pub mod clean;
 pub mod dev;
 pub mod report;
 pub mod setup;
+pub mod test;
 pub mod version;

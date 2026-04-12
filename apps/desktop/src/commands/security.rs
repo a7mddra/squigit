@@ -1,6 +1,10 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
+use ops_profile_store::security::ApiKeyProvider;
+use ops_profile_store::ProfileStore;
 use tauri::{AppHandle, Manager};
 
 #[tauri::command]
@@ -10,14 +14,17 @@ pub fn check_file_exists(path: String) -> bool {
 
 #[tauri::command]
 pub async fn encrypt_and_save(
-    app: AppHandle,
+    _app: AppHandle,
     profile_id: String,
     provider: String,
     plaintext: String,
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        crate::services::security::encrypt_and_save_key(&app, &plaintext, &provider, &profile_id)
+        let store = ProfileStore::new().map_err(|err| err.to_string())?;
+        let provider = ApiKeyProvider::from_str(&provider).map_err(|err| err.to_string())?;
+        ops_profile_store::security::encrypt_and_save_key(&store, &profile_id, provider, &plaintext)
             .map(|_| ())
+            .map_err(|err| err.to_string())
     })
     .await
     .map_err(|e| e.to_string())?

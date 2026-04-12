@@ -13,6 +13,7 @@ pub struct ProfileInfo {
     pub name: String,
     pub email: String,
     pub avatar: Option<String>,
+    pub original_avatar: Option<String>,
 }
 
 impl From<Profile> for ProfileInfo {
@@ -22,6 +23,7 @@ impl From<Profile> for ProfileInfo {
             name: p.name,
             email: p.email,
             avatar: p.avatar,
+            original_avatar: p.original_avatar,
         }
     }
 }

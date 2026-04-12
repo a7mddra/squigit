@@ -13,9 +13,7 @@ pub mod constants;
 pub mod services;
 
 use commands::audio::play_ui_sound;
-use commands::auth::{
-    cache_avatar, cancel_google_auth, get_api_key, get_user_data, logout, start_google_auth,
-};
+use commands::auth::{cache_avatar, cancel_google_auth, get_api_key, logout, start_google_auth};
 use commands::capture::{spawn_capture, spawn_capture_to_input};
 use commands::chat::{
     append_chat_message, create_chat, delete_chat, detect_image_tone, get_image_path,
@@ -96,7 +94,6 @@ pub fn run() {
             start_google_auth,
             cancel_google_auth,
             logout,
-            get_user_data,
             cache_avatar,
             // Brain
             brain::provider::commands::chat::stream_chat,

@@ -5,7 +5,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { Profile, UserData } from "./tauri.types";
+import { Profile } from "./tauri.types";
 export * from "./tauri.types";
 
 export const commands = {
@@ -33,7 +33,6 @@ export const commands = {
   startGoogleAuth: () => invoke("start_google_auth"),
   cancelGoogleAuth: () => invoke("cancel_google_auth"),
   logout: () => invoke("logout"),
-  getUserData: () => invoke<UserData>("get_user_data"),
 
   // Profile Management
   getActiveProfile: () => invoke<Profile | null>("get_active_profile"),

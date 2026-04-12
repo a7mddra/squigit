@@ -5,11 +5,17 @@
  */
 
 import { commands } from "@/core/api/tauri";
+import { listen } from "@tauri-apps/api/event";
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 type AuthStage = "LOADING" | "LOGIN" | "AUTHENTICATED";
 let hasLoggedMissingAuthConfig = false;
+
+type AuthFailurePayload = {
+  error: string;
+  cancelled: boolean;
+};
 
 export const useAuth = () => {
   const [authStage, setAuthStage] = useState<AuthStage>("LOADING");
@@ -56,6 +62,41 @@ export const useAuth = () => {
 export const useSystemAuth = (
   setSwitchingProfileId: (id: string | null) => void,
 ) => {
+  useEffect(() => {
+    let cancelled = false;
+
+    const attachFailureListener = async () => {
+      const unlisten = await listen<AuthFailurePayload>(
+        "auth-failure",
+        (event) => {
+          if (cancelled) return;
+
+          setSwitchingProfileId(null);
+
+          if (!event.payload?.cancelled) {
+            console.error("Google auth failed:", event.payload?.error);
+          }
+        },
+      );
+
+      if (cancelled) {
+        unlisten();
+      }
+
+      return unlisten;
+    };
+
+    let cleanup: (() => void) | undefined;
+    attachFailureListener().then((unlisten) => {
+      cleanup = unlisten;
+    });
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, [setSwitchingProfileId]);
+
   const addAccount = async () => {
     setSwitchingProfileId("creating_account");
 
