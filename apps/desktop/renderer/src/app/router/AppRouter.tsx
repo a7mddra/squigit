@@ -8,7 +8,7 @@ import React, { useEffect } from "react";
 import { usePlatform } from "@/hooks";
 import { useAppContext } from "../providers/AppProvider";
 import { MainScreen } from "../shell/screens/MainScreen";
-import { AppRoutes } from "./routes";
+import { AppRoutes } from "./AppRoutes";
 import { AppDialogs } from "./dialogs";
 
 import "katex/dist/katex.min.css";

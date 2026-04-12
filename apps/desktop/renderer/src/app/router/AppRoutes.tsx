@@ -5,12 +5,14 @@
  */
 
 import React from "react";
+import {
+  ChatRoute,
+  GalleryRoute,
+  HomeRoute,
+  UpdateNotesRoute,
+  WelcomeRoute,
+} from "./routes";
 import { useAppContext } from "../providers/AppProvider";
-import { ChatRoute } from "./routes/chatroute/ChatRoute";
-import { GalleryRoute } from "./routes/galleryroute/GalleryRoute";
-import { HomeRoute } from "./routes/onboarding/HomeRoute";
-import { UpdateNotesRoute } from "./routes/onboarding/UpdateNotesRoute";
-import { WelcomeRoute } from "./routes/onboarding/WelcomeRoute";
 
 const isOnboardingId = (id: string) => id.startsWith("__system_");
 
