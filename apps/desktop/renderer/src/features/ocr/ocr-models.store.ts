@@ -9,7 +9,7 @@ import { OcrModelStatus, AVAILABLE_MODELS } from "./ocr-models.types";
 import { getInstalledModelIds } from "./services/modelRegistry";
 import { downloadModel } from "./services/modelDownloader";
 
-import { commands } from "@/core/api/tauri";
+import { commands } from "@/platform/tauri";
 import { DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@/core/config";
 
 interface DownloadProgressPayload {

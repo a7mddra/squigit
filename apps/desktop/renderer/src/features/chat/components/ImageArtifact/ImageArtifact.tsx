@@ -22,7 +22,7 @@ import type { SettingsSection } from "@/features/settings";
 import { usePlatform } from "@/hooks/shared";
 import styles from "./ImageArtifact.module.css";
 import { Dialog } from "@/components/ui";
-import { useGoogleLens, generateTranslateUrl } from "@/core/api/google";
+import { GoogleLensService, generateTranslateUrl } from "@/core/services/google";
 import { DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@/core/config";
 import {
   getErrorDialog,
@@ -244,7 +244,7 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
   }, [displayedThumbPath, imageSrc, startupImage?.path]);
 
   const { isLensLoading, triggerLens, showAuthDialog, setShowAuthDialog } =
-    useGoogleLens(
+    GoogleLensService(
       startupImage,
       sessionLensUrl,
       setSessionLensUrl,

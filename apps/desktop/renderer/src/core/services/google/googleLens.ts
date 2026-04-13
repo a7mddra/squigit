@@ -9,7 +9,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { uploadToImgBB, generateLensUrl } from "./lens.google";
 
-export const useGoogleLens = (
+export const GoogleLensService = (
   startupImage: {
     path: string;
     mimeType: string;
@@ -99,12 +99,12 @@ export const useGoogleLens = (
     try {
       setIsLensLoading(true);
       console.log(
-        "[useGoogleLens] triggerLens called with activeProfileId:",
+        "[GoogleLensService] triggerLens called with activeProfileId:",
         activeProfileId,
       );
 
       if (!activeProfileId) {
-        console.error("[useGoogleLens] No active profile ID!");
+        console.error("[GoogleLensService] No active profile ID!");
         setShowAuthDialog(true);
         setIsLensLoading(false);
         return;
@@ -116,7 +116,7 @@ export const useGoogleLens = (
       });
 
       console.log(
-        "[useGoogleLens] Retrieved API key for imgbb:",
+        "[GoogleLensService] Retrieved API key for imgbb:",
         apiKey ? "FOUND" : "EMPTY",
       );
 

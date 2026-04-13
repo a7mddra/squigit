@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { commands } from "@/core/api/tauri";
+import { commands } from "@/platform/tauri";
 import { resolveOcrModelId } from "@/core/config";
 import {
   AUTO_OCR_DISABLED_MODEL_ID,

@@ -5,7 +5,7 @@
  */
 
 import { useState } from "react";
-import { commands, type Profile } from "@/core/api/tauri";
+import { commands, type Profile } from "@/platform/tauri";
 
 export const useSystemProfile = () => {
   const [activeProfile, setActiveProfile] = useState<Profile | null>(null);

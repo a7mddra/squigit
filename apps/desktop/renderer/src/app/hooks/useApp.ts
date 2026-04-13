@@ -15,8 +15,8 @@ import {
   overwriteChatMessages,
 } from "@/core/storage";
 import type { Attachment } from "@/core/helpers";
+import { github } from "@/core/services";
 import {
-  github,
   resolveOcrModelId,
   SUPPORTED_OCR_MODEL_IDS,
 } from "@/core/config";

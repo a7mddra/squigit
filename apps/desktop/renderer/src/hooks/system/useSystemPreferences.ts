@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { commands } from "@/core/api/tauri";
+import { commands } from "@/platform/tauri";
 import { DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@/core/config";
 import {
   type UserPreferences,

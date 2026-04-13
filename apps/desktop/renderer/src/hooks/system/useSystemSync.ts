@@ -7,7 +7,7 @@
 import { useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { commands } from "@/core/api/tauri";
+import { commands } from "@/platform/tauri";
 import { loadPreferences, hasAgreedFlag, setAgreedFlag } from "@/core/storage";
 import { resolveOcrModelId } from "@/core/config";
 import { initializeBrainProvider } from "@/core/brain";

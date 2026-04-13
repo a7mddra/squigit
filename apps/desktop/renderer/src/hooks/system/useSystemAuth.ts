@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { commands } from "@/core/api/tauri";
+import { commands } from "@/platform/tauri";
 import { listen } from "@tauri-apps/api/event";
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";

@@ -19,7 +19,7 @@ export interface DialogAction {
   disabled?: boolean;
 }
 
-import { commands } from "@/core/api/tauri";
+import { commands } from "@/platform/tauri";
 import { getDialogs, type DialogContent } from "@/core/helpers";
 
 interface DialogProps {

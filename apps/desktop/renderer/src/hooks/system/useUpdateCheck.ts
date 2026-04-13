@@ -6,7 +6,7 @@
 
 import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { github } from "@/core/config";
+import { github } from "@/core/services";
 import packageJson from "@/../package.json";
 
 const TAURI_CHANGELOG_URL = github.rawChangelog;
