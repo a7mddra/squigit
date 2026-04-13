@@ -10,7 +10,7 @@ import {
   ToolStep,
   Citation,
   PendingAssistantTurn,
-} from "@/features/chat";
+} from "@/core/brain/engine/";
 import { appendChatMessage } from "@/core/config";
 
 export const useChatState = (enabled: boolean) => {

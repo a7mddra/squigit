@@ -10,12 +10,12 @@ import {
   API_STATUS_TEXT,
   type AttachmentAnalysisCounts,
 } from "@/core/helpers";
+import { MessageList } from "@/features/chat";
 import {
-  MessageList,
   type Message,
   type MessageCollapseMode,
   type PendingAssistantTurn,
-} from "@/features/chat";
+} from "@/core/brain/engine";
 import styles from "./ChatRoute.module.css";
 
 interface ChatRouteContentProps {

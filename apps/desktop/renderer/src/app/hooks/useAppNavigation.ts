@@ -17,7 +17,7 @@ import {
   ChatCitation,
   ChatToolStep,
 } from "@/core/config";
-import { type Citation, type Message, type ToolStep } from "@/features/chat";
+import { type Citation, type Message, type ToolStep } from "@/core/brain/engine";
 
 const SYSTEM_GALLERY_ID = "__system_gallery";
 const isOnboardingId = (id: string) => id.startsWith("__system_");

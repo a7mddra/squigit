@@ -6,5 +6,4 @@
 
 export * from "./app-settings.ts";
 export * from "./chat-storage.ts";
-export * from "./chat-types.ts";
 export * from "./models-config.ts";

@@ -5,13 +5,20 @@
  */
 
 export type {
+  Message,
+  ToolStep,
+  Citation,
+  AssistantTurnPhase,
+  PendingAssistantRequestKind,
+  PendingAssistantTurn,
+  MessageCollapseMode,
   BrainEngineHandle,
   BrainLifecycleState,
   BrainParsedError,
   BrainSessionSnapshot,
   BrainStartupImage,
   ProviderContent,
-  ProviderStreamEvent,
+  ProviderStreamEvent
 } from "./types";
 
 export {

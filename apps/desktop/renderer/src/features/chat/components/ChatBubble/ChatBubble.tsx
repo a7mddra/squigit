@@ -40,7 +40,7 @@ import {
   ToolStep,
   MessageCollapseMode,
   PendingAssistantTurn,
-} from "@/core/config";
+} from "@/core/brain/engine";
 import {
   preprocessMarkdown,
   splitMarkdownAfterLastClosedFence,

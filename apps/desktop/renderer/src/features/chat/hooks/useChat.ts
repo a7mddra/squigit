@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Message } from "@/features/chat";
+import { Message } from "@/core/brain/engine";
 import { useBrainSession } from "@/core/brain/hooks";
 
 export const useChat = ({

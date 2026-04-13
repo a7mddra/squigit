@@ -37,7 +37,7 @@ import {
   type Attachment,
 } from "@/core/brain/session/attachments";
 
-import type { MessageCollapseMode } from "@/features/chat";
+import type { MessageCollapseMode } from "@/core/brain/engine";
 
 import { ChatRouteLayout } from "./ChatRouteLayout";
 import { ChatRouteContent } from "./ChatRouteContent";

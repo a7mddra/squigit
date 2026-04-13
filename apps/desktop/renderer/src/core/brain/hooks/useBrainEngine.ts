@@ -11,7 +11,7 @@ import {
   PendingAssistantTurn,
   PendingAssistantRequestKind,
   ToolStep,
-} from "@/features/chat";
+} from "@/core/brain/engine";
 import {
   cancelActiveProviderRequest as cancelActiveBrainRequest,
   DEFAULT_PROVIDER_FALLBACK_MODEL_ID as DEFAULT_BRAIN_FALLBACK_MODEL_ID,

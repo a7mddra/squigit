@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Message, PendingAssistantTurn } from "@/features/chat";
+import type { Message, PendingAssistantTurn } from "@/core/brain/engine";
 
 export function buildCommittedAssistantMessage(
   turn: PendingAssistantTurn,
