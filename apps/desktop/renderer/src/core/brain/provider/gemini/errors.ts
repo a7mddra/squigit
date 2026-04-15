@@ -104,7 +104,7 @@ export function getFriendlyProviderErrorMessage(
     searchStr.includes("failed to fetch") ||
     searchStr.includes("load failed")
   ) {
-    return "Unable to reach the AI service right now. Please check your internet connection and try again.";
+    return "Something went wrong. Please check your internet connection and try again.";
   }
 
   return message || fallback;
