@@ -88,6 +88,10 @@ export function getFriendlyProviderErrorMessage(
     return getProviderHighDemandMessage();
   }
 
+  if (searchStr.includes("permission to access the file")) {
+    return "You don't have permission to access the image file (likely due to an API key switch). Please retry the message or start a new thread to re-upload the image.";
+  }
+
   if (
     searchStr.includes("429") ||
     searchStr.includes("quota") ||
@@ -143,6 +147,15 @@ export function parseProviderError(error: any): BrainParsedError {
     searchStr.includes("permission denied") ||
     searchStr.includes("permission_denied")
   ) {
+    if (searchStr.includes("permission to access the file")) {
+      return {
+        title: "File Access Denied",
+        message: "You don't have permission to access the image file. This usually happens when you switch to a different API key. Please retry the message to re-upload the image.",
+        code: "403",
+        actionType: "RETRY_ONLY",
+      };
+    }
+
     return {
       title: "Account Issue",
       message:
@@ -166,7 +179,7 @@ export function parseProviderError(error: any): BrainParsedError {
     return {
       title: "Connection Error",
       message:
-        "Unable to reach the AI service. Please check your internet connection.",
+        "Something went wrong. Please check your internet connection.",
       actionType: "RETRY_ONLY",
     };
   }

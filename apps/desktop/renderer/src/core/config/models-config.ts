@@ -6,6 +6,7 @@
 
 export const MODEL_IDS = {
   PRIMARY_FAST: "gemini-3.1-flash-lite-preview",
+  SECONDARY_FAST: "gemini-3-flash-preview",
   PRIMARY_REASONING: "gemini-3.1-pro-preview",
 } as const;
 
@@ -35,7 +36,9 @@ export const resolveModelId = (
   modelId?: string | null,
   fallback: string = DEFAULT_MODEL_ID,
 ): string => {
-  const aliasedModelId = modelId ? LEGACY_MODEL_ID_ALIASES[modelId] ?? modelId : modelId;
+  const aliasedModelId = modelId
+    ? (LEGACY_MODEL_ID_ALIASES[modelId] ?? modelId)
+    : modelId;
   if (aliasedModelId && isSupportedModelId(aliasedModelId)) {
     return aliasedModelId;
   }

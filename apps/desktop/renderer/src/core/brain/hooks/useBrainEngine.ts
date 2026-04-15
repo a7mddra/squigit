@@ -21,6 +21,7 @@ import {
   shouldFallbackToDefaultProviderModel as shouldFallbackToDefaultBrainModel,
   startProviderSessionStream as startBrainSessionStream,
 } from "../provider";
+import { MODEL_IDS } from "@/core/config/models-config";
 
 import {
   advanceStreamCursorByWords,
@@ -333,14 +334,14 @@ export const useBrainEngine = (config: {
   };
 
   const runWithHighDemandRetries = async <T>(
-    run: () => Promise<T>,
+    run: (attempt: number) => Promise<T>,
     signal?: AbortSignal,
   ): Promise<T> => {
     let retriesUsed = 0;
 
     while (true) {
       try {
-        return await run();
+        return await run(retriesUsed);
       } catch (error: any) {
         if (error?.message === "CANCELLED" || isRequestAborted(signal)) {
           throw new Error("CANCELLED");
@@ -847,9 +848,9 @@ export const useBrainEngine = (config: {
         modelId,
       );
       const responseText = await runWithHighDemandRetries(
-        () =>
+        (attempt) =>
           startBrainSessionStream(
-            modelId,
+            attempt === HIGH_DEMAND_RETRY_ATTEMPTS ? MODEL_IDS.SECONDARY_FAST : modelId,
             imgData.path,
             (token: string) => {
               if (signal.aborted) return;
@@ -967,9 +968,9 @@ export const useBrainEngine = (config: {
 
       const toolTracker = createToolEventHandler(resetPendingRawText);
 
-      const responseText = await runWithHighDemandRetries(() =>
+      const responseText = await runWithHighDemandRetries((attempt) =>
         startBrainSessionStream(
-          config.currentModel,
+            attempt === HIGH_DEMAND_RETRY_ATTEMPTS ? MODEL_IDS.SECONDARY_FAST : config.currentModel,
           startupImage.path,
           (token: string) => {
             appendPendingRawText(token);
@@ -1011,10 +1012,10 @@ export const useBrainEngine = (config: {
 
     try {
       const toolTracker = createToolEventHandler(resetPendingRawText);
-      const responseText = await runWithHighDemandRetries(() =>
+      const responseText = await runWithHighDemandRetries((attempt) =>
         sendBrainMessage(
           lastSentMessage.text,
-          undefined,
+          attempt === HIGH_DEMAND_RETRY_ATTEMPTS ? MODEL_IDS.SECONDARY_FAST : undefined,
           (token: string) => {
             appendPendingRawText(token);
           },
@@ -1059,10 +1060,10 @@ export const useBrainEngine = (config: {
 
     try {
       const toolTracker = createToolEventHandler(resetPendingRawText);
-      const responseText = await runWithHighDemandRetries(() =>
+      const responseText = await runWithHighDemandRetries((attempt) =>
         sendBrainMessage(
           userText,
-          modelId,
+          attempt === HIGH_DEMAND_RETRY_ATTEMPTS ? MODEL_IDS.SECONDARY_FAST : modelId,
           (token: string) => {
             appendPendingRawText(token);
           },
@@ -1118,11 +1119,11 @@ export const useBrainEngine = (config: {
         msgIndex === 0 ? "initial" : "retry",
         requestStartedAtMs,
       );
-      const responseText = await runWithHighDemandRetries(() =>
+      const responseText = await runWithHighDemandRetries((attempt) =>
         retryBrainMessage(
           msgIndex,
           messages,
-          retryModelId,
+          attempt === HIGH_DEMAND_RETRY_ATTEMPTS ? MODEL_IDS.SECONDARY_FAST : retryModelId,
           config.chatId,
           (token: string) => {
             appendPendingRawText(token);

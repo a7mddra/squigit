@@ -10,7 +10,7 @@ export interface AttachmentAnalysisCounts {
 }
 
 export const ATTACHMENT_ANALYSIS_STATUS_DELAY_MS = 1800;
-export const HIGH_DEMAND_RETRY_DELAYS_MS = [1500, 3000, 4500] as const;
+export const HIGH_DEMAND_RETRY_DELAYS_MS = [1000, 2000] as const;
 export const HIGH_DEMAND_RETRY_ATTEMPTS = HIGH_DEMAND_RETRY_DELAYS_MS.length;
 const ANALYZED_STATUS_PREFIX = "Analyzed ";
 

@@ -81,14 +81,17 @@ export const retryFromMessage = async (
       const generateAndSaveBrief = async () => {
         let attempt = 0;
         let lastError = null;
-        while (attempt < 5) {
+        const delays = [1000, 2000];
+        while (attempt < 3) {
           try {
             const providerApiKey = brainSessionStore.storedApiKey;
             const storedImagePath = brainSessionStore.storedImagePath;
             if (!providerApiKey || !storedImagePath) return "";
+            const modelToUse = attempt === 2 ? (await import("@/core/config/models-config")).MODEL_IDS.SECONDARY_FAST : (await import("@/core/config/models-config")).MODEL_IDS.PRIMARY_FAST;
             const brief = await generateGeminiImageBrief(
               providerApiKey,
               storedImagePath,
+              modelToUse
             );
             if (brief) {
               if (chatId) {
@@ -108,10 +111,8 @@ export const retryFromMessage = async (
             );
             lastError = e;
             attempt++;
-            if (attempt < 5) {
-              await new Promise((r) =>
-                setTimeout(r, 1000 * Math.pow(2, attempt - 1)),
-              );
+            if (attempt < 3) {
+              await new Promise((r) => setTimeout(r, delays[attempt - 1]));
             }
           }
         }

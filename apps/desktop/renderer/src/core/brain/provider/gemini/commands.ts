@@ -31,8 +31,9 @@ export function streamGeminiChat(input: StreamGeminiChatInput): Promise<void> {
 export function generateGeminiImageBrief(
   apiKey: string,
   imagePath: string,
+  model?: string,
 ): Promise<string> {
-  return invoke<string>("generate_image_brief", { apiKey, imagePath });
+  return invoke<string>("generate_image_brief", { apiKey, imagePath, model });
 }
 
 export function generateGeminiChatTitle(

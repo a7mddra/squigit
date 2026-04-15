@@ -26,9 +26,11 @@ pub async fn ensure_file_uploaded(
         .unwrap_or("unknown")
         .to_string();
 
+    let cache_key = format!("{}_{}", cas_hash, &api_key[api_key.len().saturating_sub(6)..]);
+
     {
         let cache_lock = cache.lock().await;
-        if let Some(file_ref) = cache_lock.get(&cas_hash) {
+        if let Some(file_ref) = cache_lock.get(&cache_key) {
             if !is_uri_expired(file_ref) {
                 return Ok(file_ref.clone());
             }
@@ -46,7 +48,7 @@ pub async fn ensure_file_uploaded(
     let new_ref = upload_file_to_gemini(api_key, &resolved_str, mime_type, &display_name).await?;
 
     let mut cache_lock = cache.lock().await;
-    cache_lock.insert(cas_hash, new_ref.clone());
+    cache_lock.insert(cache_key, new_ref.clone());
 
     Ok(new_ref)
 }

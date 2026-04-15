@@ -103,11 +103,12 @@ pub async fn generate_image_brief(
     state: tauri::State<'_, crate::state::AppState>,
     api_key: String,
     image_path: String,
+    model: Option<String>,
 ) -> Result<String, String> {
     use crate::brain::context::builder::get_image_brief_prompt;
 
     let brief_prompt = get_image_brief_prompt()?;
-    let lite_model = crate::constants::DEFAULT_MODEL;
+    let lite_model = model.unwrap_or_else(|| crate::constants::DEFAULT_MODEL.to_string());
 
     println!("[ImageBrief] Generating brief using model: {}", lite_model);
 
