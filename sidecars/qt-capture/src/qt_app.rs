@@ -1,8 +1,8 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, Result};
 use crate::audio_guard::AudioGuard;
+use anyhow::{Context, Result};
 use std::env;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, ExitCode, Stdio};
@@ -48,8 +48,6 @@ impl QtApp {
     pub fn run(&mut self) -> Result<ExitCode> {
         let _lock = InstanceLock::try_acquire("qt-capture")
             .context("Failed to acquire instance lock - is another capture running?")?;
-
-        AudioGuard::mute();
 
         let mut child = self.spawn_process()?;
         let child_pid = child.id();
@@ -105,7 +103,12 @@ impl QtApp {
                             continue;
                         }
                         match trimmed {
-                            "REQ_MUTE" => {}
+                            "AUDIO_MUTE" | "REQ_MUTE" => {
+                                AudioGuard::mute();
+                            }
+                            "AUDIO_UNMUTE" => {
+                                AudioGuard::unmute();
+                            }
                             "CAPTURE_SUCCESS" => {
                                 capture_success = true;
                             }

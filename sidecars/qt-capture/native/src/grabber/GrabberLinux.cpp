@@ -58,6 +58,26 @@ public slots:
 signals:
   void finished();
 };
+
+class ScopedAudioMuteIpc {
+public:
+  explicit ScopedAudioMuteIpc(bool enabled = true) : m_enabled(enabled) {
+    if (m_enabled) {
+      std::cout << "AUDIO_MUTE" << std::endl;
+      std::cout.flush();
+    }
+  }
+
+  ~ScopedAudioMuteIpc() {
+    if (m_enabled) {
+      std::cout << "AUDIO_UNMUTE" << std::endl;
+      std::cout.flush();
+    }
+  }
+
+private:
+  bool m_enabled;
+};
 #endif
 
 class ScreenGrabberUnix : public ScreenGrabber {
@@ -146,17 +166,21 @@ private:
     QObject::connect(&helper, &PortalHelper::finished, &loop,
                      &QEventLoop::quit);
 
-    QDBusReply<QDBusObjectPath> reply =
-        portal.call("Screenshot", parentWindow, options);
-    if (!reply.isValid()) {
-      return frames;
+    bool portalCaptureSucceeded = false;
+    {
+      ScopedAudioMuteIpc audioMuteScope;
+      QDBusReply<QDBusObjectPath> reply =
+          portal.call("Screenshot", parentWindow, options);
+      if (!reply.isValid()) {
+        return frames;
+      }
+
+      QTimer::singleShot(60000000, &loop, &QEventLoop::quit);
+      loop.exec();
+      portalCaptureSucceeded = helper.success;
     }
 
-    QTimer::singleShot(60000000, &loop, &QEventLoop::quit);
-
-    loop.exec();
-
-    if (!helper.success) {
+    if (!portalCaptureSucceeded) {
       return frames;
     }
 

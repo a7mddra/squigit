@@ -72,9 +72,6 @@ void CaptureController::finishSquiggleCapture(const QVariantList &points) {
 
   QRectF boundingRect(minX, minY, maxX - minX, maxY - minY);
 
-  std::cout << "REQ_MUTE" << std::endl;
-  std::cout.flush();
-
   cropAndSave(boundingRect);
 }
 
@@ -85,9 +82,6 @@ void CaptureController::finishRectCapture(QPointF start, QPointF end) {
     emitFailure();
     return;
   }
-
-  std::cout << "REQ_MUTE" << std::endl;
-  std::cout.flush();
 
   cropAndSave(selectionRect);
 }
