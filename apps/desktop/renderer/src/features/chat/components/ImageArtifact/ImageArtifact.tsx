@@ -25,21 +25,22 @@ import { Dialog } from "@/components/ui";
 import {
   ReverseImageSearch,
   generateTranslateUrl,
-} from "@/core/services/google";
-import { DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@/core/config";
+} from "@squigit/core/services/google";
+import { openExternalUrl } from "@squigit/core/services/system";
+import { DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@squigit/core/config";
 import {
   getErrorDialog,
   getMissingPackageDialog,
   getOutdatedPackageDialog,
   type DialogContent,
-} from "@/core/helpers";
+} from "@squigit/core/helpers";
 import {
   AUTO_OCR_DISABLED_MODEL_ID,
   cancelOcrJob,
   type OcrFrame,
   saveImageTone,
   saveOcrData,
-} from "@/core/config";
+} from "@squigit/core/config";
 
 interface OCRBox {
   text: string;
@@ -632,7 +633,7 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
     if (displayData.length === 0) return;
     const allText = displayData.map((item) => item.text).join(" ");
     if (allText.trim()) {
-      invoke("open_external_url", { url: generateTranslateUrl(allText) });
+      openExternalUrl(generateTranslateUrl(allText)).catch(console.error);
     }
   }, [displayData]);
 

@@ -27,7 +27,7 @@ import {
   ATTACHMENT_ANALYSIS_STATUS_DELAY_MS,
   getAttachmentAnalysisStatusText,
   isQuickAnswerSuppressedProgressText,
-} from "@/core/helpers";
+} from "@squigit/core/helpers";
 
 import {
   parseAttachmentPaths,
@@ -35,9 +35,9 @@ import {
   buildAttachmentMention,
   stripImageAttachmentMentions,
   type Attachment,
-} from "@/core/brain/session/attachments";
+} from "@squigit/core/brain/session/attachments";
 
-import type { MessageCollapseMode } from "@/core/brain/engine";
+import type { MessageCollapseMode } from "@squigit/core/brain/engine";
 
 import { ChatRouteLayout } from "./ChatRouteLayout";
 import { ChatRouteContent } from "./ChatRouteContent";

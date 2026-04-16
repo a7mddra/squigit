@@ -26,7 +26,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
-import { API_STATUS_TEXT } from "@/core/helpers";
+import { API_STATUS_TEXT } from "@squigit/core/helpers";
 import {
   attachmentFromPath,
   isAttachmentPath,
@@ -34,13 +34,13 @@ import {
   parseAttachmentPaths,
   stripImageAttachmentMentions,
   unwrapMarkdownLinkDestination,
-} from "@/core/brain/session/attachments";
+} from "@squigit/core/brain/session/attachments";
 import {
   Message,
   ToolStep,
   MessageCollapseMode,
   PendingAssistantTurn,
-} from "@/core/brain/engine";
+} from "@squigit/core/brain/engine";
 import {
   preprocessMarkdown,
   splitMarkdownAfterLastClosedFence,

@@ -8,7 +8,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AppLogo } from "@/components/icons";
-import { storeImageFromPath, type ImageResult } from "@/core/config";
+import { storeImageFromPath, type ImageResult } from "@squigit/core/config";
 import { usePlatform } from "@/hooks/shared";
 import styles from "./HomeRoute.module.css";
 

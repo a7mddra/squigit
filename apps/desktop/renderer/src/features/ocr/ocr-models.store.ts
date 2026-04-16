@@ -10,7 +10,7 @@ import { getInstalledModelIds } from "./services/modelRegistry";
 import { downloadModel } from "./services/modelDownloader";
 
 import { commands } from "@/platform/tauri";
-import { DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@/core/config";
+import { DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@squigit/core/config";
 
 interface DownloadProgressPayload {
   id: string;

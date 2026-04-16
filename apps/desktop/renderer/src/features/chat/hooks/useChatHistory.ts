@@ -12,7 +12,7 @@ import {
   type ChatSearchResult,
   searchChats as searchChatsApi,
   updateChatMetadata as updateChatMeta,
-} from "@/core/config";
+} from "@squigit/core/config";
 const SYSTEM_PREFIX = "__system_";
 const isOnboardingId = (id: string) => id.startsWith(SYSTEM_PREFIX);
 const TOUCH_THROTTLE_MS = 1200;

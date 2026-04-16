@@ -6,7 +6,7 @@
 
 import React from "react";
 import { useTextEditor, useTextContextMenu } from "@/hooks/editor";
-import type { UserPreferences } from "@/core/config";
+import type { UserPreferences } from "@squigit/core/config";
 import { TextContextMenu } from "@/app/layout/menus/TextContextMenu";
 import styles from "./PersonalizationSettings.module.css";
 

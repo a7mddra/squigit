@@ -5,7 +5,7 @@
  */
 
 import React from "react";
-import { getDialogs, getUpdateAvailableDialog } from "@/core/helpers";
+import { getDialogs, getUpdateAvailableDialog } from "@squigit/core/helpers";
 import { Dialog } from "@/components/ui";
 import { MediaOverlay } from "../layout/overlays/MediaOverlay";
 import { SearchOverlay } from "../layout/overlays/SearchOverlay";

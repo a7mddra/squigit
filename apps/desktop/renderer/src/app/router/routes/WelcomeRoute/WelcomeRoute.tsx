@@ -13,7 +13,7 @@ import {
 import { ChatBubble } from "@/features/chat";
 import { SettingsSection } from "@/features/settings";
 import { usePlatform } from "@/hooks/shared";
-import type { Message } from "@/core/brain/engine";
+import type { Message } from "@squigit/core/brain/engine";
 import styles from "./WelcomeRoute.module.css";
 
 const INSTRUCTIONS: Record<string, string> = {

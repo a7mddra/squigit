@@ -6,6 +6,6 @@
 
 export * from "./useTheme";
 export * from "./usePlatform";
-export * from "../../core/brain/hooks/useAttachments";
+export * from "@squigit/core/brain/hooks/useAttachments";
 export * from "./useClipboard";
 export * from "./useKeyDown";

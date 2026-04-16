@@ -7,7 +7,7 @@
 import React, { useRef, useEffect, useState, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check, PackagePlus } from "lucide-react";
-import { DEFAULT_OCR_MODEL_ID } from "@/core/config";
+import { DEFAULT_OCR_MODEL_ID } from "@squigit/core/config";
 import { SettingsSection } from "@/features/settings";
 import { getLanguageCode } from "../ocr-models.types";
 import { useModelsStore } from "../ocr-models.store";

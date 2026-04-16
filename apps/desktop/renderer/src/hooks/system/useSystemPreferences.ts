@@ -6,12 +6,12 @@
 
 import { useState, useEffect } from "react";
 import { commands } from "@/platform/tauri";
-import { DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@/core/config";
+import { DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@squigit/core/config";
 import {
   type UserPreferences,
   loadPreferences,
   savePreferences,
-} from "@/core/config";
+} from "@squigit/core/config";
 import { useTheme } from "@/hooks/shared";
 
 export const useSystemPreferences = () => {

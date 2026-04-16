@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Message } from "@/core/brain/engine";
-import { useBrainSession } from "@/core/brain/hooks";
+import { Message } from "@squigit/core/brain/engine";
+import { useBrainSession } from "@squigit/core/brain/hooks";
 
 export const useChat = ({
   apiKey,

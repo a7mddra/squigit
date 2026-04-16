@@ -12,7 +12,7 @@ import React, {
   useContext,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { loadPreferences, savePreferences } from "@/core/config";
+import { loadPreferences, savePreferences } from "@squigit/core/config";
 
 export interface ThemeContextType {
   theme: "light" | "dark" | "system";

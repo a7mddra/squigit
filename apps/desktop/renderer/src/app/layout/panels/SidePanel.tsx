@@ -29,8 +29,8 @@ import {
 } from "@/components/icons";
 import { Dialog, LoadingSpinner } from "@/components/ui";
 import { useKeyDown, usePlatform } from "@/hooks/shared";
-import { getDeleteMultipleChatsDialog } from "@/core/helpers";
-import type { ChatMetadata } from "@/core/config";
+import { getDeleteMultipleChatsDialog } from "@squigit/core/helpers";
+import type { ChatMetadata } from "@squigit/core/config";
 import { PanelContextMenu } from "../menus/PanelContextMenu";
 import { useAppContext } from "../../providers/AppProvider";
 import styles from "./SidePanel.module.css";

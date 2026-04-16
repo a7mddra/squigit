@@ -12,11 +12,11 @@ import React, {
   forwardRef,
   useImperativeHandle,
 } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import {
   generateSearchUrl,
   generateTranslateUrl,
-} from "@/core/services/google";
+} from "@squigit/core/services/google";
+import { openExternalUrl } from "@squigit/core/services/system";
 import { InlineMenu } from "@/components/ui";
 
 interface OCRBox {
@@ -331,11 +331,13 @@ export const ImageTextMenu = forwardRef<
         if (action === "copy") {
           if (text) navigator.clipboard.writeText(text);
         } else if (action === "search") {
-          if (text)
-            invoke("open_external_url", { url: generateSearchUrl(text) });
+          if (text) {
+            openExternalUrl(generateSearchUrl(text)).catch(console.error);
+          }
         } else if (action === "translate") {
-          if (text)
-            invoke("open_external_url", { url: generateTranslateUrl(text) });
+          if (text) {
+            openExternalUrl(generateTranslateUrl(text)).catch(console.error);
+          }
         }
         hideMenu();
       }

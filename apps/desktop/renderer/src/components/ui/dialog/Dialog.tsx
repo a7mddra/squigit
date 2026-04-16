@@ -10,8 +10,6 @@ import { createPortal } from "react-dom";
 import { AlertCircle, AlertTriangle, Info, Sparkles } from "lucide-react";
 import styles from "./Dialog.module.css";
 
-export type DialogVariant = "error" | "warning" | "info" | "update";
-
 export interface DialogAction {
   label: string;
   onClick: () => void;
@@ -20,7 +18,11 @@ export interface DialogAction {
 }
 
 import { commands } from "@/platform/tauri";
-import { getDialogs, type DialogContent } from "@/core/helpers";
+import {
+  getDialogs,
+  type DialogContent,
+  type DialogVariant,
+} from "@squigit/core/helpers";
 
 interface DialogProps {
   variant?: DialogVariant;

@@ -6,7 +6,7 @@
 
 import React from "react";
 import { LoadingSpinner } from "@/components/ui";
-import type { ChatSearchResult } from "@/core/config";
+import type { ChatSearchResult } from "@squigit/core/config";
 import {
   type ChatGroup,
   formatSearchRowDate,

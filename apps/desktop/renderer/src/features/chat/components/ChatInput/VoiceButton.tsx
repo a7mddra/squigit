@@ -11,7 +11,7 @@ import { Mic, Square } from "lucide-react";
 import styles from "./ChatInput.module.css";
 import { Tooltip, Dialog } from "@/components/ui";
 import { usePlatform } from "@/hooks/shared/usePlatform";
-import { type DialogContent, getMissingPackageDialog } from "@/core/helpers";
+import { type DialogContent, getMissingPackageDialog } from "@squigit/core/helpers";
 
 interface VoiceButtonProps {
   onTranscript: (text: string, isFinal: boolean) => void;

@@ -11,7 +11,7 @@ import {
   getExtension,
   isImageExtension,
   unwrapMarkdownLinkDestination,
-} from "@/core/brain/session/attachments";
+} from "@squigit/core/brain/session/attachments";
 import { type MediaGalleryItem, type MediaViewerItem } from "@/features/media";
 
 export type MediaViewerOpenOptions = {

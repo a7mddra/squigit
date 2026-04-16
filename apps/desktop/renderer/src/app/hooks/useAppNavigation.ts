@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { resolveOcrModelId, SUPPORTED_OCR_MODEL_IDS } from "@/core/config";
+import { resolveOcrModelId, SUPPORTED_OCR_MODEL_IDS } from "@squigit/core/config";
 import {
   AUTO_OCR_DISABLED_MODEL_ID,
   cancelOcrJob,
@@ -16,8 +16,8 @@ import {
   type OcrFrame,
   ChatCitation,
   ChatToolStep,
-} from "@/core/config";
-import { type Citation, type Message, type ToolStep } from "@/core/brain/engine";
+} from "@squigit/core/config";
+import { type Citation, type Message, type ToolStep } from "@squigit/core/brain/engine";
 
 const SYSTEM_GALLERY_ID = "__system_gallery";
 const isOnboardingId = (id: string) => id.startsWith("__system_");

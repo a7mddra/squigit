@@ -13,17 +13,17 @@ import {
   OcrFrame,
   appendChatMessage,
   overwriteChatMessages,
-} from "@/core/config";
-import type { Attachment } from "@/core/brain/session/attachments";
-import { github } from "@/core/services/github";
-import { resolveOcrModelId, SUPPORTED_OCR_MODEL_IDS } from "@/core/config";
+} from "@squigit/core/config";
+import type { Attachment } from "@squigit/core/brain/session/attachments";
+import { github } from "@squigit/core/services/github";
+import { resolveOcrModelId, SUPPORTED_OCR_MODEL_IDS } from "@squigit/core/config";
 import {
   getPendingUpdate,
   useAuth,
   useSystemSync,
   useUpdateCheck,
 } from "@/hooks/system";
-import { useBrainTitle } from "@/core/brain/hooks";
+import { useBrainTitle } from "@squigit/core/brain/hooks";
 import { useAttachments } from "@/hooks/shared";
 import { useChat, useChatHistory } from "@/features/chat";
 import { useAppBusyGuard } from "./useAppBusyGuard";

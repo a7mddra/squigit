@@ -5,8 +5,8 @@
  */
 
 import { useState, useEffect } from "react";
-import { parseBrainError } from "@/core/brain/provider";
-import { invoke } from "@tauri-apps/api/core";
+import { parseBrainError } from "@squigit/core/brain/provider";
+import { openExternalUrl } from "@squigit/core/services/system";
 
 export function useChatError(
   error: string | null,
@@ -47,9 +47,9 @@ export function useChatError(
     errorActions.push({
       label: parsedError.meta.linkLabel || "Open Link",
       onClick: () => {
-        invoke("open_external_url", {
-          url: parsedError.meta?.link,
-        });
+        if (parsedError.meta?.link) {
+          openExternalUrl(parsedError.meta.link).catch(console.error);
+        }
         setIsErrorDismissed(true);
       },
       variant: "secondary",

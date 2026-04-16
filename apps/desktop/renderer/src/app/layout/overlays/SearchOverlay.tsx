@@ -12,7 +12,7 @@ import React, {
   useState,
 } from "react";
 import { WidgetOverlay } from "@/components/ui";
-import type { ChatMetadata, ChatSearchResult } from "@/core/config";
+import type { ChatMetadata, ChatSearchResult } from "@squigit/core/config";
 import { useNavigationContext } from "@/app/context/AppNavigation";
 import {
   ChatsList,

@@ -15,7 +15,7 @@ import {
   getExtension,
   isAcceptedExtension,
   isImageExtension,
-} from "@/core/brain/session/attachments";
+} from "@squigit/core/brain/session/attachments";
 import { TextContextMenu } from "@/app/layout/menus/TextContextMenu";
 import { InputTextarea, type ChatInputEditorHandle } from "./InputTextarea";
 import { InputActions } from "./InputActions";

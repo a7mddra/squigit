@@ -9,13 +9,13 @@ import { Dialog, TextShimmer } from "@/components/ui";
 import {
   API_STATUS_TEXT,
   type AttachmentAnalysisCounts,
-} from "@/core/helpers";
+} from "@squigit/core/helpers";
 import { MessageList } from "@/features/chat";
 import {
   type Message,
   type MessageCollapseMode,
   type PendingAssistantTurn,
-} from "@/core/brain/engine";
+} from "@squigit/core/brain/engine";
 import styles from "./ChatRoute.module.css";
 
 interface ChatRouteContentProps {

@@ -1,0 +1,11 @@
+{
+  "name": "@squigit/core",
+  "version": "0.1.0",
+  "type": "module",
+  "$schema": "https://json.schemastore.org/package.json",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  }
+}

@@ -7,8 +7,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import styles from "./ModelsSettings.module.css";
 import { Dropdown, DropdownItem, DropdownSectionTitle } from "@/components/ui";
-import { DEFAULT_OCR_MODEL_ID, MODELS } from "@/core/config";
-import type { UserPreferences } from "@/core/config";
+import { DEFAULT_OCR_MODEL_ID, MODELS } from "@squigit/core/config";
+import type { UserPreferences } from "@squigit/core/config";
 import {
   OCRModelDownloader,
   useModelsStore,

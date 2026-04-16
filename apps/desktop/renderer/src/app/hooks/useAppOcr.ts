@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { type OcrFrame, saveImgbbUrl, saveOcrData } from "@/core/config";
+import { type OcrFrame, saveImgbbUrl, saveOcrData } from "@squigit/core/config";
 
 export const useAppOcr = (activeSessionId: string | null) => {
   const [sessionLensUrl, setSessionLensUrl] = useState<string | null>(null);

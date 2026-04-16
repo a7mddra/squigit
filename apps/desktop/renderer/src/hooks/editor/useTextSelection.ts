@@ -5,11 +5,11 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import {
   generateSearchUrl,
   generateTranslateUrl,
-} from "@/core/services/google";
+} from "@squigit/core/services/google";
+import { openExternalUrl } from "@squigit/core/services/system";
 
 const MENU_HEIGHT = 48;
 const NOTCH_OFFSET = 12;
@@ -289,11 +289,13 @@ export const useTextSelection = ({
         if (action === "copy") {
           if (text) navigator.clipboard.writeText(text);
         } else if (action === "search") {
-          if (text)
-            invoke("open_external_url", { url: generateSearchUrl(text) });
+          if (text) {
+            openExternalUrl(generateSearchUrl(text)).catch(console.error);
+          }
         } else if (action === "translate") {
-          if (text)
-            invoke("open_external_url", { url: generateTranslateUrl(text) });
+          if (text) {
+            openExternalUrl(generateTranslateUrl(text)).catch(console.error);
+          }
         }
         hideMenu();
       }

@@ -9,7 +9,7 @@ import {
   Message,
   MessageCollapseMode,
   PendingAssistantTurn,
-} from "@/core/brain/engine";
+} from "@squigit/core/brain/engine";
 import { TextShimmer } from "@/components/ui";
 import {
   API_STATUS_TEXT,
@@ -17,7 +17,7 @@ import {
   getAttachmentAnalysisStatusText,
   isQuickAnswerSuppressedProgressText,
   type AttachmentAnalysisCounts,
-} from "@/core/helpers";
+} from "@squigit/core/helpers";
 import { ChatBubble } from "./components/ChatBubble/ChatBubble";
 import styles from "./MessageList.module.css";
 

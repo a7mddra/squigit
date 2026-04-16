@@ -5,9 +5,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { cancelOcrJob } from "@/core/config";
-import { getAppBusyDialog } from "@/core/helpers";
-import type { DialogContent } from "@/core/helpers";
+import { cancelOcrJob } from "@squigit/core/config";
+import { getAppBusyDialog } from "@squigit/core/helpers";
+import type { DialogContent } from "@squigit/core/helpers";
 
 type GuardedAction = () => void | Promise<void>;
 
