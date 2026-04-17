@@ -4,4 +4,4 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export { useChatState } from "@squigit/core/brain/hooks/useChatState";
+export { useChatState } from "@squigit/react/brain/hooks";

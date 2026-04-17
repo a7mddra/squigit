@@ -13,7 +13,7 @@ import {
   readTextFile,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
-import type { ProviderStreamEvent } from "@squigit/core/brain/engine/types";
+import type { ProviderStreamEvent } from "@squigit/core/brain/engine";
 import {
   setPreferencesPort,
   setProviderPort,

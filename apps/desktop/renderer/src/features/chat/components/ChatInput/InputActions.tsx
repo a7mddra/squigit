@@ -7,7 +7,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import { Paperclip, ArrowUp, Square, Camera, Code2 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ACCEPTED_EXTENSIONS } from "@squigit/core/brain/session/attachments";
+import { ACCEPTED_EXTENSIONS } from "@squigit/core/brain/attachments";
 import { MODELS } from "@squigit/core/config";
 import {
   Dropdown,

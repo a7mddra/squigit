@@ -5,7 +5,7 @@
  */
 
 import { Message } from "@squigit/core/brain/engine";
-import { useBrainSession } from "@squigit/core/brain/hooks";
+import { useBrainSession } from "@squigit/react/brain/hooks";
 
 export const useChat = ({
   apiKey,

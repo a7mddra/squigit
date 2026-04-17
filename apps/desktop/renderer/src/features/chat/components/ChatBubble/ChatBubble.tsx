@@ -34,7 +34,7 @@ import {
   parseAttachmentPaths,
   stripImageAttachmentMentions,
   unwrapMarkdownLinkDestination,
-} from "@squigit/core/brain/session/attachments";
+} from "@squigit/core/brain/attachments";
 import {
   Message,
   ToolStep,

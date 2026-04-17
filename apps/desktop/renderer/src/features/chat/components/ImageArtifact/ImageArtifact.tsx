@@ -23,9 +23,9 @@ import { usePlatform } from "@/hooks/shared";
 import styles from "./ImageArtifact.module.css";
 import { Dialog } from "@/components/ui";
 import {
-  ReverseImageSearch,
   generateTranslateUrl,
 } from "@squigit/core/services/google";
+import { useReverseImageSearch } from "@squigit/react/services/google";
 import { openExternalUrl } from "@squigit/core/services/system";
 import { DEFAULT_OCR_MODEL_ID, resolveOcrModelId } from "@squigit/core/config";
 import {
@@ -248,7 +248,7 @@ export const ImageArtifact: React.FC<ImageArtifactProps> = ({
   }, [displayedThumbPath, imageSrc, startupImage?.path]);
 
   const { isLensLoading, triggerLens, showAuthDialog, setShowAuthDialog } =
-    ReverseImageSearch(
+    useReverseImageSearch(
       startupImage,
       sessionLensUrl,
       setSessionLensUrl,

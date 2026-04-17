@@ -18,7 +18,7 @@ import {
   ACCEPTED_EXTENSIONS,
   getExtension,
   isImageExtension,
-} from "@squigit/core/brain/session/attachments";
+} from "@squigit/core/brain/attachments";
 import styles from "./CodeEditor.module.css";
 
 const NON_CODE_IMPORT_EXTENSIONS = new Set([

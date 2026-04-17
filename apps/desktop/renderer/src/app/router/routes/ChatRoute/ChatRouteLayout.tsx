@@ -6,7 +6,7 @@
 
 import React, { type RefObject } from "react";
 import { InlineMenu, LoadingSpinner } from "@/components/ui";
-import type { Attachment } from "@squigit/core/brain/session/attachments";
+import type { Attachment } from "@squigit/core/brain/attachments";
 import type { OcrFrame } from "@squigit/core/config";
 import { ChatInput, ImageArtifact } from "@/features/chat";
 import styles from "./ChatRoute.module.css";

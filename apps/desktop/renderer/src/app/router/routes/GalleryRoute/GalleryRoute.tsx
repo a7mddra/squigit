@@ -7,7 +7,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useMediaContext } from "@/app/context/AppMedia";
-import type { Attachment } from "@squigit/core/brain/session/attachments";
+import type { Attachment } from "@squigit/core/brain/attachments";
 import { getImagePath, type ChatMetadata } from "@squigit/core/config";
 import styles from "./GalleryRoute.module.css";
 

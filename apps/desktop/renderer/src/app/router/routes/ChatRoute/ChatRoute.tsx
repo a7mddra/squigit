@@ -35,7 +35,7 @@ import {
   buildAttachmentMention,
   stripImageAttachmentMentions,
   type Attachment,
-} from "@squigit/core/brain/session/attachments";
+} from "@squigit/core/brain/attachments";
 
 import type { MessageCollapseMode } from "@squigit/core/brain/engine";
 

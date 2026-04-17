@@ -5,7 +5,7 @@
  */
 
 import type { KeyboardEvent, RefObject } from "react";
-import type { Attachment } from "@squigit/core/brain/session/attachments";
+import type { Attachment } from "@squigit/core/brain/attachments";
 
 export type ChatSubmitHandler = () => void;
 

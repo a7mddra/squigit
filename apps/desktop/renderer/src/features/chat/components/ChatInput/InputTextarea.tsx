@@ -47,7 +47,7 @@ import {
   buildAttachmentMention,
   isAttachmentPath,
   unwrapMarkdownLinkDestination,
-} from "@squigit/core/brain/session/attachments";
+} from "@squigit/core/brain/attachments";
 import { useMediaContext } from "@/app/context/AppMedia";
 import styles from "./ChatInput.module.css";
 
