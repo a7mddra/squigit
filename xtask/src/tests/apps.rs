@@ -281,17 +281,14 @@ fn terminal_link(label: &str, url: &str) -> String {
 }
 
 fn should_emit_osc8_links() -> bool {
-    match std::env::var("CARGO_TERM_HYPERLINKS").ok().as_deref() {
-        Some(value) => {
-            let normalized = value.trim().to_ascii_lowercase();
-            if matches!(normalized.as_str(), "1" | "true" | "yes" | "on") {
-                return true;
-            }
-            if matches!(normalized.as_str(), "0" | "false" | "no" | "off") {
-                return false;
-            }
+    if let Some(value) = std::env::var("CARGO_TERM_HYPERLINKS").ok().as_deref() {
+        let normalized = value.trim().to_ascii_lowercase();
+        if matches!(normalized.as_str(), "1" | "true" | "yes" | "on") {
+            return true;
         }
-        _ => {}
+        if matches!(normalized.as_str(), "0" | "false" | "no" | "off") {
+            return false;
+        }
     }
 
     io::stderr().is_terminal()
