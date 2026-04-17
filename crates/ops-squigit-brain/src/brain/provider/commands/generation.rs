@@ -1,7 +1,6 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 
-#[tauri::command]
 pub async fn generate_chat_title(
     api_key: String,
     model: String,
@@ -15,20 +14,18 @@ pub async fn generate_chat_title(
     .await
 }
 
-#[tauri::command]
 pub async fn generate_image_brief(
-    state: tauri::State<'_, crate::state::AppState>,
+    runtime: &crate::runtime::BrainRuntimeState,
     api_key: String,
     image_path: String,
     model: Option<String>,
 ) -> Result<String, String> {
     crate::brain::provider::gemini::commands::generation::generate_image_brief(
-        state, api_key, image_path, model,
+        runtime, api_key, image_path, model,
     )
     .await
 }
 
-#[tauri::command]
 pub async fn compress_conversation(
     api_key: String,
     image_brief: String,

@@ -26,6 +26,7 @@ dependencies = [
  "opener",
  "ops-chat-storage",
  "ops-profile-store",
+ "ops-squigit-brain",
  "parking_lot",
  "rand 0.8.5",
  "regex",
@@ -3883,6 +3884,30 @@ dependencies = [
  "thiserror 2.0.18",
  "tiny_http",
  "url",
+]
+
+[[package]]
+name = "ops-squigit-brain"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "futures-util",
+ "iana-time-zone",
+ "lazy_static",
+ "log",
+ "mime_guess",
+ "ops-chat-storage",
+ "ops-profile-store",
+ "rand 0.8.5",
+ "regex",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tokio",
+ "tokio-util",
+ "url",
+ "webbrowser",
 ]
 
 [[package]]

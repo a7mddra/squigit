@@ -84,7 +84,7 @@ pub(crate) struct GeminiResponseChunk {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub(crate) enum GeminiEvent {
+pub enum GeminiEvent {
     Token {
         token: String,
     },

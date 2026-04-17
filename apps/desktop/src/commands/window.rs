@@ -7,7 +7,7 @@ use tauri::{AppHandle, Manager};
 #[tauri::command]
 pub async fn open_external_url(url: String) -> Result<(), String> {
     println!("Opening URL: {}", url);
-    tauri::async_runtime::spawn_blocking(move || crate::utils::open_url(&url))
+    tauri::async_runtime::spawn_blocking(move || ops_squigit_brain::system::open_external_url(&url))
         .await
         .map_err(|e| e.to_string())?
 }

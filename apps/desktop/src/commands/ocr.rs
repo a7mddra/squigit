@@ -27,9 +27,9 @@ use tokio::time::{timeout, Duration};
 #[cfg(unix)]
 use std::io;
 
-use crate::brain::provider::attachments::paths::resolve_attachment_path_internal;
 use crate::services::models::ModelManager;
 use crate::state::{AppState, OcrJobHandle};
+use ops_squigit_brain::attachments::resolve_attachment_path_buf;
 
 /// Maximum wall-clock time for a single OCR job (seconds).
 const OCR_TIMEOUT_SECS_DEFAULT: u64 = 120;
@@ -290,7 +290,7 @@ pub async fn ocr_image(
         );
     }
 
-    let resolved_image_path = resolve_attachment_path_internal(&image_data)?;
+    let resolved_image_path = resolve_attachment_path_buf(&image_data)?;
 
     let mut rec_model_dir_override: Option<String> = None;
     if let Some(name) = model_name

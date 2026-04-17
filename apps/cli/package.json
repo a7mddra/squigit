@@ -15,7 +15,7 @@
     "build": "tsc -p tsconfig.json",
     "apikey:test": "npm run build && node dist/src/apikey.js",
     "auth:test": "npm run build && node dist/src/test.js",
-    "test": "npm run build && node --test --test-concurrency=1 dist/test/live-store.test.js",
+    "test": "npm run build && node --test --test-concurrency=1 dist/test/live-*.test.js",
     "test:live": "SQUIGIT_LIVE_STORE_TESTS=1 npm test"
   },
   "devDependencies": {

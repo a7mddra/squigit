@@ -1,11 +1,10 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 
-#[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn stream_chat(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, crate::state::AppState>,
+    runtime: &crate::runtime::BrainRuntimeState,
+    sink: &dyn crate::events::BrainEventSink,
     api_key: String,
     model: String,
     is_initial_turn: bool,
@@ -23,8 +22,8 @@ pub async fn stream_chat(
     image_brief: Option<String>,
 ) -> Result<(), String> {
     crate::brain::provider::gemini::commands::chat::stream_gemini_chat_v2(
-        app,
-        state,
+        runtime,
+        sink,
         api_key,
         model,
         is_initial_turn,

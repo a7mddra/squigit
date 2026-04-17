@@ -3,24 +3,16 @@
 
 //! Chat storage Tauri commands.
 
-use crate::brain::provider::attachments::paths::resolve_attachment_path_internal;
-use crate::services::search::{search_local_chats, ChatSearchResult};
 use crate::services::tone::detect_image_tone_from_bytes;
 use ops_chat_storage::{
     ChatData, ChatMessage, ChatMetadata, ChatStorage, OcrFrame, OcrRegion, StoredImage,
 };
-use ops_profile_store::ProfileStore;
+use ops_squigit_brain::attachments::resolve_attachment_path_buf;
+use ops_squigit_brain::search::{search_local_chats, ChatSearchResult};
 
 /// Helper to get storage for the active profile.
 fn get_active_storage() -> Result<ChatStorage, String> {
-    let profile_store = ProfileStore::new().map_err(|e| e.to_string())?;
-    let active_id = profile_store
-        .get_active_profile_id()
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "No active profile. Please log in first.".to_string())?;
-
-    let chats_dir = profile_store.get_chats_dir(&active_id);
-    ChatStorage::with_base_dir(chats_dir).map_err(|e| e.to_string())
+    ops_squigit_brain::image::get_active_storage()
 }
 
 // =============================================================================
@@ -30,22 +22,16 @@ fn get_active_storage() -> Result<ChatStorage, String> {
 /// Store image bytes and return hash + path.
 #[tauri::command]
 pub fn store_image_bytes(bytes: Vec<u8>) -> Result<StoredImage, String> {
-    let storage = get_active_storage()?;
     let explicit_tone = detect_image_tone_from_bytes(&bytes);
-    storage
-        .store_image(&bytes, explicit_tone)
-        .map_err(|e| e.to_string())
+    ops_squigit_brain::image::process_bytes_internal(bytes, explicit_tone)
 }
 
 /// Store image from file path and return hash + path.
 #[tauri::command]
 pub fn store_image_from_path(path: String) -> Result<StoredImage, String> {
-    let storage = get_active_storage()?;
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
     let explicit_tone = detect_image_tone_from_bytes(&bytes);
-    storage
-        .store_image(&bytes, explicit_tone)
-        .map_err(|e| e.to_string())
+    ops_squigit_brain::image::process_bytes_internal(bytes, explicit_tone)
 }
 
 /// Store any file from path (preserving extension) and return hash + CAS path.
@@ -60,29 +46,7 @@ pub fn store_file_from_path(path: String) -> Result<StoredImage, String> {
 /// Validate if a file is safe text (valid UTF-8 and no null bytes).
 #[tauri::command]
 pub fn validate_text_file(path: String) -> Result<bool, String> {
-    use std::fs::File;
-    use std::io::Read;
-
-    let mut file = File::open(&path).map_err(|e| e.to_string())?;
-    let mut buffer = vec![0u8; 8192]; // Read up to 8KB
-    let bytes_read = file.read(&mut buffer).map_err(|e| e.to_string())?;
-    buffer.truncate(bytes_read);
-
-    // Empty files are valid text files
-    if bytes_read == 0 {
-        return Ok(true);
-    }
-
-    // Check for null bytes (quick binary check)
-    if buffer.contains(&0) {
-        return Ok(false);
-    }
-
-    // Check strict UTF-8 validity
-    match std::str::from_utf8(&buffer) {
-        Ok(_) => Ok(true),
-        Err(_) => Ok(false),
-    }
+    ops_squigit_brain::attachments::validate_text_file(&path)
 }
 
 /// Get the path to a stored image by its hash.
@@ -95,14 +59,13 @@ pub fn get_image_path(hash: String) -> Result<String, String> {
 /// Resolve an attachment path (absolute or relative CAS path) to an absolute path.
 #[tauri::command]
 pub fn resolve_attachment_path(path: String) -> Result<String, String> {
-    let resolved = resolve_attachment_path_internal(&path)?;
-    Ok(resolved.to_string_lossy().to_string())
+    ops_squigit_brain::attachments::resolve_attachment_path(&path)
 }
 
 /// Detect image tone for a given attachment path.
 #[tauri::command]
 pub fn detect_image_tone(path: String) -> Result<String, String> {
-    let resolved = resolve_attachment_path_internal(&path)?;
+    let resolved = resolve_attachment_path_buf(&path)?;
     let bytes = std::fs::read(resolved).map_err(|e| e.to_string())?;
 
     match detect_image_tone_from_bytes(&bytes).as_deref() {
@@ -116,9 +79,7 @@ pub fn detect_image_tone(path: String) -> Result<String, String> {
 /// Read UTF-8 text content from an attachment path.
 #[tauri::command]
 pub fn read_attachment_text(path: String) -> Result<String, String> {
-    let resolved = resolve_attachment_path_internal(&path)?;
-    let bytes = std::fs::read(resolved).map_err(|e| e.to_string())?;
-    Ok(String::from_utf8_lossy(&bytes).to_string())
+    ops_squigit_brain::attachments::read_attachment_text(&path)
 }
 
 /// Reveal a file in the system file manager, selecting it when possible.
@@ -126,7 +87,7 @@ pub fn read_attachment_text(path: String) -> Result<String, String> {
 pub fn reveal_in_file_manager(path: String) -> Result<(), String> {
     use std::process::Command;
 
-    let resolved = resolve_attachment_path_internal(&path)?;
+    let resolved = resolve_attachment_path_buf(&path)?;
 
     #[cfg(target_os = "windows")]
     {

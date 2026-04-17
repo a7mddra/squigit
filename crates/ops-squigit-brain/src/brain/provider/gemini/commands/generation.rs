@@ -4,6 +4,7 @@
 use crate::brain::provider::gemini::transport::types::{
     GeminiContent, GeminiFileData, GeminiPart, GeminiRequest, GeminiResponseChunk,
 };
+use crate::runtime::BrainRuntimeState;
 
 /// Generate a chat title for the chat using the brain's title prompt and the text context.
 /// Returns the generated title text directly.
@@ -100,7 +101,7 @@ pub async fn generate_chat_title(
 /// This runs in parallel with the main analysis and the result is stored
 /// as `image_brief` in system_instruction for all subsequent turns.
 pub async fn generate_image_brief(
-    state: tauri::State<'_, crate::state::AppState>,
+    runtime: &BrainRuntimeState,
     api_key: String,
     image_path: String,
     model: Option<String>,
@@ -122,7 +123,7 @@ pub async fn generate_image_brief(
     let file_ref = crate::brain::provider::gemini::attachments::ensure_file_uploaded(
         &api_key,
         &image_path,
-        &state.provider_file_cache,
+        &runtime.provider_file_cache,
     )
     .await?;
 

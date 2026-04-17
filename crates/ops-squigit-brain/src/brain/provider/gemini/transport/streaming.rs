@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures_util::StreamExt;
-use tauri::{AppHandle, Emitter};
+use crate::events::BrainEventSink;
 
 use super::types::{GeminiEvent, GeminiFunctionCall, GeminiRequest, GeminiResponseChunk};
 
-pub(crate) fn emit_event(app: &AppHandle, channel_id: &str, event: GeminiEvent) {
-    let _ = app.emit(channel_id, event);
+pub(crate) fn emit_event(sink: &dyn BrainEventSink, channel_id: &str, event: GeminiEvent) {
+    sink.emit(channel_id, event);
 }
 
 pub(crate) struct StreamIterationResult {
@@ -16,7 +16,7 @@ pub(crate) struct StreamIterationResult {
 }
 
 pub(crate) async fn stream_request_iteration(
-    app: &AppHandle,
+    sink: &dyn BrainEventSink,
     client: &reqwest::Client,
     url: &str,
     request_body: &GeminiRequest,
@@ -75,7 +75,7 @@ pub(crate) async fn stream_request_iteration(
                                                         part.thought_signature.clone();
                                                     if !full_text.is_empty() {
                                                         full_text.clear();
-                                                        emit_event(app, channel_id, GeminiEvent::Reset);
+                                                        emit_event(sink, channel_id, GeminiEvent::Reset);
                                                     }
                                                 }
                                                 continue;
@@ -84,7 +84,7 @@ pub(crate) async fn stream_request_iteration(
                                                 if let Some(text) = &part.text {
                                                     full_text.push_str(text);
                                                     emit_event(
-                                                        app,
+                                                        sink,
                                                         channel_id,
                                                         GeminiEvent::Token {
                                                             token: text.clone(),

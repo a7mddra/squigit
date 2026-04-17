@@ -4,7 +4,6 @@
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::Path;
-use tauri::AppHandle;
 
 use crate::brain::provider::gemini::agent::request_control::{
     register_request, remove_request, GeminiRequestControl,
@@ -23,6 +22,8 @@ use crate::brain::provider::gemini::transport::streaming::{emit_event, stream_re
 use crate::brain::provider::gemini::transport::types::{
     GeminiContent, GeminiEvent, GeminiFileData, GeminiFunctionResponse, GeminiPart, GeminiRequest,
 };
+use crate::events::BrainEventSink;
+use crate::runtime::BrainRuntimeState;
 
 fn normalize_attachment_lookup_key(path: &str) -> String {
     let trimmed = path.trim();
@@ -155,8 +156,8 @@ fn tool_attachment_lookup_value(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn stream_gemini_chat_v2(
-    app: AppHandle,
-    state: tauri::State<'_, crate::state::AppState>,
+    runtime: &BrainRuntimeState,
+    sink: &dyn BrainEventSink,
     api_key: String,
     model: String,
     is_initial_turn: bool,
@@ -190,7 +191,7 @@ pub async fn stream_gemini_chat_v2(
         );
 
         let request_control = GeminiRequestControl::new();
-        register_request(channel_id.clone(), request_control.clone()).await;
+        register_request(runtime, channel_id.clone(), request_control.clone()).await;
 
         let mut allow_tools = !is_initial_turn;
         let mut tool_calls = 0usize;
@@ -210,7 +211,7 @@ pub async fn stream_gemini_chat_v2(
 
             if let Some(path) = image_path.clone() {
                 let file_ref =
-                    crate::brain::provider::gemini::attachments::ensure_file_uploaded(&api_key, &path, &state.provider_file_cache)
+                    crate::brain::provider::gemini::attachments::ensure_file_uploaded(&api_key, &path, &runtime.provider_file_cache)
                         .await?;
                 parts.push(GeminiPart {
                     file_data: Some(GeminiFileData {
@@ -239,7 +240,7 @@ pub async fn stream_gemini_chat_v2(
 
             if !user_message.is_empty() {
                 let interleaved_parts =
-                    build_interleaved_parts(&user_message, &api_key, &state.provider_file_cache)
+                    build_interleaved_parts(&user_message, &api_key, &runtime.provider_file_cache)
                         .await?;
                 parts.extend(interleaved_parts);
             }
@@ -285,7 +286,7 @@ pub async fn stream_gemini_chat_v2(
                 chat_id.as_deref(),
                 &attachment_mentions,
                 &api_key,
-                &state.provider_file_cache,
+                &runtime.provider_file_cache,
             )
             .await?;
 
@@ -325,7 +326,7 @@ pub async fn stream_gemini_chat_v2(
             if allow_tools && request_control.is_answer_now_requested() {
                 allow_tools = false;
                 emit_event(
-                    &app,
+                    sink,
                     &channel_id,
                     GeminiEvent::ToolStatus {
                         message: "Wrapping up with what I have so far".to_string(),
@@ -377,7 +378,7 @@ pub async fn stream_gemini_chat_v2(
             };
 
             let iteration = stream_request_iteration(
-                &app,
+                sink,
                 &client,
                 &url,
                 &request_body,
@@ -402,7 +403,7 @@ pub async fn stream_gemini_chat_v2(
             let call_id = tool_step_id(iter, &function_call.name);
             if let Some(status_text_value) = status_text.as_ref() {
                 emit_event(
-                    &app,
+                    sink,
                     &channel_id,
                     GeminiEvent::ToolStatus {
                         message: status_text_value.clone(),
@@ -411,7 +412,7 @@ pub async fn stream_gemini_chat_v2(
             }
 
             emit_event(
-                &app,
+                sink,
                 &channel_id,
                 GeminiEvent::ToolStart {
                     id: call_id.clone(),
@@ -426,17 +427,17 @@ pub async fn stream_gemini_chat_v2(
                 api_key: &api_key,
                 model: &model,
                 chat_id: chat_id.as_deref(),
-                gemini_file_cache: &state.provider_file_cache,
+                gemini_file_cache: &runtime.provider_file_cache,
                 request_control: &request_control,
                 web_state: &mut web_tool_state,
             };
             let dispatch_result = dispatch_tool_call(&function_call, &mut dispatch_context, |message| {
-                emit_event(&app, &channel_id, GeminiEvent::ToolStatus { message });
+                emit_event(sink, &channel_id, GeminiEvent::ToolStatus { message });
             })
             .await?;
 
             emit_event(
-                &app,
+                sink,
                 &channel_id,
                 GeminiEvent::ToolEnd {
                     id: call_id,
@@ -456,7 +457,7 @@ pub async fn stream_gemini_chat_v2(
             if request_control.is_answer_now_requested() {
                 allow_tools = false;
                 emit_event(
-                    &app,
+                    sink,
                     &channel_id,
                     GeminiEvent::ToolStatus {
                         message: "Wrapping up with what I have so far".to_string(),
@@ -468,7 +469,7 @@ pub async fn stream_gemini_chat_v2(
             if tool_calls >= MAX_TOOL_CALLS_PER_TURN {
                 allow_tools = false;
                 emit_event(
-                    &app,
+                    sink,
                     &channel_id,
                     GeminiEvent::ToolStatus {
                         message: "Wrapping up with what I have so far".to_string(),
@@ -478,7 +479,7 @@ pub async fn stream_gemini_chat_v2(
             if consecutive_tool_failures >= 2 {
                 allow_tools = false;
                 emit_event(
-                    &app,
+                    sink,
                     &channel_id,
                     GeminiEvent::ToolStatus {
                         message:
@@ -518,7 +519,7 @@ pub async fn stream_gemini_chat_v2(
     }
     .await;
 
-    remove_request(&channel_id).await;
+    remove_request(runtime, &channel_id).await;
 
     result
 }

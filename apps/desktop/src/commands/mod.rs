@@ -3,6 +3,7 @@
 
 pub mod audio;
 pub mod auth;
+pub mod brain;
 pub mod chat;
 pub mod clipboard;
 pub mod image;

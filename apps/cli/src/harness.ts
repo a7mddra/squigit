@@ -47,6 +47,48 @@ export async function runHarness(args: string[]): Promise<string> {
   return stdout;
 }
 
+export async function runBrainHarness(args: string[]): Promise<string> {
+  const child = spawn(
+    "cargo",
+    [
+      "run",
+      "-q",
+      "-p",
+      "ops-squigit-brain",
+      "--example",
+      "live_brain_harness",
+      "--",
+      ...args,
+    ],
+    {
+      cwd: repoRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: process.env,
+    },
+  );
+
+  let stdout = "";
+  let stderr = "";
+
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk.toString();
+  });
+
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  const [code] = (await once(child, "close")) as [number | null];
+
+  if (code !== 0) {
+    throw new Error(
+      stderr.trim() || stdout.trim() || `Harness exited with code ${code ?? "unknown"}`,
+    );
+  }
+
+  return stdout;
+}
+
 export function parseLastJsonLine<T>(stdout: string): T {
   const jsonLine = stdout
     .trim()

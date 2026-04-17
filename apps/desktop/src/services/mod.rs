@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod audio;
+pub mod brain;
 pub mod capture;
 pub mod image;
 pub mod models;
 pub mod network;
-pub mod search;
 pub mod theme;
 pub mod tone;
 pub mod tray;

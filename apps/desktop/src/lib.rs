@@ -7,13 +7,16 @@ use tauri_plugin_autostart::MacosLauncher;
 pub mod state;
 pub mod utils;
 
-pub mod brain;
 pub mod commands;
 pub mod constants;
 pub mod services;
 
 use commands::audio::play_ui_sound;
 use commands::auth::{cache_avatar, cancel_google_auth, get_api_key, logout, start_google_auth};
+use commands::brain::{
+    cancel_request, compress_conversation, generate_chat_title, generate_image_brief,
+    quick_answer_request, stream_chat,
+};
 use commands::capture::{spawn_capture, spawn_capture_to_input};
 use commands::chat::{
     append_chat_message, create_chat, delete_chat, detect_image_tone, get_image_path,
@@ -71,6 +74,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::new())
+        .manage(services::brain::DesktopBrainService::new())
         .manage(services::audio::UiSoundPlayer::new())
         .manage(SpeechState::default())
         .invoke_handler(tauri::generate_handler![
@@ -96,12 +100,12 @@ pub fn run() {
             logout,
             cache_avatar,
             // Brain
-            brain::provider::commands::chat::stream_chat,
-            brain::provider::commands::generation::generate_chat_title,
-            brain::provider::commands::generation::generate_image_brief,
-            brain::provider::commands::generation::compress_conversation,
-            brain::provider::agent::request_control::cancel_request,
-            brain::provider::agent::request_control::quick_answer_request,
+            stream_chat,
+            generate_chat_title,
+            generate_image_brief,
+            compress_conversation,
+            cancel_request,
+            quick_answer_request,
             // Window
             open_external_url,
             set_background_color,
