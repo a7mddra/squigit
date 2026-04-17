@@ -1,8 +1,0 @@
-generate_title: |
-  Generate a 2-3 word title for this conversation based on the provided summary.
-  Rules:
-  - No punctuation
-  - No "Image of", "Screenshot of", or "Summary of"
-  - Capture the specific topic (e.g., "Rust Compiler Error", "Youtube Feed", "React Component Code")
-  - Title case
-  - Return ONLY the title text, nothing else

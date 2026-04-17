@@ -1,5 +1,0 @@
-describe_image: |
-  Look at this image as a human would. Describe what you see in 2-3 sentences.
-  Focus on: what application/website is shown, what content is visible, any errors or notable elements.
-  Do NOT analyze, do NOT suggest fixes, do NOT interpret intent.
-  Just describe what your eyes see, like a camera would.
