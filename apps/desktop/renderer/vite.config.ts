@@ -17,7 +17,11 @@ export default defineConfig({
   envPrefix: ["VITE_", "TAURI_"],
   resolve: {
     alias: {
-      "@squigit/core": path.resolve(__dirname, "../../shared/src"),
+      "@squigit/core": path.resolve(__dirname, "../../shared/packages/core/src"),
+      "@squigit/react": path.resolve(
+        __dirname,
+        "../../shared/packages/react/src",
+      ),
       "@": path.resolve(__dirname, "./src"),
     },
   },
