@@ -1,0 +1,13 @@
+{
+  "name": "@squigit/react",
+  "version": "0.1.0",
+  "type": "module",
+  "$schema": "https://json.schemastore.org/package.json",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts",
+    "./brain/hooks": "./src/brain/hooks/index.ts",
+    "./services/google": "./src/services/google/index.ts",
+    "./attachments": "./src/attachments/index.ts"
+  }
+}

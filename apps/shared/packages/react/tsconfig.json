@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "jsx": "react-jsx",
+    "paths": {
+      "@squigit/core": ["../core/src/index.ts"],
+      "@squigit/core/*": ["../core/src/*"],
+      "react": ["../../../desktop/renderer/node_modules/@types/react/index.d.ts"],
+      "react/jsx-runtime": [
+        "../../../desktop/renderer/node_modules/@types/react/jsx-runtime.d.ts"
+      ],
+      "react-dom": [
+        "../../../desktop/renderer/node_modules/@types/react-dom/index.d.ts"
+      ],
+      "react-dom/client": [
+        "../../../desktop/renderer/node_modules/@types/react-dom/client.d.ts"
+      ]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}
