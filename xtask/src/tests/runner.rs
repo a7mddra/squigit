@@ -12,6 +12,7 @@ enum ParsedInvocation {
         category: String,
         tail: Vec<String>,
         list: bool,
+        all: bool,
     },
 }
 
@@ -25,9 +26,10 @@ pub fn run(options: TestCommandOptions) -> Result<()> {
             category,
             tail,
             list,
+            all,
         } => match category.as_str() {
             "apps" => super::apps::run(list, &tail),
-            "crates" => super::crates::run(list, &tail),
+            "crates" => super::crates::run(list, all, &tail),
             "sidecars" => super::sidecars::run(list, &tail),
             other => bail!(
                 "Unknown test category '{}'. Run `cargo xtask test --list`.",
@@ -59,6 +61,7 @@ fn parse_invocation(options: TestCommandOptions) -> Result<ParsedInvocation> {
         category: options.path[0].clone(),
         tail: options.path[1..].to_vec(),
         list: options.list,
+        all: options.all,
     })
 }
 
@@ -70,6 +73,7 @@ mod tests {
     fn options(list: bool, path: &[&str]) -> TestCommandOptions {
         TestCommandOptions {
             list,
+            all: false,
             path: path.iter().map(|token| token.to_string()).collect(),
         }
     }
@@ -96,6 +100,7 @@ mod tests {
                 category: "apps".to_string(),
                 tail: vec!["auth".to_string(), "login".to_string()],
                 list: false,
+                all: false,
             }
         );
     }

@@ -9,6 +9,7 @@
 //!   cargo xtask test --list
 //!   cargo xtask test apps auth login
 //!   cargo xtask test apps brain analyze
+//!   cargo xtask test crates --all
 //!   cargo xtask report --strict
 //!   cargo xtask version 0.2.0
 //!   cargo xtask version --bump patch
@@ -82,6 +83,10 @@ enum Commands {
         #[arg(long)]
         list: bool,
 
+        /// Run all tests for the selected category (currently supported for `crates`).
+        #[arg(long)]
+        all: bool,
+
         /// Test scope path (category suite action args...)
         #[arg(value_name = "PATH")]
         path: Vec<String>,
@@ -142,7 +147,9 @@ fn main() -> Result<()> {
         Commands::Run { cmd, args } => dev::run(&cmd, false, &args)?,
         Commands::Dev { mode, args } => dev::run("dev", mode.as_deref() == Some("tray"), &args)?,
         Commands::Report { strict } => report::run(report::ReportOptions { strict })?,
-        Commands::Test { list, path } => test::run(test::TestCommandOptions { list, path })?,
+        Commands::Test { list, all, path } => {
+            test::run(test::TestCommandOptions { list, all, path })?
+        }
         Commands::Version {
             version: explicit,
             bump,

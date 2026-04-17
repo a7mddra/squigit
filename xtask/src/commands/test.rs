@@ -6,6 +6,7 @@ use anyhow::Result;
 #[derive(Debug, Clone, Default)]
 pub struct TestCommandOptions {
     pub list: bool,
+    pub all: bool,
     pub path: Vec<String>,
 }
 
