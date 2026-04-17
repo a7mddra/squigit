@@ -1,8 +1,8 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::brain::context::builder::format_history_log;
-use crate::brain::provider::gemini::transport::types::GeminiEvent;
+use crate::context::builder::format_history_log;
+use crate::provider::gemini::transport::types::GeminiEvent;
 use crate::events::BrainEventSink;
 use crate::runtime::BrainRuntimeState;
 use ops_chat_storage::{ChatData, ChatMessage, ChatMetadata, StoredImage};
@@ -107,7 +107,7 @@ impl BrainService {
         sink: &dyn BrainEventSink,
         request: StreamChatRequest,
     ) -> Result<(), String> {
-        crate::brain::provider::commands::chat::stream_chat(
+        crate::provider::gemini::commands::chat::stream_gemini_chat_v2(
             &self.runtime,
             sink,
             request.api_key,
@@ -133,7 +133,7 @@ impl BrainService {
         &self,
         request: GenerateChatTitleRequest,
     ) -> Result<String, String> {
-        crate::brain::provider::commands::generation::generate_chat_title(
+        crate::provider::gemini::commands::generation::generate_chat_title(
             request.api_key,
             request.model,
             request.prompt_context,
@@ -145,7 +145,7 @@ impl BrainService {
         &self,
         request: GenerateImageBriefRequest,
     ) -> Result<String, String> {
-        crate::brain::provider::commands::generation::generate_image_brief(
+        crate::provider::gemini::commands::generation::generate_image_brief(
             &self.runtime,
             request.api_key,
             request.image_path,
@@ -158,7 +158,7 @@ impl BrainService {
         &self,
         request: CompressConversationRequest,
     ) -> Result<String, String> {
-        crate::brain::provider::commands::generation::compress_conversation(
+        crate::provider::gemini::commands::generation::compress_conversation(
             request.api_key,
             request.image_brief,
             request.history_to_compress,
@@ -167,12 +167,15 @@ impl BrainService {
     }
 
     pub async fn cancel_request(&self, channel_id: Option<String>) -> Result<(), String> {
-        crate::brain::provider::agent::request_control::cancel_request(&self.runtime, channel_id)
-            .await
+        crate::provider::gemini::agent::request_control::cancel_gemini_request(
+            &self.runtime,
+            channel_id,
+        )
+        .await
     }
 
     pub async fn request_quick_answer(&self, channel_id: String) -> Result<(), String> {
-        crate::brain::provider::agent::request_control::quick_answer_request(
+        crate::provider::gemini::agent::request_control::answer_now_gemini_request(
             &self.runtime,
             channel_id,
         )
@@ -184,8 +187,8 @@ impl BrainService {
         sink: &dyn BrainEventSink,
         request: AnalyzeImageRequest,
     ) -> Result<AnalyzeImageResult, String> {
-        let image = crate::image::process_and_store_image(&request.image_path, None)?;
-        let storage = crate::image::get_active_storage()?;
+        let image = crate::context::media::process_and_store_image(&request.image_path, None)?;
+        let storage = crate::context::media::get_active_storage()?;
 
         let mut metadata = ChatMetadata::new(
             "Untitled".to_string(),
@@ -278,7 +281,7 @@ impl BrainService {
         sink: &dyn BrainEventSink,
         request: PromptChatRequest,
     ) -> Result<PromptChatResult, String> {
-        let storage = crate::image::get_active_storage()?;
+        let storage = crate::context::media::get_active_storage()?;
         let chat = storage
             .load_chat(&request.chat_id)
             .map_err(|e| e.to_string())?;

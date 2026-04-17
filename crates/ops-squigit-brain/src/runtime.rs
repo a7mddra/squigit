@@ -1,8 +1,8 @@
 // Copyright 2026 a7mddra
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::brain::provider::gemini::agent::request_control::GeminiRequestControl;
-use crate::brain::provider::gemini::attachments::GeminiFileRef;
+use crate::provider::gemini::agent::request_control::GeminiRequestControl;
+use crate::provider::gemini::attachments::GeminiFileRef;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
