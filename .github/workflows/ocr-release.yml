@@ -495,6 +495,7 @@ jobs:
           PACKAGE_IDENTIFIER: SquigitOrg.SquigitOCR
           PACKAGE_VERSION: ${{ needs.build-release-ocr-windows.outputs.version }}
           INSTALLER_URL: ${{ needs.build-release-ocr-windows.outputs.asset_url }}
+          MANIFEST_DIR: ${{ steps.manifest.outputs.manifest-dir }}
           WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_CREATE_GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = "Stop"
@@ -502,8 +503,26 @@ jobs:
             Write-Host "WINGET_CREATE_GITHUB_TOKEN is empty; skipping wingetcreate --submit."
             exit 0
           }
+
+          $packageRoot = ($env:PACKAGE_IDENTIFIER -replace '\.', '/')
+          $manifestApiPath = "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/$($env:PACKAGE_IDENTIFIER.Substring(0, 1).ToLowerInvariant())/$packageRoot"
+          $headers = @{
+            Accept = "application/vnd.github+json"
+            "User-Agent" = "squigit-github-actions"
+          }
+
           Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
-          .\wingetcreate.exe update $env:PACKAGE_IDENTIFIER -u $env:INSTALLER_URL -v $env:PACKAGE_VERSION -t $env:WINGET_CREATE_GITHUB_TOKEN --submit
+          $manifestLookup = Invoke-WebRequest -Uri $manifestApiPath -Headers $headers -SkipHttpErrorCheck
+
+          if ($manifestLookup.StatusCode -eq 404) {
+            Write-Host "No existing winget-pkgs manifest found for $env:PACKAGE_IDENTIFIER. Submitting generated manifest as first publication."
+            .\wingetcreate.exe submit $env:MANIFEST_DIR
+          } elseif ($manifestLookup.StatusCode -eq 200) {
+            Write-Host "Existing winget-pkgs manifest found for $env:PACKAGE_IDENTIFIER. Submitting update."
+            .\wingetcreate.exe update $env:PACKAGE_IDENTIFIER -u $env:INSTALLER_URL -v $env:PACKAGE_VERSION --submit
+          } else {
+            throw "Unexpected response while checking winget-pkgs manifest path ($($manifestLookup.StatusCode)): $manifestApiPath"
+          }
 
       - name: Publish Notes
         shell: pwsh
@@ -513,7 +532,7 @@ jobs:
           Write-Host "asset_url=${{ needs.build-release-ocr-windows.outputs.asset_url }}"
           Write-Host "sha256=${{ needs.build-release-ocr-windows.outputs.sha256 }}"
           Write-Host "Set submit_winget_pr=true on workflow_dispatch and configure WINGET_CREATE_GITHUB_TOKEN to open/update winget-pkgs PRs."
-          Write-Host "For first-ever package publication, wingetcreate new is typically a one-time manual step."
+          Write-Host "This workflow auto-detects first publication vs update and will submit the generated manifest accordingly."
 
   test-winget-ocr:
     name: End-user Winget Install Smoke (OCR)
