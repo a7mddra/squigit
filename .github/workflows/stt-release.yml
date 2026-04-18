@@ -452,7 +452,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v6
 
-      - name: Install via Winget (End-user First)
+      - name: Install via Winget (STT)
         id: install-winget
         shell: pwsh
         env:
