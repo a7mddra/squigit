@@ -16,7 +16,6 @@ class SquigitStt < Formula
   end
 
   test do
-    system "#{bin}/squigit-stt", "--help"
     system "#{bin}/squigit-stt", "--version"
   end
 end

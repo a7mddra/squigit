@@ -167,10 +167,29 @@ void stop_engine() {
   send_json(j);
 }
 
+void print_help() {
+  std::cout << "squigit-stt\n";
+  std::cout << "Usage:\n";
+  std::cout << "  squigit-stt --version\n";
+  std::cout << "  squigit-stt --help\n";
+  std::cout << "  squigit-stt  # JSON-over-stdin mode\n";
+}
+
 int main(int argc, char** argv) {
-  if (argc > 1 && std::string(argv[1]) == "--version") {
-    std::cout << "1.2.0" << std::endl;
-    return 0;
+  if (argc > 1) {
+    const std::string arg = argv[1];
+    if (arg == "--version") {
+      std::cout << "1.2.0" << std::endl;
+      return 0;
+    }
+    if (arg == "--help" || arg == "-h") {
+      print_help();
+      return 0;
+    }
+
+    std::cerr << "Unknown argument: " << arg << std::endl;
+    print_help();
+    return 2;
   }
 
   std::string line;
