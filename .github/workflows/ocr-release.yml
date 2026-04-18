@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "OCR formula version (example: 1.2.0)"
+        description: "OCR formula version (example: 0.2.0)"
         required: true
         type: string
       release_tag:
-        description: "Optional release tag override (example: ocr-v1.2.0). Leave empty to auto-use ocr-v<version>."
+        description: "Optional release tag override\n(example: ocr-v0.2.0). Leave empty to auto-use ocr-v<version>."
         required: false
         default: ""
         type: string
@@ -26,7 +26,7 @@ on:
         default: true
         type: boolean
       submit_winget_pr:
-        description: "Submit/update winget-pkgs PR (manual mode only, requires WINGET_CREATE_GITHUB_TOKEN secret)"
+        description: "Submit/update winget-pkgs PR"
         required: false
         default: false
         type: boolean
@@ -94,7 +94,7 @@ jobs:
       sha256: ${{ steps.meta.outputs.sha256 }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Extract Version
         id: version
@@ -242,7 +242,7 @@ jobs:
       sha256: ${{ steps.meta.outputs.sha256 }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -345,7 +345,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Sync OCR Formula to Tap
         uses: ./.github/actions/update-homebrew-tap-formula
@@ -369,7 +369,7 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -465,7 +465,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Generate Winget Manifest (OCR)
         id: manifest
@@ -525,7 +525,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v6

@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "STT formula version (example: 1.2.0)"
+        description: "STT formula version (example: 0.2.0)"
         required: true
         type: string
       release_tag:
-        description: "Optional release tag override (example: stt-v1.2.0). Leave empty to auto-use stt-v<version>."
+        description: "Optional release tag override\n(example: stt-v0.2.0). Leave empty to auto-use stt-v<version>."
         required: false
         default: ""
         type: string
@@ -26,7 +26,7 @@ on:
         default: true
         type: boolean
       submit_winget_pr:
-        description: "Submit/update winget-pkgs PR (manual mode only, requires WINGET_CREATE_GITHUB_TOKEN secret)"
+        description: "Submit/update winget-pkgs PR"
         required: false
         default: false
         type: boolean
