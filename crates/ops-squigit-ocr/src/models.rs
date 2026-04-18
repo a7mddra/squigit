@@ -4,20 +4,21 @@
 use flate2::read::GzDecoder;
 use futures_util::StreamExt;
 use reqwest::header::{ACCEPT_RANGES, CONTENT_LENGTH, RANGE};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tar::Archive;
-use tauri::{Emitter, Window};
 use thiserror::Error;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio_util::sync::CancellationToken;
 
-use crate::constants::DEFAULT_OCR_LANGUAGE;
+use crate::network::{NetworkStatus, PeerNetworkMonitor};
+
+const APP_DIR_NAME: &str = "squigit";
+const DEFAULT_OCR_LANGUAGE: &str = "pp-ocr-v5-en";
 
 #[derive(Debug, Error)]
 pub enum ModelError {
@@ -29,21 +30,19 @@ pub enum ModelError {
     Network(#[from] reqwest::Error),
     #[error("Extraction error: {0}")]
     Extraction(String),
-    #[error("Tauri event error: {0}")]
-    Tauri(#[from] tauri::Error),
     #[error("Download cancelled")]
     Cancelled,
 }
 
 pub type Result<T> = std::result::Result<T, ModelError>;
 
-#[derive(Clone, Serialize)]
-struct DownloadProgressPayload {
-    id: String,
-    progress: u8,
-    loaded: u64,
-    total: u64,
-    status: String,
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DownloadProgressPayload {
+    pub id: String,
+    pub progress: u8,
+    pub loaded: u64,
+    pub total: u64,
+    pub status: String,
 }
 
 fn canonical_ocr_model_id(model_id: &str) -> &str {
@@ -109,20 +108,20 @@ fn build_archive_candidates(primary_url: &str, model_id: &str) -> Vec<String> {
 pub struct ModelManager {
     models_dir: PathBuf,
     cancellation_tokens: Arc<Mutex<HashMap<String, CancellationToken>>>,
-    network_monitor: Arc<crate::services::network::PeerNetworkMonitor>,
+    network_monitor: Arc<PeerNetworkMonitor>,
 }
 
 impl ModelManager {
     pub fn new() -> Result<Self> {
         let config_dir = dirs::config_dir().ok_or(ModelError::NoConfigDir)?;
         let models_dir = config_dir
-            .join(crate::constants::APP_NAME.to_lowercase())
+            .join(APP_DIR_NAME)
             .join("Local Storage")
             .join("models");
 
         fs::create_dir_all(&models_dir)?;
 
-        let network_monitor = Arc::new(crate::services::network::PeerNetworkMonitor::new());
+        let network_monitor = Arc::new(PeerNetworkMonitor::new());
 
         Ok(Self {
             models_dir,
@@ -135,17 +134,17 @@ impl ModelManager {
         self.network_monitor.start_monitor();
     }
 
+    pub fn models_dir(&self) -> &Path {
+        &self.models_dir
+    }
+
     pub fn get_model_dir(&self, model_id: &str) -> PathBuf {
         if model_id.is_empty() {
             return self.models_dir.clone();
         }
 
         let canonical_id = canonical_ocr_model_id(model_id);
-        let canonical_dir = self.models_dir.join(canonical_id);
-        if canonical_dir.exists() {
-            return canonical_dir;
-        }
-        canonical_dir
+        self.models_dir.join(canonical_id)
     }
 
     fn get_temp_file_path(&self, model_id: &str) -> PathBuf {
@@ -158,38 +157,61 @@ impl ModelManager {
         dir.exists() && is_model_dir_ready(&dir)
     }
 
+    pub fn list_downloaded_models(&self) -> Result<Vec<String>> {
+        let mut models = Vec::new();
+
+        if self.models_dir.exists() {
+            for entry in fs::read_dir(&self.models_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() && is_model_dir_ready(&path) {
+                    if let Some(name) = path.file_name() {
+                        models.push(name.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+
+        Ok(models)
+    }
+
     pub fn cancel_download(&self, model_id: &str) {
+        let canonical_id = canonical_ocr_model_id(model_id).to_string();
         if let Ok(mut tokens) = self.cancellation_tokens.lock() {
-            if let Some(token) = tokens.remove(model_id) {
+            if let Some(token) = tokens.remove(&canonical_id) {
                 token.cancel();
             }
         }
     }
 
-    pub async fn download_and_extract(
+    pub async fn download_and_extract<F>(
         &self,
         url: &str,
         model_id: &str,
-        window: &Window,
-    ) -> Result<PathBuf> {
-        let target_dir = self.get_model_dir(model_id);
+        mut on_progress: F,
+    ) -> Result<PathBuf>
+    where
+        F: FnMut(DownloadProgressPayload) + Send,
+    {
+        let canonical_id = canonical_ocr_model_id(model_id).to_string();
+        let target_dir = self.get_model_dir(&canonical_id);
 
-        if self.is_model_installed(model_id) {
+        if self.is_model_installed(&canonical_id) {
             return Ok(target_dir);
         }
 
-        self.cancel_download(model_id);
+        self.cancel_download(&canonical_id);
 
         let cancel_token = CancellationToken::new();
         if let Ok(mut tokens) = self.cancellation_tokens.lock() {
-            tokens.insert(model_id.to_string(), cancel_token.clone());
+            tokens.insert(canonical_id.clone(), cancel_token.clone());
         }
 
-        let temp_file_path = self.get_temp_file_path(model_id);
+        let temp_file_path = self.get_temp_file_path(&canonical_id);
         let client = reqwest::Client::builder()
             .user_agent("squigit-ocr-model-downloader/1.0")
             .build()?;
-        let archive_candidates = build_archive_candidates(url, model_id);
+        let archive_candidates = build_archive_candidates(url, &canonical_id);
         let mut selected_archive_url: Option<String> = None;
 
         for candidate_url in archive_candidates {
@@ -197,7 +219,7 @@ impl ModelManager {
             loop {
                 if cancel_token.is_cancelled() {
                     if let Ok(mut tokens) = self.cancellation_tokens.lock() {
-                        tokens.remove(model_id);
+                        tokens.remove(&canonical_id);
                     }
 
                     let _ = fs::remove_file(&temp_file_path);
@@ -210,30 +232,27 @@ impl ModelManager {
 
                 let status_str = if current_bytes == 0 {
                     "checking"
-                } else if net_state.status == crate::services::network::NetworkStatus::Offline {
+                } else if net_state.status == NetworkStatus::Offline {
                     // Hint only: do not hard-stop retries on DNS/firewall-restricted networks.
                     "paused"
                 } else {
                     "downloading"
                 };
-                let _ = window.emit(
-                    "download-progress",
-                    DownloadProgressPayload {
-                        id: model_id.to_string(),
-                        progress: 0,
-                        loaded: current_bytes,
-                        total: 0,
-                        status: status_str.to_string(),
-                    },
-                );
+                on_progress(DownloadProgressPayload {
+                    id: canonical_id.clone(),
+                    progress: 0,
+                    loaded: current_bytes,
+                    total: 0,
+                    status: status_str.to_string(),
+                });
 
                 match self
                     .download_chunk_loop(
                         &client,
                         &candidate_url,
-                        model_id,
+                        &canonical_id,
                         &temp_file_path,
-                        window,
+                        &mut on_progress,
                         &cancel_token,
                     )
                     .await
@@ -244,7 +263,7 @@ impl ModelManager {
                     }
                     Err(ModelError::Cancelled) => {
                         if let Ok(mut tokens) = self.cancellation_tokens.lock() {
-                            tokens.remove(model_id);
+                            tokens.remove(&canonical_id);
                         }
 
                         let _ = fs::remove_file(&temp_file_path);
@@ -257,16 +276,13 @@ impl ModelManager {
                             candidate_url, attempts, e
                         );
 
-                        let _ = window.emit(
-                            "download-progress",
-                            DownloadProgressPayload {
-                                id: model_id.to_string(),
-                                progress: 0,
-                                loaded: current_bytes,
-                                total: 0,
-                                status: "paused".to_string(),
-                            },
-                        );
+                        on_progress(DownloadProgressPayload {
+                            id: canonical_id.clone(),
+                            progress: 0,
+                            loaded: current_bytes,
+                            total: 0,
+                            status: "paused".to_string(),
+                        });
 
                         if attempts >= 3 {
                             let _ = fs::remove_file(&temp_file_path);
@@ -284,24 +300,36 @@ impl ModelManager {
 
         if let Some(chosen_url) = selected_archive_url {
             if let Ok(mut tokens) = self.cancellation_tokens.lock() {
-                tokens.remove(model_id);
+                tokens.remove(&canonical_id);
             }
 
-            println!("Extracting model {}...", model_id);
+            println!("Extracting model {}...", canonical_id);
             return self
-                .perform_extraction(&chosen_url, model_id, &temp_file_path, &target_dir, window)
+                .perform_extraction(
+                    &chosen_url,
+                    &canonical_id,
+                    &temp_file_path,
+                    &target_dir,
+                    &mut on_progress,
+                )
                 .await;
         }
 
         println!(
             "Archive download failed for {}. Falling back to direct model file download...",
-            model_id
+            canonical_id
         );
         let fallback_result = self
-            .download_direct_model_files(&client, model_id, &target_dir, window, &cancel_token)
+            .download_direct_model_files(
+                &client,
+                &canonical_id,
+                &target_dir,
+                &mut on_progress,
+                &cancel_token,
+            )
             .await;
         if let Ok(mut tokens) = self.cancellation_tokens.lock() {
-            tokens.remove(model_id);
+            tokens.remove(&canonical_id);
         }
         let _ = fs::remove_file(&temp_file_path);
         fallback_result
@@ -351,14 +379,17 @@ impl ModelManager {
         Ok(written)
     }
 
-    async fn download_direct_model_files(
+    async fn download_direct_model_files<F>(
         &self,
         client: &reqwest::Client,
         model_id: &str,
         target_dir: &Path,
-        window: &Window,
+        on_progress: &mut F,
         cancel_token: &CancellationToken,
-    ) -> Result<PathBuf> {
+    ) -> Result<PathBuf>
+    where
+        F: FnMut(DownloadProgressPayload) + Send,
+    {
         let canonical_id = canonical_ocr_model_id(model_id);
         let repo = hf_repo_for_model_id(canonical_id).ok_or_else(|| {
             ModelError::Extraction(format!(
@@ -389,16 +420,13 @@ impl ModelManager {
                 }
 
                 let progress = ((idx as f64 / REQUIRED_FILES.len() as f64) * 100.0) as u8;
-                let _ = window.emit(
-                    "download-progress",
-                    DownloadProgressPayload {
-                        id: model_id.to_string(),
-                        progress,
-                        loaded: idx as u64,
-                        total: REQUIRED_FILES.len() as u64,
-                        status: "downloading".to_string(),
-                    },
-                );
+                on_progress(DownloadProgressPayload {
+                    id: model_id.to_string(),
+                    progress,
+                    loaded: idx as u64,
+                    total: REQUIRED_FILES.len() as u64,
+                    status: "downloading".to_string(),
+                });
 
                 let file_url = format!("{}/{}/resolve/main/{}", base, repo, file_name);
                 let target_path = target_dir.join(file_name);
@@ -416,16 +444,13 @@ impl ModelManager {
             }
 
             if success && is_model_dir_ready(target_dir) {
-                let _ = window.emit(
-                    "download-progress",
-                    DownloadProgressPayload {
-                        id: model_id.to_string(),
-                        progress: 100,
-                        loaded: REQUIRED_FILES.len() as u64,
-                        total: REQUIRED_FILES.len() as u64,
-                        status: "extracting".to_string(),
-                    },
-                );
+                on_progress(DownloadProgressPayload {
+                    id: model_id.to_string(),
+                    progress: 100,
+                    loaded: REQUIRED_FILES.len() as u64,
+                    total: REQUIRED_FILES.len() as u64,
+                    status: "extracting".to_string(),
+                });
                 println!(
                     "Model {} installed successfully at {:?} (direct file fallback)",
                     model_id, target_dir
@@ -441,15 +466,18 @@ impl ModelManager {
         )))
     }
 
-    async fn download_chunk_loop(
+    async fn download_chunk_loop<F>(
         &self,
         client: &reqwest::Client,
         url: &str,
         model_id: &str,
         temp_file_path: &Path,
-        window: &Window,
+        on_progress: &mut F,
         cancel_token: &CancellationToken,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        F: FnMut(DownloadProgressPayload) + Send,
+    {
         let mut downloaded_bytes = 0u64;
         let mut file;
 
@@ -562,16 +590,13 @@ impl ModelManager {
 
                             if total_size > 0 {
                                 let progress = ((downloaded_bytes as f64 / total_size as f64) * 100.0) as u8;
-                                let _ = window.emit(
-                                    "download-progress",
-                                    DownloadProgressPayload {
-                                        id: model_id.to_string(),
-                                        progress,
-                                        loaded: downloaded_bytes,
-                                        total: total_size,
-                                        status: "downloading".to_string(),
-                                    },
-                                );
+                                on_progress(DownloadProgressPayload {
+                                    id: model_id.to_string(),
+                                    progress,
+                                    loaded: downloaded_bytes,
+                                    total: total_size,
+                                    status: "downloading".to_string(),
+                                });
                             }
                         }
                         Ok(None) => {
@@ -589,24 +614,24 @@ impl ModelManager {
         Ok(())
     }
 
-    async fn perform_extraction(
+    async fn perform_extraction<F>(
         &self,
         url: &str,
         model_id: &str,
         temp_file_path: &Path,
         target_dir: &Path,
-        window: &Window,
-    ) -> Result<PathBuf> {
-        let _ = window.emit(
-            "download-progress",
-            DownloadProgressPayload {
-                id: model_id.to_string(),
-                progress: 100,
-                loaded: 0,
-                total: 0,
-                status: "extracting".to_string(),
-            },
-        );
+        on_progress: &mut F,
+    ) -> Result<PathBuf>
+    where
+        F: FnMut(DownloadProgressPayload) + Send,
+    {
+        on_progress(DownloadProgressPayload {
+            id: model_id.to_string(),
+            progress: 100,
+            loaded: 0,
+            total: 0,
+            status: "extracting".to_string(),
+        });
 
         if target_dir.exists() {
             fs::remove_dir_all(target_dir)?;
@@ -677,5 +702,29 @@ impl ModelManager {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_archive_candidates, canonical_ocr_model_id};
+
+    #[test]
+    fn canonical_model_id_defaults_to_english() {
+        assert_eq!(canonical_ocr_model_id(""), "pp-ocr-v5-en");
+        assert_eq!(canonical_ocr_model_id("   "), "pp-ocr-v5-en");
+    }
+
+    #[test]
+    fn archive_candidates_keep_primary_and_official_fallback() {
+        let candidates =
+            build_archive_candidates("https://example.invalid/custom.tar", "pp-ocr-v5-cyrillic");
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some("https://example.invalid/custom.tar")
+        );
+        assert!(candidates
+            .iter()
+            .any(|candidate| candidate.contains("cyrillic_PP-OCRv5_mobile_rec_infer.tar")));
     }
 }

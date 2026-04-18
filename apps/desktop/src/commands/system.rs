@@ -3,21 +3,19 @@
 
 //! System level commands for orchestrating sidecars and OS environment checks
 
+use crate::services::ocr::DesktopOcrService;
 use tauri::Manager;
 
 #[tauri::command]
-pub async fn run_sidecar_version(app: tauri::AppHandle, command: String) -> Result<String, String> {
+pub async fn run_sidecar_version(
+    app: tauri::AppHandle,
+    ocr: tauri::State<'_, DesktopOcrService>,
+    command: String,
+) -> Result<String, String> {
     if command == "squigit-ocr --version" {
         let resource_dir = app.path().resource_dir().map_err(|e| e.to_string())?;
-        let (sidecar_path, _) = crate::commands::ocr::resolve_sidecar_path(&resource_dir);
-        let output = std::process::Command::new(sidecar_path)
-            .arg("--version")
-            .output()
-            .map_err(|e| e.to_string())?;
-        if output.status.success() {
-            return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
-        }
-        return Err("Sidecar command failed".to_string());
+        let (sidecar_path, _) = ocr.resolve_sidecar_path(&resource_dir);
+        return ocr.read_sidecar_version(&sidecar_path);
     }
 
     if command == "squigit-stt --version" {

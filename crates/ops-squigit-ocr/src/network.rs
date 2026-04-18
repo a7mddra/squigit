@@ -1,3 +1,6 @@
+// Copyright 2026 a7mddra
+// SPDX-License-Identifier: Apache-2.0
+
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
@@ -48,7 +51,7 @@ impl PeerNetworkMonitor {
     pub fn start_monitor(&self) {
         let state = self.state.clone();
 
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             loop {
                 let start = Instant::now();
                 // 8.8.8.8:53 is Google DNS, very reliable.
@@ -74,8 +77,6 @@ impl PeerNetworkMonitor {
                 };
 
                 *state.lock().unwrap() = status;
-
-                // Sleep for 2 seconds
                 sleep(Duration::from_secs(2)).await;
             }
         });

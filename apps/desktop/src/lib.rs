@@ -77,6 +77,7 @@ pub fn run() {
         .manage(services::brain::DesktopBrainService::new())
         .manage(services::audio::UiSoundPlayer::new())
         .manage(SpeechState::default())
+        .manage(services::ocr::DesktopOcrService::new().expect("Failed to init OCR service"))
         .invoke_handler(tauri::generate_handler![
             // Image processing
             process_image_path,
@@ -180,11 +181,10 @@ pub fn run() {
             spawn_capture,
             spawn_capture_to_input,
         ])
-        .manage(services::models::ModelManager::new().expect("Failed to init ModelManager"))
         .setup(move |app| {
             let handle = app.handle().clone();
-            let model_manager = app.state::<services::models::ModelManager>();
-            model_manager.start_monitor();
+            let ocr_service = app.state::<services::ocr::DesktopOcrService>();
+            ocr_service.start_monitor();
 
             let start_in_background = crate::utils::launched_in_background();
             let launch_args: Vec<String> = std::env::args().skip(1).collect();

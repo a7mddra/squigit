@@ -27,6 +27,7 @@ dependencies = [
  "ops-chat-storage",
  "ops-profile-store",
  "ops-squigit-brain",
+ "ops-squigit-ocr",
  "parking_lot",
  "rand 0.8.5",
  "regex",
@@ -3909,6 +3910,27 @@ dependencies = [
  "tokio-util",
  "url",
  "webbrowser",
+]
+
+[[package]]
+name = "ops-squigit-ocr"
+version = "0.1.0"
+dependencies = [
+ "dirs 6.0.0",
+ "flate2",
+ "futures-util",
+ "libc",
+ "ops-chat-storage",
+ "reqwest 0.11.27",
+ "semver",
+ "serde",
+ "serde_json",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "which 6.0.3",
 ]
 
 [[package]]

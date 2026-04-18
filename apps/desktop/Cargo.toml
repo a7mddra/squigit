@@ -42,6 +42,7 @@ webbrowser = "1.0.6"
 ops-chat-storage = { path = "../../crates/ops-chat-storage" }
 ops-profile-store = { path = "../../crates/ops-profile-store" }
 ops-squigit-brain = { path = "../../crates/ops-squigit-brain" }
+ops-squigit-ocr = { path = "../../crates/ops-squigit-ocr" }
 tauri-plugin-dialog = "2.6.0"
 clipboard-rs = "0.3.2"
 tauri-plugin-single-instance = "2"

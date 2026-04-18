@@ -3,17 +3,12 @@
 
 use ops_chat_storage::StoredImage;
 use parking_lot::Mutex;
-use std::sync::{atomic::AtomicBool, Arc};
-
-pub struct OcrJobHandle {
-    pub child: tokio::process::Child,
-}
+use std::sync::{Arc, atomic::AtomicBool};
 
 pub struct AppState {
     pub image_data: Arc<Mutex<Option<StoredImage>>>,
     pub auth_running: Arc<AtomicBool>,
     pub auth_cancelled: Arc<AtomicBool>,
-    pub ocr_job: Arc<tokio::sync::Mutex<Option<OcrJobHandle>>>,
 }
 
 impl AppState {
@@ -22,7 +17,6 @@ impl AppState {
             image_data: Arc::new(Mutex::new(None)),
             auth_running: Arc::new(AtomicBool::new(false)),
             auth_cancelled: Arc::new(AtomicBool::new(false)),
-            ocr_job: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
 }
