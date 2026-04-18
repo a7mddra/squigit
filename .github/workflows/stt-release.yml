@@ -21,9 +21,14 @@ on:
         default: true
         type: boolean
       release_winget:
-        description: "Run Winget lane (mock)"
+        description: "Run Winget lane"
         required: false
         default: true
+        type: boolean
+      submit_winget_pr:
+        description: "Submit/update winget-pkgs PR (manual mode only, requires WINGET_CREATE_GITHUB_PAT secret)"
+        required: false
+        default: false
         type: boolean
       release_apt:
         description: "Run APT lane (mock)"
@@ -179,6 +184,72 @@ jobs:
           echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
           echo "asset_url=${ASSET_URL}" >> "$GITHUB_OUTPUT"
 
+  build-release-stt-windows:
+    name: Build STT Windows x64 + Release Asset
+    if: needs.resolve-channel-scope.outputs.run_winget == 'true'
+    needs:
+      - resolve-channel-scope
+      - build-release-stt
+    runs-on: windows-latest
+    outputs:
+      version: ${{ needs.build-release-stt.outputs.version }}
+      release_tag: ${{ needs.build-release-stt.outputs.release_tag }}
+      asset_url: ${{ steps.meta.outputs.asset_url }}
+      sha256: ${{ steps.meta.outputs.sha256 }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Whisper STT Sidecar (Windows x64)
+        id: build
+        uses: ./.github/actions/build-whisper-stt
+        with:
+          python-version: "3.12"
+          package-windows-asset: "true"
+          windows-asset-name: "squigit-stt-win-x64.zip"
+
+      - name: Run STT Version Smoke Check (Windows)
+        shell: pwsh
+        env:
+          EXPECTED_VERSION: ${{ needs.build-release-stt.outputs.version }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $sttVersion = & packaging/binaries/whisper-stt-x86_64-pc-windows-msvc/squigit-stt.exe --version
+          $sttVersion = ($sttVersion | Select-Object -Last 1).Trim()
+          Write-Host "Detected STT version: $sttVersion"
+          if ($sttVersion -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Invalid STT version output: $sttVersion"
+          }
+          if ($sttVersion -ne $env:EXPECTED_VERSION) {
+            throw "STT version mismatch: built=$sttVersion expected=$env:EXPECTED_VERSION"
+          }
+
+      - name: Upload STT Windows Asset to GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.build-release-stt.outputs.release_tag }}
+          name: STT v${{ needs.build-release-stt.outputs.version }}
+          files: ${{ steps.build.outputs.asset-path }}
+          overwrite_files: true
+          repository: squigit-org/squigit
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Export Winget Release Metadata
+        id: meta
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ needs.build-release-stt.outputs.release_tag }}
+          ASSET_NAME: ${{ steps.build.outputs.asset-name }}
+          ASSET_SHA256: ${{ steps.build.outputs.asset-sha256 }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $assetUrl = "https://github.com/squigit-org/squigit/releases/download/$env:RELEASE_TAG/$env:ASSET_NAME"
+          "asset_url=$assetUrl" >> $env:GITHUB_OUTPUT
+          "sha256=$env:ASSET_SHA256" >> $env:GITHUB_OUTPUT
+
   update-homebrew-tap-stt:
     name: Update Homebrew Tap Formula (STT)
     if: needs.resolve-channel-scope.outputs.run_homebrew == 'true'
@@ -245,37 +316,129 @@ jobs:
             exit 1
           fi
 
-  publish-winget-mock-stt:
-    name: Publish Winget Manifest (Mock STT)
+  publish-winget-stt:
+    name: Publish Winget Manifest (STT)
     if: needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-stt
-    runs-on: ubuntu-latest
+      - build-release-stt-windows
+    runs-on: windows-latest
     steps:
-      - name: Mock publish
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "MOCK winget publish for squigit-stt"
-          echo "version=${{ needs.build-release-stt.outputs.version }}"
-          echo "asset_url=${{ needs.build-release-stt.outputs.asset_url }}"
-          echo "sha256=${{ needs.build-release-stt.outputs.sha256 }}"
+      - name: Checkout Code
+        uses: actions/checkout@v6
 
-  test-winget-mock-stt:
-    name: End-user Winget Install Smoke (Mock STT)
+      - name: Generate Winget Manifest (STT)
+        id: manifest
+        uses: ./.github/actions/generate-winget-portable-manifest
+        with:
+          package-identifier: SquigitOrg.SquigitSTT
+          package-version: ${{ needs.build-release-stt-windows.outputs.version }}
+          package-name: Squigit STT
+          publisher: Squigit Org
+          short-description: Standalone headless speech-to-text CLI engine for Squigit
+          installer-url: ${{ needs.build-release-stt-windows.outputs.asset_url }}
+          installer-sha256: ${{ needs.build-release-stt-windows.outputs.sha256 }}
+          command-alias: squigit-stt
+          nested-installer-path: squigit-stt.exe
+          output-dir: ${{ github.workspace }}/target/winget-manifest-stt
+
+      - name: Upload Winget Manifest (STT)
+        uses: actions/upload-artifact@v7
+        with:
+          name: winget-manifest-stt
+          path: ${{ steps.manifest.outputs.manifest-dir }}
+
+      - name: Submit Winget Update PR (optional)
+        if: github.event_name == 'workflow_dispatch' && inputs.submit_winget_pr && secrets.WINGET_CREATE_GITHUB_PAT != ''
+        shell: pwsh
+        env:
+          PACKAGE_IDENTIFIER: SquigitOrg.SquigitSTT
+          PACKAGE_VERSION: ${{ needs.build-release-stt-windows.outputs.version }}
+          INSTALLER_URL: ${{ needs.build-release-stt-windows.outputs.asset_url }}
+          WINGET_CREATE_GITHUB_PAT: ${{ secrets.WINGET_CREATE_GITHUB_PAT }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          .\wingetcreate.exe update $env:PACKAGE_IDENTIFIER -u $env:INSTALLER_URL -v $env:PACKAGE_VERSION -t $env:WINGET_CREATE_GITHUB_PAT --submit
+
+      - name: Publish Notes
+        shell: pwsh
+        run: |
+          Write-Host "Prepared Winget manifest for squigit-stt"
+          Write-Host "version=${{ needs.build-release-stt-windows.outputs.version }}"
+          Write-Host "asset_url=${{ needs.build-release-stt-windows.outputs.asset_url }}"
+          Write-Host "sha256=${{ needs.build-release-stt-windows.outputs.sha256 }}"
+          Write-Host "Set submit_winget_pr=true on workflow_dispatch and configure WINGET_CREATE_GITHUB_PAT to open/update winget-pkgs PRs."
+          Write-Host "For first-ever package publication, wingetcreate new is typically a one-time manual step."
+
+  test-winget-stt:
+    name: End-user Winget Install Smoke (STT)
     if: needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-stt
-      - publish-winget-mock-stt
-    runs-on: ubuntu-latest
+      - build-release-stt-windows
+      - publish-winget-stt
+    runs-on: windows-latest
     steps:
-      - name: Mock install smoke
-        shell: bash
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Generate Winget Manifest (STT)
+        id: manifest
+        uses: ./.github/actions/generate-winget-portable-manifest
+        with:
+          package-identifier: SquigitOrg.SquigitSTT
+          package-version: ${{ needs.build-release-stt-windows.outputs.version }}
+          package-name: Squigit STT
+          publisher: Squigit Org
+          short-description: Standalone headless speech-to-text CLI engine for Squigit
+          installer-url: ${{ needs.build-release-stt-windows.outputs.asset_url }}
+          installer-sha256: ${{ needs.build-release-stt-windows.outputs.sha256 }}
+          command-alias: squigit-stt
+          nested-installer-path: squigit-stt.exe
+          output-dir: ${{ github.workspace }}/target/winget-manifest-stt-test
+
+      - name: Install via Winget Manifest
+        shell: pwsh
         run: |
-          set -euo pipefail
-          echo "MOCK winget install squigit-stt --version ${{ needs.build-release-stt.outputs.version }}"
+          winget uninstall --id SquigitOrg.SquigitSTT --scope user --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "No previous SquigitOrg.SquigitSTT install found (winget uninstall exit code: $LASTEXITCODE)."
+          }
+          winget install --manifest "${{ steps.manifest.outputs.manifest-dir }}" --scope user --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
+
+      - name: Resolve Installed STT Executable
+        id: locate-stt
+        shell: pwsh
+        run: |
+          $cmd = Get-Command squigit-stt -ErrorAction SilentlyContinue
+          if ($cmd) {
+            $sttExe = $cmd.Source
+          } else {
+            $root = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages"
+            $candidate = Get-ChildItem -Path $root -Recurse -Filter squigit-stt.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $candidate) {
+              throw "Installed squigit-stt executable was not found."
+            }
+            $sttExe = $candidate.FullName
+          }
+          "stt_exe=$sttExe" >> $env:GITHUB_OUTPUT
+
+      - name: Validate Installed STT Version
+        shell: pwsh
+        env:
+          EXPECTED_VERSION: ${{ needs.build-release-stt-windows.outputs.version }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $sttVersion = & "${{ steps.locate-stt.outputs.stt_exe }}" --version
+          $sttVersion = ($sttVersion | Select-Object -Last 1).Trim()
+          Write-Host "Installed STT version: $sttVersion"
+          if ($sttVersion -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Installed STT version is not semver: $sttVersion"
+          }
+          if ($sttVersion -ne $env:EXPECTED_VERSION) {
+            throw "Installed STT version mismatch: installed=$sttVersion expected=$env:EXPECTED_VERSION"
+          }
 
   publish-apt-mock-stt:
     name: Publish APT Package (Mock STT)

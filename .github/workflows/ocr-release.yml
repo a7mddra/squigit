@@ -21,9 +21,14 @@ on:
         default: true
         type: boolean
       release_winget:
-        description: "Run Winget lane (mock)"
+        description: "Run Winget lane"
         required: false
         default: true
+        type: boolean
+      submit_winget_pr:
+        description: "Submit/update winget-pkgs PR (manual mode only, requires WINGET_CREATE_GITHUB_PAT secret)"
+        required: false
+        default: false
         type: boolean
       release_apt:
         description: "Run APT lane (mock)"
@@ -223,6 +228,114 @@ jobs:
           echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
           echo "asset_url=${ASSET_URL}" >> "$GITHUB_OUTPUT"
 
+  build-release-ocr-windows:
+    name: Build OCR Windows x64 + Release Asset
+    if: needs.resolve-channel-scope.outputs.run_winget == 'true'
+    needs:
+      - resolve-channel-scope
+      - build-release-ocr
+    runs-on: windows-latest
+    outputs:
+      version: ${{ needs.build-release-ocr.outputs.version }}
+      release_tag: ${{ needs.build-release-ocr.outputs.release_tag }}
+      asset_url: ${{ steps.meta.outputs.asset_url }}
+      sha256: ${{ steps.meta.outputs.sha256 }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build PaddleOCR Sidecar (Windows x64)
+        id: build
+        uses: ./.github/actions/build-paddle-ocr
+        with:
+          python-version: "3.12"
+          pyi-mode: "onedir"
+          package-windows-asset: "true"
+          windows-asset-name: "squigit-ocr-win-x64.zip"
+
+      - name: Run OCR Version Smoke Check (Windows)
+        shell: pwsh
+        env:
+          EXPECTED_VERSION: ${{ needs.build-release-ocr.outputs.version }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ocrVersion = & packaging/binaries/paddle-ocr-x86_64-pc-windows-msvc/squigit-ocr.exe --version
+          $ocrVersion = ($ocrVersion | Select-Object -Last 1).Trim()
+          Write-Host "Detected OCR version: $ocrVersion"
+          if ($ocrVersion -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Invalid OCR version output: $ocrVersion"
+          }
+          if ($ocrVersion -ne $env:EXPECTED_VERSION) {
+            throw "OCR version mismatch: built=$ocrVersion expected=$env:EXPECTED_VERSION"
+          }
+
+      - name: Generate PNG Smoke Image (Windows)
+        shell: pwsh
+        run: |
+          & sidecars/paddle-ocr/venv/Scripts/python.exe sidecars/paddle-ocr/scripts/gen_test_image.py `
+            --output $env:TEMP/ocr-smoke.png `
+            --text "SQUIGIT Windows-x64 OCR SMOKE"
+
+      - name: Run Sidecar CLI and Print JSON (Windows)
+        shell: pwsh
+        run: |
+          & packaging/binaries/paddle-ocr-x86_64-pc-windows-msvc/squigit-ocr.exe $env:TEMP/ocr-smoke.png | Tee-Object -FilePath $env:TEMP/ocr-smoke-output.json
+
+      - name: Validate OCR JSON Payload (Windows)
+        shell: pwsh
+        run: |
+          $code = @"
+          import json
+          import os
+          from pathlib import Path
+
+          out = Path(os.environ["TEMP"]) / "ocr-smoke-output.json"
+          payload = json.loads(out.read_text(encoding="utf-8").strip())
+          if isinstance(payload, dict) and "error" in payload:
+              raise SystemExit(f"OCR returned error: {payload['error']}")
+          if not isinstance(payload, list):
+              raise SystemExit(f"OCR payload type {type(payload).__name__}, expected list")
+          if not payload:
+              raise SystemExit("OCR payload list is empty")
+
+          text_values = [str(item.get("text", "")).strip() for item in payload if isinstance(item, dict)]
+          merged = " | ".join(t for t in text_values if t)
+          upper = merged.upper()
+          for token in ("SQUIGIT", "OCR", "SMOKE"):
+              if token not in upper:
+                  raise SystemExit(f"Expected token '{token}' in OCR text, got: {merged!r}")
+
+          print(f"Detected entries: {len(payload)}")
+          print(f"Detected text: {merged}")
+          "@
+          & sidecars/paddle-ocr/venv/Scripts/python.exe -c $code
+
+      - name: Upload OCR Windows Asset to GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.build-release-ocr.outputs.release_tag }}
+          name: OCR v${{ needs.build-release-ocr.outputs.version }}
+          files: ${{ steps.build.outputs.asset-path }}
+          overwrite_files: true
+          repository: squigit-org/squigit
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Export Winget Release Metadata
+        id: meta
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ needs.build-release-ocr.outputs.release_tag }}
+          ASSET_NAME: ${{ steps.build.outputs.asset-name }}
+          ASSET_SHA256: ${{ steps.build.outputs.asset-sha256 }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $assetUrl = "https://github.com/squigit-org/squigit/releases/download/$env:RELEASE_TAG/$env:ASSET_NAME"
+          "asset_url=$assetUrl" >> $env:GITHUB_OUTPUT
+          "sha256=$env:ASSET_SHA256" >> $env:GITHUB_OUTPUT
+
   update-homebrew-tap-ocr:
     name: Update Homebrew Tap Formula (OCR)
     if: needs.resolve-channel-scope.outputs.run_homebrew == 'true'
@@ -343,37 +456,179 @@ jobs:
           print(f"Detected text: {merged}")
           PY
 
-  publish-winget-mock-ocr:
-    name: Publish Winget Manifest (Mock OCR)
+  publish-winget-ocr:
+    name: Publish Winget Manifest (OCR)
     if: needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-ocr
-    runs-on: ubuntu-latest
+      - build-release-ocr-windows
+    runs-on: windows-latest
     steps:
-      - name: Mock publish
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "MOCK winget publish for squigit-ocr"
-          echo "version=${{ needs.build-release-ocr.outputs.version }}"
-          echo "asset_url=${{ needs.build-release-ocr.outputs.asset_url }}"
-          echo "sha256=${{ needs.build-release-ocr.outputs.sha256 }}"
+      - name: Checkout Code
+        uses: actions/checkout@v6
 
-  test-winget-mock-ocr:
-    name: End-user Winget Install Smoke (Mock OCR)
+      - name: Generate Winget Manifest (OCR)
+        id: manifest
+        uses: ./.github/actions/generate-winget-portable-manifest
+        with:
+          package-identifier: SquigitOrg.SquigitOCR
+          package-version: ${{ needs.build-release-ocr-windows.outputs.version }}
+          package-name: Squigit OCR
+          publisher: Squigit Org
+          short-description: Standalone headless OCR CLI engine for Squigit
+          installer-url: ${{ needs.build-release-ocr-windows.outputs.asset_url }}
+          installer-sha256: ${{ needs.build-release-ocr-windows.outputs.sha256 }}
+          command-alias: squigit-ocr
+          nested-installer-path: squigit-ocr.exe
+          output-dir: ${{ github.workspace }}/target/winget-manifest-ocr
+
+      - name: Upload Winget Manifest (OCR)
+        uses: actions/upload-artifact@v7
+        with:
+          name: winget-manifest-ocr
+          path: ${{ steps.manifest.outputs.manifest-dir }}
+
+      - name: Submit Winget Update PR (optional)
+        if: github.event_name == 'workflow_dispatch' && inputs.submit_winget_pr && secrets.WINGET_CREATE_GITHUB_PAT != ''
+        shell: pwsh
+        env:
+          PACKAGE_IDENTIFIER: SquigitOrg.SquigitOCR
+          PACKAGE_VERSION: ${{ needs.build-release-ocr-windows.outputs.version }}
+          INSTALLER_URL: ${{ needs.build-release-ocr-windows.outputs.asset_url }}
+          WINGET_CREATE_GITHUB_PAT: ${{ secrets.WINGET_CREATE_GITHUB_PAT }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          .\wingetcreate.exe update $env:PACKAGE_IDENTIFIER -u $env:INSTALLER_URL -v $env:PACKAGE_VERSION -t $env:WINGET_CREATE_GITHUB_PAT --submit
+
+      - name: Publish Notes
+        shell: pwsh
+        run: |
+          Write-Host "Prepared Winget manifest for squigit-ocr"
+          Write-Host "version=${{ needs.build-release-ocr-windows.outputs.version }}"
+          Write-Host "asset_url=${{ needs.build-release-ocr-windows.outputs.asset_url }}"
+          Write-Host "sha256=${{ needs.build-release-ocr-windows.outputs.sha256 }}"
+          Write-Host "Set submit_winget_pr=true on workflow_dispatch and configure WINGET_CREATE_GITHUB_PAT to open/update winget-pkgs PRs."
+          Write-Host "For first-ever package publication, wingetcreate new is typically a one-time manual step."
+
+  test-winget-ocr:
+    name: End-user Winget Install Smoke (OCR)
     if: needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-ocr
-      - publish-winget-mock-ocr
-    runs-on: ubuntu-latest
+      - build-release-ocr-windows
+      - publish-winget-ocr
+    runs-on: windows-latest
     steps:
-      - name: Mock install smoke
-        shell: bash
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Smoke Image Dependencies
+        shell: pwsh
         run: |
-          set -euo pipefail
-          echo "MOCK winget install squigit-ocr --version ${{ needs.build-release-ocr.outputs.version }}"
+          python -m pip install --upgrade pip
+          python -m pip install pillow
+
+      - name: Generate Winget Manifest (OCR)
+        id: manifest
+        uses: ./.github/actions/generate-winget-portable-manifest
+        with:
+          package-identifier: SquigitOrg.SquigitOCR
+          package-version: ${{ needs.build-release-ocr-windows.outputs.version }}
+          package-name: Squigit OCR
+          publisher: Squigit Org
+          short-description: Standalone headless OCR CLI engine for Squigit
+          installer-url: ${{ needs.build-release-ocr-windows.outputs.asset_url }}
+          installer-sha256: ${{ needs.build-release-ocr-windows.outputs.sha256 }}
+          command-alias: squigit-ocr
+          nested-installer-path: squigit-ocr.exe
+          output-dir: ${{ github.workspace }}/target/winget-manifest-ocr-test
+
+      - name: Install via Winget Manifest
+        shell: pwsh
+        run: |
+          winget uninstall --id SquigitOrg.SquigitOCR --scope user --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "No previous SquigitOrg.SquigitOCR install found (winget uninstall exit code: $LASTEXITCODE)."
+          }
+          winget install --manifest "${{ steps.manifest.outputs.manifest-dir }}" --scope user --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
+
+      - name: Resolve Installed OCR Executable
+        id: locate-ocr
+        shell: pwsh
+        run: |
+          $cmd = Get-Command squigit-ocr -ErrorAction SilentlyContinue
+          if ($cmd) {
+            $ocrExe = $cmd.Source
+          } else {
+            $root = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages"
+            $candidate = Get-ChildItem -Path $root -Recurse -Filter squigit-ocr.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $candidate) {
+              throw "Installed squigit-ocr executable was not found."
+            }
+            $ocrExe = $candidate.FullName
+          }
+          "ocr_exe=$ocrExe" >> $env:GITHUB_OUTPUT
+
+      - name: Validate Installed OCR Version
+        shell: pwsh
+        env:
+          EXPECTED_VERSION: ${{ needs.build-release-ocr-windows.outputs.version }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ocrVersion = & "${{ steps.locate-ocr.outputs.ocr_exe }}" --version
+          $ocrVersion = ($ocrVersion | Select-Object -Last 1).Trim()
+          Write-Host "Installed OCR version: $ocrVersion"
+          if ($ocrVersion -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Installed OCR version is not semver: $ocrVersion"
+          }
+          if ($ocrVersion -ne $env:EXPECTED_VERSION) {
+            throw "Installed OCR version mismatch: installed=$ocrVersion expected=$env:EXPECTED_VERSION"
+          }
+
+      - name: Generate OCR Smoke Image
+        shell: pwsh
+        run: |
+          python sidecars/paddle-ocr/scripts/gen_test_image.py --output $env:TEMP/ocr-smoke.png --text "SQUIGIT Windows-x64 OCR SMOKE"
+
+      - name: Run Installed OCR CLI and Print JSON
+        shell: pwsh
+        run: |
+          & "${{ steps.locate-ocr.outputs.ocr_exe }}" $env:TEMP/ocr-smoke.png | Tee-Object -FilePath $env:TEMP/ocr-smoke-output.json
+
+      - name: Validate Installed OCR JSON Payload
+        shell: pwsh
+        run: |
+          $code = @"
+          import json
+          import os
+          from pathlib import Path
+
+          out = Path(os.environ["TEMP"]) / "ocr-smoke-output.json"
+          payload = json.loads(out.read_text(encoding="utf-8").strip())
+          if isinstance(payload, dict) and "error" in payload:
+              raise SystemExit(f"OCR returned error: {payload['error']}")
+          if not isinstance(payload, list):
+              raise SystemExit(f"OCR payload type {type(payload).__name__}, expected list")
+          if not payload:
+              raise SystemExit("OCR payload list is empty")
+
+          text_values = [str(item.get("text", "")).strip() for item in payload if isinstance(item, dict)]
+          merged = " | ".join(t for t in text_values if t)
+          upper = merged.upper()
+          for token in ("SQUIGIT", "OCR", "SMOKE"):
+              if token not in upper:
+                  raise SystemExit(f"Expected token '{token}' in OCR text, got: {merged!r}")
+
+          print(f"Detected entries: {len(payload)}")
+          print(f"Detected text: {merged}")
+          "@
+          python -c $code
 
   publish-apt-mock-ocr:
     name: Publish APT Package (Mock OCR)

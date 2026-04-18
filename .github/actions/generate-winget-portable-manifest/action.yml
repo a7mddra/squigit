@@ -1,0 +1,121 @@
+name: "Generate Winget Portable Manifest"
+description: "Generates version/defaultLocale/installer manifest files for a ZIP-contained portable app"
+inputs:
+  package-identifier:
+    description: "Winget package identifier (for example: SquigitOrg.SquigitOCR)"
+    required: true
+  package-version:
+    description: "Package semantic version"
+    required: true
+  package-name:
+    description: "Display package name"
+    required: true
+  publisher:
+    description: "Publisher string"
+    required: true
+  short-description:
+    description: "Short package description"
+    required: true
+  installer-url:
+    description: "Installer ZIP URL"
+    required: true
+  installer-sha256:
+    description: "Installer ZIP SHA256"
+    required: true
+  command-alias:
+    description: "Command alias exposed by winget"
+    required: true
+  nested-installer-path:
+    description: "Relative path to executable inside ZIP"
+    required: true
+  architecture:
+    description: "Winget architecture value"
+    required: false
+    default: "x64"
+  package-locale:
+    description: "Locale for defaultLocale manifest"
+    required: false
+    default: "en-US"
+  license:
+    description: "License string"
+    required: false
+    default: "Apache-2.0"
+  manifest-version:
+    description: "Winget manifest schema version"
+    required: false
+    default: "1.6.0"
+  output-dir:
+    description: "Directory where manifest files will be written"
+    required: false
+    default: "target/winget-manifest"
+outputs:
+  manifest-dir:
+    description: "Directory containing generated manifest files"
+    value: ${{ steps.generate.outputs.manifest_dir }}
+runs:
+  using: "composite"
+  steps:
+    - name: Generate Manifest Files
+      id: generate
+      shell: bash
+      env:
+        PACKAGE_IDENTIFIER: ${{ inputs.package-identifier }}
+        PACKAGE_VERSION: ${{ inputs.package-version }}
+        PACKAGE_NAME: ${{ inputs.package-name }}
+        PUBLISHER: ${{ inputs.publisher }}
+        SHORT_DESCRIPTION: ${{ inputs.short-description }}
+        INSTALLER_URL: ${{ inputs.installer-url }}
+        INSTALLER_SHA256: ${{ inputs.installer-sha256 }}
+        COMMAND_ALIAS: ${{ inputs.command-alias }}
+        NESTED_INSTALLER_PATH: ${{ inputs.nested-installer-path }}
+        ARCHITECTURE: ${{ inputs.architecture }}
+        PACKAGE_LOCALE: ${{ inputs.package-locale }}
+        LICENSE: ${{ inputs.license }}
+        MANIFEST_VERSION: ${{ inputs.manifest-version }}
+        OUTPUT_DIR: ${{ inputs.output-dir }}
+      run: |
+        set -euo pipefail
+
+        mkdir -p "${OUTPUT_DIR}"
+
+        VERSION_FILE="${OUTPUT_DIR}/${PACKAGE_IDENTIFIER}.yaml"
+        LOCALE_FILE="${OUTPUT_DIR}/${PACKAGE_IDENTIFIER}.locale.${PACKAGE_LOCALE}.yaml"
+        INSTALLER_FILE="${OUTPUT_DIR}/${PACKAGE_IDENTIFIER}.installer.yaml"
+
+        cat > "${VERSION_FILE}" <<EOF
+        PackageIdentifier: ${PACKAGE_IDENTIFIER}
+        PackageVersion: ${PACKAGE_VERSION}
+        DefaultLocale: ${PACKAGE_LOCALE}
+        ManifestType: version
+        ManifestVersion: ${MANIFEST_VERSION}
+        EOF
+
+        cat > "${LOCALE_FILE}" <<EOF
+        PackageIdentifier: ${PACKAGE_IDENTIFIER}
+        PackageVersion: ${PACKAGE_VERSION}
+        PackageLocale: ${PACKAGE_LOCALE}
+        Publisher: ${PUBLISHER}
+        PackageName: ${PACKAGE_NAME}
+        License: ${LICENSE}
+        ShortDescription: ${SHORT_DESCRIPTION}
+        ManifestType: defaultLocale
+        ManifestVersion: ${MANIFEST_VERSION}
+        EOF
+
+        cat > "${INSTALLER_FILE}" <<EOF
+        PackageIdentifier: ${PACKAGE_IDENTIFIER}
+        PackageVersion: ${PACKAGE_VERSION}
+        InstallerType: zip
+        NestedInstallerType: portable
+        Installers:
+          - Architecture: ${ARCHITECTURE}
+            InstallerUrl: ${INSTALLER_URL}
+            InstallerSha256: ${INSTALLER_SHA256}
+            NestedInstallerFiles:
+              - RelativeFilePath: ${NESTED_INSTALLER_PATH}
+                PortableCommandAlias: ${COMMAND_ALIAS}
+        ManifestType: installer
+        ManifestVersion: ${MANIFEST_VERSION}
+        EOF
+
+        echo "manifest_dir=${OUTPUT_DIR}" >> "${GITHUB_OUTPUT}"

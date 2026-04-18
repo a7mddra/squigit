@@ -5,6 +5,28 @@ inputs:
     description: "Python version used to download Whisper models"
     required: false
     default: "3.13"
+  package-windows-asset:
+    description: "When true on Windows, zip the packaged runtime dir and expose asset outputs"
+    required: false
+    default: "false"
+  windows-runtime-dir:
+    description: "Runtime directory to zip when package-windows-asset=true"
+    required: false
+    default: "packaging/binaries/whisper-stt-x86_64-pc-windows-msvc"
+  windows-asset-name:
+    description: "ZIP filename to produce when package-windows-asset=true"
+    required: false
+    default: "squigit-stt-win-x64.zip"
+outputs:
+  asset-path:
+    description: "Absolute path to generated Windows ZIP asset"
+    value: ${{ steps.package-windows.outputs.asset_path }}
+  asset-name:
+    description: "Generated Windows ZIP filename"
+    value: ${{ steps.package-windows.outputs.asset_name }}
+  asset-sha256:
+    description: "SHA256 of generated Windows ZIP asset"
+    value: ${{ steps.package-windows.outputs.asset_sha256 }}
 runs:
   using: "composite"
   steps:
@@ -25,3 +47,33 @@ runs:
       shell: bash
       run: |
         cargo xtask build stt
+
+    - name: Package Windows STT Asset
+      if: runner.os == 'Windows' && inputs.package-windows-asset == 'true'
+      id: package-windows
+      shell: pwsh
+      env:
+        RUNTIME_DIR: ${{ inputs.windows-runtime-dir }}
+        ASSET_NAME: ${{ inputs.windows-asset-name }}
+      run: |
+        $ErrorActionPreference = "Stop"
+
+        if (-not (Test-Path -LiteralPath $env:RUNTIME_DIR)) {
+          throw "Windows runtime directory not found: $env:RUNTIME_DIR"
+        }
+
+        $runtimeDir = (Resolve-Path -LiteralPath $env:RUNTIME_DIR).Path
+        $assetDir = Join-Path $env:RUNNER_TEMP "winget-assets"
+        New-Item -ItemType Directory -Path $assetDir -Force | Out-Null
+
+        $assetPath = Join-Path $assetDir $env:ASSET_NAME
+        if (Test-Path -LiteralPath $assetPath) {
+          Remove-Item -LiteralPath $assetPath -Force
+        }
+
+        Compress-Archive -Path (Join-Path $runtimeDir "*") -DestinationPath $assetPath -Force
+        $sha = (Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash.ToLowerInvariant()
+
+        "asset_path=$assetPath" >> $env:GITHUB_OUTPUT
+        "asset_name=$env:ASSET_NAME" >> $env:GITHUB_OUTPUT
+        "asset_sha256=$sha" >> $env:GITHUB_OUTPUT
