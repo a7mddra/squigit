@@ -1,0 +1,63 @@
+name: "Homebrew Install With Retry"
+description: "Tap and install a formula with retries for transient CDN/network failures"
+inputs:
+  tap:
+    description: "Homebrew tap identifier (<owner>/tap)"
+    required: false
+    default: "squigit-org/tap"
+  formula:
+    description: "Formula name to install"
+    required: true
+  attempts:
+    description: "Maximum number of install attempts"
+    required: false
+    default: "6"
+  sleep-seconds:
+    description: "Seconds to wait between failed attempts"
+    required: false
+    default: "20"
+  initial-wait-seconds:
+    description: "Initial wait before installation starts"
+    required: false
+    default: "60"
+  brew-curl-retries:
+    description: "HOMEBREW_CURL_RETRIES value"
+    required: false
+    default: "5"
+runs:
+  using: "composite"
+  steps:
+    - name: Tap and Install Formula
+      shell: bash
+      env:
+        TAP: ${{ inputs.tap }}
+        FORMULA: ${{ inputs.formula }}
+        ATTEMPTS: ${{ inputs.attempts }}
+        SLEEP_SECONDS: ${{ inputs.sleep-seconds }}
+        INITIAL_WAIT_SECONDS: ${{ inputs.initial-wait-seconds }}
+        HOMEBREW_CURL_RETRIES: ${{ inputs.brew-curl-retries }}
+      run: |
+        set -euo pipefail
+
+        sleep "${INITIAL_WAIT_SECONDS}"
+        brew tap "${TAP}"
+
+        attempt=1
+        while [ "${attempt}" -le "${ATTEMPTS}" ]; do
+          echo "brew install attempt ${attempt}/${ATTEMPTS} for ${FORMULA}..."
+          if brew install "${FORMULA}"; then
+            echo "${FORMULA} installed successfully."
+            exit 0
+          fi
+
+          if [ "${attempt}" -eq "${ATTEMPTS}" ]; then
+            echo "Failed to install ${FORMULA} after ${ATTEMPTS} attempts."
+            exit 1
+          fi
+
+          brew uninstall --force "${FORMULA}" >/dev/null 2>&1 || true
+          brew cleanup "${FORMULA}" >/dev/null 2>&1 || true
+          echo "Install failed; waiting ${SLEEP_SECONDS}s before retrying..."
+          sleep "${SLEEP_SECONDS}"
+          attempt=$((attempt + 1))
+        done

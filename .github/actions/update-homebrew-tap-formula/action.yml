@@ -1,0 +1,135 @@
+name: "Update Homebrew Tap Formula"
+description: "Sync a formula template into homebrew-tap and inject version/url/sha via pkg.rb"
+inputs:
+  tap-token:
+    description: "GitHub token with write access to the tap repository"
+    required: true
+  tap-repo:
+    description: "Tap repository slug (<owner>/<repo>)"
+    required: false
+    default: "squigit-org/homebrew-tap"
+  version:
+    description: "Formula version value"
+    required: true
+  asset-url:
+    description: "Release asset URL"
+    required: true
+  sha256:
+    description: "Release asset SHA256"
+    required: true
+  template-formula-path:
+    description: "Absolute path to formula template in the current workspace"
+    required: true
+  formula-file:
+    description: "Formula file name inside tap repository (example: squigit-ocr.rb)"
+    required: true
+  commit-message:
+    description: "Git commit message for tap update"
+    required: true
+  max-asset-check-attempts:
+    description: "How many times to poll release asset availability"
+    required: false
+    default: "12"
+  asset-check-sleep-seconds:
+    description: "Seconds between release asset availability checks"
+    required: false
+    default: "15"
+runs:
+  using: "composite"
+  steps:
+    - name: Validate Inputs
+      shell: bash
+      env:
+        TAP_TOKEN: ${{ inputs.tap-token }}
+        VERSION: ${{ inputs.version }}
+        ASSET_URL: ${{ inputs.asset-url }}
+        SHA256: ${{ inputs.sha256 }}
+        TEMPLATE_FORMULA_PATH: ${{ inputs.template-formula-path }}
+        FORMULA_FILE: ${{ inputs.formula-file }}
+        COMMIT_MESSAGE: ${{ inputs.commit-message }}
+      run: |
+        set -euo pipefail
+        for var in TAP_TOKEN VERSION ASSET_URL SHA256 TEMPLATE_FORMULA_PATH FORMULA_FILE COMMIT_MESSAGE; do
+          if [ -z "${!var:-}" ]; then
+            echo "Missing required input mapped to env ${var}"
+            exit 1
+          fi
+        done
+
+        if [ ! -f "${TEMPLATE_FORMULA_PATH}" ]; then
+          echo "Template formula not found: ${TEMPLATE_FORMULA_PATH}"
+          exit 1
+        fi
+
+    - name: Wait for Release Asset Propagation
+      shell: bash
+      env:
+        ASSET_URL: ${{ inputs.asset-url }}
+        MAX_ATTEMPTS: ${{ inputs.max-asset-check-attempts }}
+        SLEEP_SECONDS: ${{ inputs.asset-check-sleep-seconds }}
+      run: |
+        set -euo pipefail
+        attempt=1
+        while [ "${attempt}" -le "${MAX_ATTEMPTS}" ]; do
+          echo "Checking release asset availability (${attempt}/${MAX_ATTEMPTS})..."
+          if curl --fail --silent --show-error --location --head --max-time 20 "${ASSET_URL}" >/dev/null; then
+            echo "Release asset is reachable."
+            break
+          fi
+
+          if [ "${attempt}" -eq "${MAX_ATTEMPTS}" ]; then
+            echo "Release asset did not become reachable in time: ${ASSET_URL}"
+            exit 1
+          fi
+
+          echo "Release asset is not reachable yet; waiting ${SLEEP_SECONDS}s before retrying..."
+          sleep "${SLEEP_SECONDS}"
+          attempt=$((attempt + 1))
+        done
+
+    - name: Update Formula in Tap Repo
+      shell: bash
+      env:
+        TAP_TOKEN: ${{ inputs.tap-token }}
+        TAP_REPO: ${{ inputs.tap-repo }}
+        VERSION: ${{ inputs.version }}
+        ASSET_URL: ${{ inputs.asset-url }}
+        SHA256: ${{ inputs.sha256 }}
+        TEMPLATE_FORMULA_PATH: ${{ inputs.template-formula-path }}
+        FORMULA_FILE: ${{ inputs.formula-file }}
+        COMMIT_MESSAGE: ${{ inputs.commit-message }}
+      run: |
+        set -euo pipefail
+
+        git clone "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git"
+        cd "$(basename "${TAP_REPO}")"
+
+        if [ ! -f "pkg.rb" ]; then
+          echo "Required tap updater script missing: pkg.rb"
+          exit 1
+        fi
+
+        install -m 0644 "${TEMPLATE_FORMULA_PATH}" "${FORMULA_FILE}"
+
+        ruby pkg.rb \
+          --formula "${FORMULA_FILE}" \
+          --version "${VERSION}" \
+          --url "${ASSET_URL}" \
+          --sha256 "${SHA256}"
+
+        if grep -q "INSERT_.*_HERE" "${FORMULA_FILE}"; then
+          echo "Template placeholders were not fully resolved in ${FORMULA_FILE}"
+          exit 1
+        fi
+
+        git config user.name "GitHub Actions Bot"
+        git config user.email "actions@github.com"
+        git add "${FORMULA_FILE}"
+
+        if git diff --cached --quiet; then
+          echo "Tap formula already up to date."
+          exit 0
+        fi
+
+        git commit -m "${COMMIT_MESSAGE}"
+        git push origin main

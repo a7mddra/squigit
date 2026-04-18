@@ -4,14 +4,24 @@ on:
   push:
     tags:
       - "ocr-v*"
+      - "stt-v*"
   workflow_dispatch:
     inputs:
+      package:
+        description: "Package to release: ocr, stt, or both"
+        required: true
+        type: choice
+        options:
+          - ocr
+          - stt
+          - both
+        default: both
       version:
-        description: "OCR formula version (example: 0.1.0)"
+        description: "Formula version (example: 1.2.0)"
         required: true
         type: string
       release_tag:
-        description: "Optional release tag override (example: ocr-v0.1.0). Leave empty to auto-use ocr-v<version>."
+        description: "Optional release tag override for single-package dispatch. Leave empty to auto-use <prefix>-v<version>."
         required: false
         default: ""
         type: string
@@ -22,6 +32,7 @@ permissions:
 jobs:
   build-release-ocr:
     name: Build OCR macOS Arm64 + Release Asset
+    if: startsWith(github.ref_name, 'ocr-v') || (github.event_name == 'workflow_dispatch' && (inputs.package == 'ocr' || inputs.package == 'both'))
     runs-on: macos-14
     outputs:
       version: ${{ steps.meta.outputs.version }}
@@ -41,6 +52,10 @@ jobs:
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             VERSION="${{ inputs.version }}"
             RELEASE_TAG="${{ inputs.release_tag }}"
+            if [ "${{ inputs.package }}" = "both" ] && [ -n "${RELEASE_TAG}" ]; then
+              echo "release_tag override cannot be used when package=both."
+              exit 1
+            fi
             if [ -z "${RELEASE_TAG}" ]; then
               RELEASE_TAG="ocr-v${VERSION}"
             fi
@@ -145,92 +160,33 @@ jobs:
           echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
           echo "asset_url=${ASSET_URL}" >> "$GITHUB_OUTPUT"
 
-  update-homebrew-tap:
-    name: Update Homebrew Tap Formula
+  update-homebrew-tap-ocr:
+    name: Update Homebrew Tap Formula (OCR)
+    if: startsWith(github.ref_name, 'ocr-v') || (github.event_name == 'workflow_dispatch' && (inputs.package == 'ocr' || inputs.package == 'both'))
     needs: build-release-ocr
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
 
-      - name: Wait for Release Asset Propagation
-        env:
-          ASSET_URL: ${{ needs.build-release-ocr.outputs.asset_url }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in {1..12}; do
-            echo "Checking release asset availability (${attempt}/12)..."
-            if curl --fail --silent --show-error --location --head --max-time 20 "${ASSET_URL}" >/dev/null; then
-              echo "Release asset is reachable."
-              break
-            fi
+      - name: Sync OCR Formula to Tap
+        uses: ./.github/actions/update-homebrew-tap-formula
+        with:
+          tap-token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          tap-repo: squigit-org/homebrew-tap
+          version: ${{ needs.build-release-ocr.outputs.version }}
+          asset-url: ${{ needs.build-release-ocr.outputs.asset_url }}
+          sha256: ${{ needs.build-release-ocr.outputs.sha256 }}
+          template-formula-path: ${{ github.workspace }}/packaging/homebrew/squigit-ocr.rb
+          formula-file: squigit-ocr.rb
+          commit-message: Update squigit-ocr to v${{ needs.build-release-ocr.outputs.version }}
 
-            if [ "${attempt}" -eq 12 ]; then
-              echo "Release asset did not become reachable in time: ${ASSET_URL}"
-              exit 1
-            fi
-
-            echo "Release asset is not reachable yet; waiting 15s before retrying..."
-            sleep 15
-          done
-
-      - name: Update Tap Repo Formula
-        env:
-          TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
-          VERSION: ${{ needs.build-release-ocr.outputs.version }}
-          ASSET_URL: ${{ needs.build-release-ocr.outputs.asset_url }}
-          SHA256: ${{ needs.build-release-ocr.outputs.sha256 }}
-          TEMPLATE_FORMULA_PATH: ${{ github.workspace }}/packaging/homebrew/squigit-ocr.rb
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -z "${TAP_TOKEN:-}" ]; then
-            echo "Missing TAP_GITHUB_TOKEN secret"
-            exit 1
-          fi
-
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/squigit-org/homebrew-tap.git"
-          cd homebrew-tap
-
-          if [ ! -f "${TEMPLATE_FORMULA_PATH}" ]; then
-            echo "Template formula not found at ${TEMPLATE_FORMULA_PATH}"
-            exit 1
-          fi
-
-          if [ ! -f "pkg.rb" ]; then
-            echo "Required tap updater script missing: pkg.rb"
-            exit 1
-          fi
-
-          install -m 0644 "${TEMPLATE_FORMULA_PATH}" squigit-ocr.rb
-
-          ruby pkg.rb \
-            --formula squigit-ocr.rb \
-            --version "${VERSION}" \
-            --url "${ASSET_URL}" \
-            --sha256 "${SHA256}"
-
-          if grep -q "INSERT_.*_HERE" squigit-ocr.rb; then
-            echo "Template placeholders were not fully resolved."
-            exit 1
-          fi
-
-          git config user.name "GitHub Actions Bot"
-          git config user.email "actions@github.com"
-          git add squigit-ocr.rb
-          if git diff --cached --quiet; then
-            echo "Tap formula already up to date."
-            exit 0
-          fi
-          git commit -m "Update squigit-ocr to v${VERSION}"
-          git push origin main
-
-  test-homebrew:
-    name: End-user Homebrew Install Smoke
+  test-homebrew-ocr:
+    name: End-user Homebrew Install Smoke (OCR)
+    if: startsWith(github.ref_name, 'ocr-v') || (github.event_name == 'workflow_dispatch' && (inputs.package == 'ocr' || inputs.package == 'both'))
     needs:
       - build-release-ocr
-      - update-homebrew-tap
+      - update-homebrew-tap-ocr
     runs-on: macos-14
     steps:
       - name: Checkout Code
@@ -248,41 +204,15 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install pillow
 
-      - name: Wait for Tap Propagation
-        shell: bash
-        run: sleep 60
-
       - name: Tap and Install squigit-ocr
-        shell: bash
-        env:
-          HOMEBREW_CURL_RETRIES: 5
-        run: |
-          set -euo pipefail
-          brew tap a7mddra/tap
-
-          installed=0
-          for attempt in {1..6}; do
-            echo "brew install attempt ${attempt}/6..."
-            if brew install squigit-ocr; then
-              installed=1
-              break
-            fi
-
-            if [ "${attempt}" -eq 6 ]; then
-              echo "Failed to install squigit-ocr after 6 attempts."
-              exit 1
-            fi
-
-            brew uninstall --force squigit-ocr >/dev/null 2>&1 || true
-            brew cleanup squigit-ocr >/dev/null 2>&1 || true
-            echo "Install failed; waiting 20s before retrying..."
-            sleep 20
-          done
-
-          if [ "${installed}" -ne 1 ]; then
-            echo "squigit-ocr was not installed."
-            exit 1
-          fi
+        uses: ./.github/actions/homebrew-install-with-retry
+        with:
+          tap: squigit-org/tap
+          formula: squigit-ocr
+          initial-wait-seconds: "60"
+          attempts: "6"
+          sleep-seconds: "20"
+          brew-curl-retries: "5"
 
       - name: Run Built-in Formula Test
         shell: bash
@@ -329,3 +259,158 @@ jobs:
           print(f"Detected entries: {len(payload)}")
           print(f"Detected text: {merged}")
           PY
+
+  build-release-stt:
+    name: Build STT macOS Arm64 + Release Asset
+    if: startsWith(github.ref_name, 'stt-v') || (github.event_name == 'workflow_dispatch' && (inputs.package == 'stt' || inputs.package == 'both'))
+    runs-on: macos-14
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      asset_url: ${{ steps.meta.outputs.asset_url }}
+      sha256: ${{ steps.meta.outputs.sha256 }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Extract Version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+            RELEASE_TAG="${{ inputs.release_tag }}"
+            if [ "${{ inputs.package }}" = "both" ] && [ -n "${RELEASE_TAG}" ]; then
+              echo "release_tag override cannot be used when package=both."
+              exit 1
+            fi
+            if [ -z "${RELEASE_TAG}" ]; then
+              RELEASE_TAG="stt-v${VERSION}"
+            fi
+          else
+            RELEASE_TAG="${GITHUB_REF_NAME}"
+            VERSION="${RELEASE_TAG#stt-v}"
+          fi
+
+          if [ -z "${VERSION}" ]; then
+            echo "Resolved VERSION is empty"
+            exit 1
+          fi
+
+          if [ -z "${RELEASE_TAG}" ]; then
+            echo "Resolved RELEASE_TAG is empty"
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Whisper STT Sidecar
+        uses: ./.github/actions/build-whisper-stt
+        with:
+          python-version: "3.12"
+
+      - name: Run Sidecar Version Smoke Check
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x packaging/binaries/whisper-stt-aarch64-apple-darwin/squigit-stt || true
+          STT_VERSION="$(packaging/binaries/whisper-stt-aarch64-apple-darwin/squigit-stt --version | tr -d '\r' | tail -n 1)"
+          echo "Detected STT version: ${STT_VERSION}"
+          if ! [[ "${STT_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid STT version output: ${STT_VERSION}"
+            exit 1
+          fi
+
+      - name: Create Release Tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czvf squigit-stt-mac-aarch64.tar.gz -C packaging/binaries/whisper-stt-aarch64-apple-darwin .
+
+      - name: Upload STT Asset to GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.version.outputs.release_tag }}
+          name: STT v${{ steps.version.outputs.version }}
+          files: squigit-stt-mac-aarch64.tar.gz
+          overwrite_files: true
+          repository: squigit-org/squigit
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Export Release Metadata
+        id: meta
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          SHA256="$(shasum -a 256 squigit-stt-mac-aarch64.tar.gz | awk '{ print $1 }')"
+          ASSET_URL="https://github.com/squigit-org/squigit/releases/download/${RELEASE_TAG}/squigit-stt-mac-aarch64.tar.gz"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "asset_url=${ASSET_URL}" >> "$GITHUB_OUTPUT"
+
+  update-homebrew-tap-stt:
+    name: Update Homebrew Tap Formula (STT)
+    if: startsWith(github.ref_name, 'stt-v') || (github.event_name == 'workflow_dispatch' && (inputs.package == 'stt' || inputs.package == 'both'))
+    needs: build-release-stt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Sync STT Formula to Tap
+        uses: ./.github/actions/update-homebrew-tap-formula
+        with:
+          tap-token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          tap-repo: squigit-org/homebrew-tap
+          version: ${{ needs.build-release-stt.outputs.version }}
+          asset-url: ${{ needs.build-release-stt.outputs.asset_url }}
+          sha256: ${{ needs.build-release-stt.outputs.sha256 }}
+          template-formula-path: ${{ github.workspace }}/packaging/homebrew/squigit-stt.rb
+          formula-file: squigit-stt.rb
+          commit-message: Update squigit-stt to v${{ needs.build-release-stt.outputs.version }}
+
+  test-homebrew-stt:
+    name: End-user Homebrew Install Smoke (STT)
+    if: startsWith(github.ref_name, 'stt-v') || (github.event_name == 'workflow_dispatch' && (inputs.package == 'stt' || inputs.package == 'both'))
+    needs:
+      - build-release-stt
+      - update-homebrew-tap-stt
+    runs-on: macos-14
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Tap and Install squigit-stt
+        uses: ./.github/actions/homebrew-install-with-retry
+        with:
+          tap: squigit-org/tap
+          formula: squigit-stt
+          initial-wait-seconds: "60"
+          attempts: "6"
+          sleep-seconds: "20"
+          brew-curl-retries: "5"
+
+      - name: Run Built-in Formula Test
+        shell: bash
+        run: brew test squigit-stt
+
+      - name: Validate Installed STT Version
+        shell: bash
+        run: |
+          set -euo pipefail
+          STT_VERSION="$(squigit-stt --version | tr -d '\r' | tail -n 1)"
+          echo "Installed STT version: ${STT_VERSION}"
+          if ! [[ "${STT_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Installed STT version is not semver: ${STT_VERSION}"
+            exit 1
+          fi

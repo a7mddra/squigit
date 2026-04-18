@@ -1,7 +1,7 @@
 class SquigitStt < Formula
   desc "Standalone purely headless CLI STT engine for Squigit"
-  homepage "https://github.com/a7mddra/squigit"
-  # URL, SHA256, and version should be populated by release automation.
+  homepage "https://github.com/squigit-org/squigit"
+  # Source template: release CI copies this file into the tap repo, then fills metadata via pkg.rb.
   url "INSERT_URL_HERE"
   sha256 "INSERT_SHA256_HERE"
   version "INSERT_VERSION_HERE"
@@ -18,5 +18,6 @@ class SquigitStt < Formula
 
   test do
     system "#{bin}/squigit-stt", "--help"
+    system "#{bin}/squigit-stt", "--version"
   end
 end
