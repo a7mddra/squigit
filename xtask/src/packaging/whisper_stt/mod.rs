@@ -37,11 +37,16 @@ pub fn stt() -> Result<()> {
     let internal_dst = sidecar_dst.join("_internal");
     fs::create_dir_all(&internal_dst)?;
 
+    #[cfg(windows)]
+    let runtime_lib_dst = sidecar_dst.clone();
+    #[cfg(not(windows))]
+    let runtime_lib_dst = internal_dst.clone();
+
     for lib in runtime_libs {
         let Some(name) = lib.file_name() else {
             continue;
         };
-        let dst = internal_dst.join(name);
+        let dst = runtime_lib_dst.join(name);
         println!("  Copying runtime lib to {}", dst.display());
         fs::copy(&lib, &dst)?;
     }

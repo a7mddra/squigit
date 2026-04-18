@@ -130,6 +130,25 @@ jobs:
           python-version: "3.12"
           pyi-mode: "onefile"
 
+      - name: Run OCR Version Smoke Check
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          chmod +x packaging/binaries/paddle-ocr-aarch64-apple-darwin/squigit-ocr || true
+          OCR_VERSION="$(packaging/binaries/paddle-ocr-aarch64-apple-darwin/squigit-ocr --version | tr -d '\r' | tail -n 1)"
+          echo "Detected OCR version: ${OCR_VERSION}"
+          if ! [[ "${OCR_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid OCR version output: ${OCR_VERSION}"
+            exit 1
+          fi
+          if [ "${OCR_VERSION}" != "${EXPECTED_VERSION}" ]; then
+            echo "OCR version mismatch: built=${OCR_VERSION}, expected=${EXPECTED_VERSION}"
+            echo "Align sidecar --version with the release version/tag before publishing."
+            exit 1
+          fi
+
       - name: Generate OCR Smoke Image
         shell: bash
         run: |
@@ -264,6 +283,23 @@ jobs:
       - name: Run Built-in Formula Test
         shell: bash
         run: brew test squigit-ocr
+
+      - name: Validate Installed OCR Version
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ needs.build-release-ocr.outputs.version }}
+        run: |
+          set -euo pipefail
+          OCR_VERSION="$(squigit-ocr --version | tr -d '\r' | tail -n 1)"
+          echo "Installed OCR version: ${OCR_VERSION}"
+          if ! [[ "${OCR_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Installed OCR version is not semver: ${OCR_VERSION}"
+            exit 1
+          fi
+          if [ "${OCR_VERSION}" != "${EXPECTED_VERSION}" ]; then
+            echo "Installed OCR version mismatch: installed=${OCR_VERSION}, expected=${EXPECTED_VERSION}"
+            exit 1
+          fi
 
       - name: Generate OCR Smoke Image
         shell: bash

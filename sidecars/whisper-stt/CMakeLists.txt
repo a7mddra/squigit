@@ -73,6 +73,7 @@ set(SOURCES
 )
 
 add_executable(squigit-stt ${SOURCES})
+target_compile_definitions(squigit-stt PRIVATE SQUIGIT_STT_VERSION=\"${PROJECT_VERSION}\")
 
 # Include directories
 target_include_directories(squigit-stt PRIVATE

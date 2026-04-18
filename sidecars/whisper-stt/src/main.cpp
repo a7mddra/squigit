@@ -20,6 +20,10 @@
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
+#ifndef SQUIGIT_STT_VERSION
+#define SQUIGIT_STT_VERSION "0.1.0"
+#endif
+
 // Global state
 std::unique_ptr<squigit::AudioCapture> audio_capture;
 std::unique_ptr<squigit::InferenceEngine> inference_engine;
@@ -179,7 +183,7 @@ int main(int argc, char** argv) {
   if (argc > 1) {
     const std::string arg = argv[1];
     if (arg == "--version") {
-      std::cout << "1.2.0" << std::endl;
+      std::cout << SQUIGIT_STT_VERSION << std::endl;
       return 0;
     }
     if (arg == "--help" || arg == "-h") {

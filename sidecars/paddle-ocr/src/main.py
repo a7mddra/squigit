@@ -156,7 +156,7 @@ _preload_frozen_paddle_libs()
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src import EngineConfig, NumpyEncoder, OCREngine
+from src import EngineConfig, NumpyEncoder, OCREngine, __version__
 
 
 def _format_exception(exc: Exception) -> str:
@@ -213,7 +213,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Squigit PaddleOCR sidecar (CLI mode)."
     )
     parser.add_argument(
-        "--version", action="version", version="0.1.2"
+        "--version", action="version", version=__version__
     )
     parser.add_argument("image_path", help="Path to image file.")
     parser.add_argument("--lang", default="en", help="Language hint (default: en).")

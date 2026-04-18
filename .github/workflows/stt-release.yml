@@ -131,6 +131,8 @@ jobs:
 
       - name: Run Sidecar Version Smoke Check
         shell: bash
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           chmod +x packaging/binaries/whisper-stt-aarch64-apple-darwin/squigit-stt || true
@@ -138,6 +140,11 @@ jobs:
           echo "Detected STT version: ${STT_VERSION}"
           if ! [[ "${STT_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Invalid STT version output: ${STT_VERSION}"
+            exit 1
+          fi
+          if [ "${STT_VERSION}" != "${EXPECTED_VERSION}" ]; then
+            echo "STT version mismatch: built=${STT_VERSION}, expected=${EXPECTED_VERSION}"
+            echo "Align sidecar --version with the release version/tag before publishing."
             exit 1
           fi
 
@@ -223,12 +230,18 @@ jobs:
 
       - name: Validate Installed STT Version
         shell: bash
+        env:
+          EXPECTED_VERSION: ${{ needs.build-release-stt.outputs.version }}
         run: |
           set -euo pipefail
           STT_VERSION="$(squigit-stt --version | tr -d '\r' | tail -n 1)"
           echo "Installed STT version: ${STT_VERSION}"
           if ! [[ "${STT_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Installed STT version is not semver: ${STT_VERSION}"
+            exit 1
+          fi
+          if [ "${STT_VERSION}" != "${EXPECTED_VERSION}" ]; then
+            echo "Installed STT version mismatch: installed=${STT_VERSION}, expected=${EXPECTED_VERSION}"
             exit 1
           fi
 
