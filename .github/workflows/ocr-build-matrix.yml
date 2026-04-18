@@ -66,7 +66,7 @@ jobs:
           set -euo pipefail
           sidecars/paddle-ocr/venv/bin/python sidecars/paddle-ocr/scripts/gen_test_image.py \
             --output /tmp/ocr-smoke.png \
-            --text "SNAPLLM ${{ matrix.os_name }} OCR SMOKE"
+            --text "SQUIGIT ${{ matrix.os_name }} OCR SMOKE"
 
       - name: Generate PNG smoke image (Windows)
         if: runner.os == 'Windows'
@@ -74,7 +74,7 @@ jobs:
         run: |
           & sidecars/paddle-ocr/venv/Scripts/python.exe sidecars/paddle-ocr/scripts/gen_test_image.py `
             --output $env:TEMP/ocr-smoke.png `
-            --text "SNAPLLM ${{ matrix.os_name }} OCR SMOKE"
+            --text "SQUIGIT ${{ matrix.os_name }} OCR SMOKE"
 
       - name: Run sidecar CLI and print JSON (Unix)
         if: runner.os != 'Windows'
