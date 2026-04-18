@@ -489,7 +489,7 @@ jobs:
           path: ${{ steps.manifest.outputs.manifest-dir }}
 
       - name: Submit Winget Update PR (optional)
-        if: github.event_name == 'workflow_dispatch' && inputs.submit_winget_pr && secrets.WINGET_CREATE_GITHUB_PAT != ''
+        if: github.event_name == 'workflow_dispatch' && inputs.submit_winget_pr
         shell: pwsh
         env:
           PACKAGE_IDENTIFIER: SquigitOrg.SquigitOCR
@@ -498,6 +498,10 @@ jobs:
           WINGET_CREATE_GITHUB_PAT: ${{ secrets.WINGET_CREATE_GITHUB_PAT }}
         run: |
           $ErrorActionPreference = "Stop"
+          if ([string]::IsNullOrWhiteSpace($env:WINGET_CREATE_GITHUB_PAT)) {
+            Write-Host "WINGET_CREATE_GITHUB_PAT is empty; skipping wingetcreate --submit."
+            exit 0
+          }
           Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
           .\wingetcreate.exe update $env:PACKAGE_IDENTIFIER -u $env:INSTALLER_URL -v $env:PACKAGE_VERSION -t $env:WINGET_CREATE_GITHUB_PAT --submit
 
