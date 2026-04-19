@@ -478,6 +478,9 @@ jobs:
             echo "Failed to resolve imported GPG key fingerprint" >&2
             exit 1
           fi
+          pubkey_path="${RUNNER_TEMP}/linux-rpm-signing-key.asc"
+          gpg --batch --yes --armor --output "${pubkey_path}" --export "${gpg_key_fpr}"
+          rpm --import "${pubkey_path}"
 
           escaped_passphrase="$(printf '%s' "${GPG_PASSPHRASE}" | sed "s/'/'\"'\"'/g")"
           cat > "${HOME}/.rpmmacros" <<RPMMACROS
@@ -491,7 +494,7 @@ jobs:
 
           rpmsign --addsign "${RPM_PATH}"
           rpm --checksig --verbose "${RPM_PATH}"
-          rm -f "${HOME}/.rpmmacros"
+          rm -f "${HOME}/.rpmmacros" "${pubkey_path}"
 
       - name: Recalculate Linux Package Checksums
         if: steps.reuse-linux.outputs.hit != 'true' && steps.reuse-linux.outputs.cache_hit != 'true'
