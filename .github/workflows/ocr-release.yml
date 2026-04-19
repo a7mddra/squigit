@@ -435,6 +435,13 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v6
 
+      - name: Restore Linux Package Build Cache
+        id: linux-pkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/linux-package-cache/ocr
+          key: linux-package-cache-ocr-${{ github.sha }}-${{ needs.resolve-release-meta.outputs.release_tag }}
+
       - name: Reuse Existing Linux OCR Packages
         id: reuse-linux
         shell: bash
@@ -444,6 +451,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          CACHE_DIR="${RUNNER_TEMP}/linux-package-cache/ocr"
           DEB_NAME="squigit-ocr_${VERSION}_amd64.deb"
           RPM_NAME="squigit-ocr-${VERSION}-1.x86_64.rpm"
           DEB_ASSET_URL="https://github.com/squigit-org/squigit/releases/download/${RELEASE_TAG}/${DEB_NAME}"
@@ -460,35 +468,59 @@ jobs:
             RPM_SHA256="$(sha256sum "${RPM_PATH}" | awk '{print $1}')"
 
             echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "cache_hit=false" >> "$GITHUB_OUTPUT"
             echo "deb_name=${DEB_NAME}" >> "$GITHUB_OUTPUT"
             echo "deb_sha256=${DEB_SHA256}" >> "$GITHUB_OUTPUT"
             echo "rpm_name=${RPM_NAME}" >> "$GITHUB_OUTPUT"
             echo "rpm_sha256=${RPM_SHA256}" >> "$GITHUB_OUTPUT"
+            echo "deb_path=${DEB_PATH}" >> "$GITHUB_OUTPUT"
+            echo "rpm_path=${RPM_PATH}" >> "$GITHUB_OUTPUT"
           else
             echo "hit=false" >> "$GITHUB_OUTPUT"
+            cached_deb="${CACHE_DIR}/${DEB_NAME}"
+            cached_rpm="${CACHE_DIR}/${RPM_NAME}"
+            if [ -f "${cached_deb}" ] && [ -f "${cached_rpm}" ]; then
+              DEB_PATH="${RUNNER_TEMP}/${DEB_NAME}"
+              RPM_PATH="${RUNNER_TEMP}/${RPM_NAME}"
+              cp "${cached_deb}" "${DEB_PATH}"
+              cp "${cached_rpm}" "${RPM_PATH}"
+
+              DEB_SHA256="$(sha256sum "${DEB_PATH}" | awk '{print $1}')"
+              RPM_SHA256="$(sha256sum "${RPM_PATH}" | awk '{print $1}')"
+
+              echo "cache_hit=true" >> "$GITHUB_OUTPUT"
+              echo "deb_name=${DEB_NAME}" >> "$GITHUB_OUTPUT"
+              echo "deb_sha256=${DEB_SHA256}" >> "$GITHUB_OUTPUT"
+              echo "rpm_name=${RPM_NAME}" >> "$GITHUB_OUTPUT"
+              echo "rpm_sha256=${RPM_SHA256}" >> "$GITHUB_OUTPUT"
+              echo "deb_path=${DEB_PATH}" >> "$GITHUB_OUTPUT"
+              echo "rpm_path=${RPM_PATH}" >> "$GITHUB_OUTPUT"
+            else
+              echo "cache_hit=false" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: Setup Rust
-        if: steps.reuse-linux.outputs.hit != 'true'
+        if: steps.reuse-linux.outputs.hit != 'true' && steps.reuse-linux.outputs.cache_hit != 'true'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Linux Packaging Toolchain
-        if: steps.reuse-linux.outputs.hit != 'true'
+        if: steps.reuse-linux.outputs.hit != 'true' && steps.reuse-linux.outputs.cache_hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y rpm createrepo-c dpkg-dev apt-utils
+          sudo apt-get install -y rpm createrepo-c dpkg-dev apt-utils gnupg2
 
       - name: Build PaddleOCR Sidecar (Linux onedir)
-        if: steps.reuse-linux.outputs.hit != 'true'
+        if: steps.reuse-linux.outputs.hit != 'true' && steps.reuse-linux.outputs.cache_hit != 'true'
         uses: ./.github/actions/build-paddle-ocr
         with:
           python-version: "3.12"
           pyi-mode: "onedir"
 
       - name: Validate Onedir Runtime Layout
-        if: steps.reuse-linux.outputs.hit != 'true'
+        if: steps.reuse-linux.outputs.hit != 'true' && steps.reuse-linux.outputs.cache_hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -496,7 +528,7 @@ jobs:
           test -d packaging/binaries/paddle-ocr-x86_64-unknown-linux-gnu/_internal
 
       - name: Build Linux Package Files (.deb/.rpm)
-        if: steps.reuse-linux.outputs.hit != 'true'
+        if: steps.reuse-linux.outputs.hit != 'true' && steps.reuse-linux.outputs.cache_hit != 'true'
         id: pkg
         uses: ./.github/actions/build-linux-packages
         with:
@@ -510,6 +542,113 @@ jobs:
           description-line-1: A headless, offline optical character recognition pipeline designed for Squigit.
           description-line-2: Includes onedir runtime payload with local dependencies for Linux x86_64.
 
+      - name: Sign Linux RPM Package Asset
+        if: steps.reuse-linux.outputs.hit != 'true' && steps.reuse-linux.outputs.cache_hit != 'true'
+        shell: bash
+        env:
+          RPM_PATH: ${{ steps.pkg.outputs.rpm_path }}
+          GPG_PRIVATE_KEY: ${{ secrets.LINUX_PACKAGES_GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.LINUX_PACKAGES_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+
+          export GNUPGHOME="${RUNNER_TEMP}/linux-rpm-sign-gnupg"
+          rm -rf "${GNUPGHOME}"
+          mkdir -p "${GNUPGHOME}"
+          chmod 700 "${GNUPGHOME}"
+
+          printf '%s' "${GPG_PRIVATE_KEY}" | gpg --batch --import
+          gpg_key_fpr="$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ {print $10; exit}')"
+          if [ -z "${gpg_key_fpr}" ]; then
+            echo "Failed to resolve imported GPG key fingerprint" >&2
+            exit 1
+          fi
+
+          escaped_passphrase="$(printf '%s' "${GPG_PASSPHRASE}" | sed "s/'/'\"'\"'/g")"
+          cat > "${HOME}/.rpmmacros" <<RPMMACROS
+          %_signature gpg
+          %_gpg_path ${GNUPGHOME}
+          %_gpg_name ${gpg_key_fpr}
+          %_gpgbin /usr/bin/gpg
+          %__gpg /usr/bin/gpg
+          %__gpg_sign_cmd %{__gpg} --batch --yes --no-armor --pinentry-mode loopback --passphrase '${escaped_passphrase}' --detach-sign --output %{__signature_filename} %{__plaintext_filename}
+          RPMMACROS
+
+          rpmsign --addsign "${RPM_PATH}"
+          rpm --checksig --verbose "${RPM_PATH}"
+          rm -f "${HOME}/.rpmmacros"
+
+      - name: Recalculate Linux Package Checksums
+        if: steps.reuse-linux.outputs.hit != 'true' && steps.reuse-linux.outputs.cache_hit != 'true'
+        id: pkg-sha
+        shell: bash
+        env:
+          DEB_PATH: ${{ steps.pkg.outputs.deb_path }}
+          RPM_PATH: ${{ steps.pkg.outputs.rpm_path }}
+        run: |
+          set -euo pipefail
+          echo "deb_sha256=$(sha256sum "${DEB_PATH}" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "rpm_sha256=$(sha256sum "${RPM_PATH}" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve Linux Package Asset Paths
+        if: steps.reuse-linux.outputs.hit != 'true'
+        id: pkg-paths
+        shell: bash
+        env:
+          CACHE_HIT: ${{ steps.reuse-linux.outputs.cache_hit }}
+          CACHED_DEB_PATH: ${{ steps.reuse-linux.outputs.deb_path }}
+          CACHED_RPM_PATH: ${{ steps.reuse-linux.outputs.rpm_path }}
+          CACHED_DEB_NAME: ${{ steps.reuse-linux.outputs.deb_name }}
+          CACHED_RPM_NAME: ${{ steps.reuse-linux.outputs.rpm_name }}
+          CACHED_DEB_SHA256: ${{ steps.reuse-linux.outputs.deb_sha256 }}
+          CACHED_RPM_SHA256: ${{ steps.reuse-linux.outputs.rpm_sha256 }}
+          BUILT_DEB_PATH: ${{ steps.pkg.outputs.deb_path }}
+          BUILT_RPM_PATH: ${{ steps.pkg.outputs.rpm_path }}
+          BUILT_DEB_NAME: ${{ steps.pkg.outputs.deb_name }}
+          BUILT_RPM_NAME: ${{ steps.pkg.outputs.rpm_name }}
+          BUILT_DEB_SHA256: ${{ steps.pkg-sha.outputs.deb_sha256 }}
+          BUILT_RPM_SHA256: ${{ steps.pkg-sha.outputs.rpm_sha256 }}
+        run: |
+          set -euo pipefail
+
+          if [ "${CACHE_HIT}" = "true" ]; then
+            echo "deb_path=${CACHED_DEB_PATH}" >> "$GITHUB_OUTPUT"
+            echo "rpm_path=${CACHED_RPM_PATH}" >> "$GITHUB_OUTPUT"
+            echo "deb_name=${CACHED_DEB_NAME}" >> "$GITHUB_OUTPUT"
+            echo "rpm_name=${CACHED_RPM_NAME}" >> "$GITHUB_OUTPUT"
+            echo "deb_sha256=${CACHED_DEB_SHA256}" >> "$GITHUB_OUTPUT"
+            echo "rpm_sha256=${CACHED_RPM_SHA256}" >> "$GITHUB_OUTPUT"
+          else
+            echo "deb_path=${BUILT_DEB_PATH}" >> "$GITHUB_OUTPUT"
+            echo "rpm_path=${BUILT_RPM_PATH}" >> "$GITHUB_OUTPUT"
+            echo "deb_name=${BUILT_DEB_NAME}" >> "$GITHUB_OUTPUT"
+            echo "rpm_name=${BUILT_RPM_NAME}" >> "$GITHUB_OUTPUT"
+            echo "deb_sha256=${BUILT_DEB_SHA256}" >> "$GITHUB_OUTPUT"
+            echo "rpm_sha256=${BUILT_RPM_SHA256}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Populate Linux Package Build Cache
+        if: steps.reuse-linux.outputs.hit != 'true' && steps.reuse-linux.outputs.cache_hit != 'true'
+        shell: bash
+        env:
+          CACHE_DIR: ${{ runner.temp }}/linux-package-cache/ocr
+          DEB_PATH: ${{ steps.pkg-paths.outputs.deb_path }}
+          RPM_PATH: ${{ steps.pkg-paths.outputs.rpm_path }}
+          DEB_NAME: ${{ steps.pkg-paths.outputs.deb_name }}
+          RPM_NAME: ${{ steps.pkg-paths.outputs.rpm_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${CACHE_DIR}"
+          cp "${DEB_PATH}" "${CACHE_DIR}/${DEB_NAME}"
+          cp "${RPM_PATH}" "${CACHE_DIR}/${RPM_NAME}"
+
+      - name: Save Linux Package Build Cache
+        if: steps.reuse-linux.outputs.hit != 'true' && steps.reuse-linux.outputs.cache_hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/linux-package-cache/ocr
+          key: linux-package-cache-ocr-${{ github.sha }}-${{ needs.resolve-release-meta.outputs.release_tag }}
+
       - name: Upload Linux Package Assets to GitHub Release
         if: steps.reuse-linux.outputs.hit != 'true'
         uses: softprops/action-gh-release@v3
@@ -517,8 +656,8 @@ jobs:
           tag_name: ${{ needs.resolve-release-meta.outputs.release_tag }}
           name: OCR v${{ needs.resolve-release-meta.outputs.version }}
           files: |
-            ${{ steps.pkg.outputs.deb_path }}
-            ${{ steps.pkg.outputs.rpm_path }}
+            ${{ steps.pkg-paths.outputs.deb_path }}
+            ${{ steps.pkg-paths.outputs.rpm_path }}
           overwrite_files: true
           repository: squigit-org/squigit
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -533,10 +672,10 @@ jobs:
           CACHED_DEB_SHA256: ${{ steps.reuse-linux.outputs.deb_sha256 }}
           CACHED_RPM_NAME: ${{ steps.reuse-linux.outputs.rpm_name }}
           CACHED_RPM_SHA256: ${{ steps.reuse-linux.outputs.rpm_sha256 }}
-          BUILT_DEB_NAME: ${{ steps.pkg.outputs.deb_name }}
-          BUILT_DEB_SHA256: ${{ steps.pkg.outputs.deb_sha256 }}
-          BUILT_RPM_NAME: ${{ steps.pkg.outputs.rpm_name }}
-          BUILT_RPM_SHA256: ${{ steps.pkg.outputs.rpm_sha256 }}
+          BUILT_DEB_NAME: ${{ steps.pkg-paths.outputs.deb_name }}
+          BUILT_DEB_SHA256: ${{ steps.pkg-paths.outputs.deb_sha256 }}
+          BUILT_RPM_NAME: ${{ steps.pkg-paths.outputs.rpm_name }}
+          BUILT_RPM_SHA256: ${{ steps.pkg-paths.outputs.rpm_sha256 }}
         run: |
           set -euo pipefail
 
@@ -677,6 +816,8 @@ jobs:
           package-name: squigit-ocr
           package-component: ocr
           package-version: ${{ needs.resolve-release-meta.outputs.version }}
+          source-release-repo: squigit-org/squigit
+          source-release-tag: ${{ needs.resolve-release-meta.outputs.release_tag }}
           deb-path: ${{ steps.assets.outputs.deb_path }}
           rpm-path: ${{ steps.assets.outputs.rpm_path }}
           gpg-private-key: ${{ secrets.LINUX_PACKAGES_GPG_PRIVATE_KEY }}
@@ -700,9 +841,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          REPO_BASE="https://github.com/squigit-org/squigit-packages/raw/main"
           sudo mkdir -p /etc/apt/keyrings
-          curl -fsSL https://squigit-org.github.io/squigit-packages/keys/squigit-packages.asc | gpg --dearmor | sudo tee /etc/apt/keyrings/squigit-packages.gpg >/dev/null
-          echo "deb [signed-by=/etc/apt/keyrings/squigit-packages.gpg] https://squigit-org.github.io/squigit-packages/apt stable ocr stt" | sudo tee /etc/apt/sources.list.d/squigit-packages.list >/dev/null
+          curl -fsSL "${REPO_BASE}/keys/squigit-packages.asc" | gpg --dearmor | sudo tee /etc/apt/keyrings/squigit-packages.gpg >/dev/null
+          echo "deb [signed-by=/etc/apt/keyrings/squigit-packages.gpg] ${REPO_BASE}/apt stable ocr stt" | sudo tee /etc/apt/sources.list.d/squigit-packages.list >/dev/null
 
       - name: Refresh APT Cache (with retries)
         shell: bash
@@ -795,23 +937,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          REPO_BASE="https://github.com/squigit-org/squigit-packages/raw/main"
           cat > /etc/yum.repos.d/squigit.repo <<'EOF'
           [squigit-ocr]
           name=Squigit OCR Packages
-          baseurl=https://squigit-org.github.io/squigit-packages/rpm/ocr
+          baseurl=__REPO_BASE__/rpm/ocr
           enabled=1
           gpgcheck=1
           repo_gpgcheck=1
-          gpgkey=https://squigit-org.github.io/squigit-packages/keys/squigit-packages.asc
+          gpgkey=__REPO_BASE__/keys/squigit-packages.asc
 
           [squigit-stt]
           name=Squigit STT Packages
-          baseurl=https://squigit-org.github.io/squigit-packages/rpm/stt
+          baseurl=__REPO_BASE__/rpm/stt
           enabled=1
           gpgcheck=1
           repo_gpgcheck=1
-          gpgkey=https://squigit-org.github.io/squigit-packages/keys/squigit-packages.asc
+          gpgkey=__REPO_BASE__/keys/squigit-packages.asc
           EOF
+          sed -i "s|__REPO_BASE__|${REPO_BASE}|g" /etc/yum.repos.d/squigit.repo
 
       - name: Refresh DNF Cache (with retries)
         shell: bash

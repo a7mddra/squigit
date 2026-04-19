@@ -9,10 +9,6 @@ require_env() {
   fi
 }
 
-escape_single_quotes() {
-  printf '%s' "$1" | sed "s/'/'\"'\"'/g"
-}
-
 require_cmd() {
   local cmd="$1"
   if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -21,12 +17,33 @@ require_cmd() {
   fi
 }
 
+download_asset_with_retry() {
+  local url="$1"
+  local target="$2"
+  local attempt
+
+  for attempt in $(seq 1 12); do
+    if curl --fail --silent --show-error --location --head --max-time 30 "${url}" >/dev/null; then
+      break
+    fi
+    if [ "${attempt}" -eq 12 ]; then
+      echo "Release asset did not propagate in time: ${url}" >&2
+      exit 1
+    fi
+    sleep 10
+  done
+
+  curl --fail --silent --show-error --location "${url}" -o "${target}"
+}
+
 require_env PACKAGES_TOKEN
 require_env PACKAGES_REPO
 require_env PACKAGES_BRANCH
 require_env PACKAGE_NAME
 require_env PACKAGE_COMPONENT
 require_env PACKAGE_VERSION
+require_env SOURCE_RELEASE_REPO
+require_env SOURCE_RELEASE_TAG
 require_env DEB_PATH
 require_env RPM_PATH
 require_env GPG_PRIVATE_KEY
@@ -35,66 +52,171 @@ require_env PAGES_BASE_URL
 require_env APT_SUITE
 require_env GITHUB_OUTPUT
 
-if [ "$PACKAGE_COMPONENT" != "ocr" ] && [ "$PACKAGE_COMPONENT" != "stt" ]; then
-  echo "PACKAGE_COMPONENT must be 'ocr' or 'stt', got: $PACKAGE_COMPONENT" >&2
-  exit 1
-fi
-if [ ! -f "$DEB_PATH" ]; then
-  echo "Debian package not found: $DEB_PATH" >&2
-  exit 1
-fi
-if [ ! -f "$RPM_PATH" ]; then
-  echo "RPM package not found: $RPM_PATH" >&2
+if [ "${PACKAGE_COMPONENT}" != "ocr" ] && [ "${PACKAGE_COMPONENT}" != "stt" ]; then
+  echo "PACKAGE_COMPONENT must be 'ocr' or 'stt', got: ${PACKAGE_COMPONENT}" >&2
   exit 1
 fi
 
-for cmd in git gpg dpkg-scanpackages apt-ftparchive createrepo_c rpmsign gzip; do
+if [ ! -f "${DEB_PATH}" ]; then
+  echo "Debian package not found: ${DEB_PATH}" >&2
+  exit 1
+fi
+
+if [ ! -f "${RPM_PATH}" ]; then
+  echo "RPM package not found: ${RPM_PATH}" >&2
+  exit 1
+fi
+
+for cmd in git gpg dpkg-scanpackages apt-ftparchive createrepo_c gzip curl; do
   require_cmd "$cmd"
 done
 
 repo_dir="${RUNNER_TEMP}/squigit-packages-repo"
-rm -rf "$repo_dir"
+rm -rf "${repo_dir}"
 
 export GNUPGHOME="${RUNNER_TEMP}/squigit-packages-gnupg"
-rm -rf "$GNUPGHOME"
-mkdir -p "$GNUPGHOME"
-chmod 700 "$GNUPGHOME"
+rm -rf "${GNUPGHOME}"
+mkdir -p "${GNUPGHOME}"
+chmod 700 "${GNUPGHOME}"
 
-printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+printf '%s' "${GPG_PRIVATE_KEY}" | gpg --batch --import
 
 gpg_key_fpr="$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ {print $10; exit}')"
-if [ -z "$gpg_key_fpr" ]; then
+if [ -z "${gpg_key_fpr}" ]; then
   echo "Failed to resolve imported GPG key fingerprint" >&2
   exit 1
 fi
 
-git clone "https://x-access-token:${PACKAGES_TOKEN}@github.com/${PACKAGES_REPO}.git" "$repo_dir"
-cd "$repo_dir"
-git checkout "$PACKAGES_BRANCH"
+git clone "https://x-access-token:${PACKAGES_TOKEN}@github.com/${PACKAGES_REPO}.git" "${repo_dir}"
+cd "${repo_dir}"
+git checkout "${PACKAGES_BRANCH}"
+
+raw_base_url="https://github.com/${PACKAGES_REPO}/raw/${PACKAGES_BRANCH}"
+source_release_root="https://github.com/${SOURCE_RELEASE_REPO}/releases/download"
 
 mkdir -p "apt/dists/${APT_SUITE}/ocr/binary-amd64"
 mkdir -p "apt/dists/${APT_SUITE}/stt/binary-amd64"
-mkdir -p "apt/pool/ocr" "apt/pool/stt"
-mkdir -p "rpm/ocr" "rpm/stt" "keys"
+mkdir -p "rpm/ocr" "rpm/stt" "keys" "metadata"
 
-# Keep one deb per component lane and regenerate index metadata.
-find "apt/pool/${PACKAGE_COMPONENT}" -maxdepth 1 -type f -name '*.deb' -delete
-deb_target="apt/pool/${PACKAGE_COMPONENT}/$(basename "$DEB_PATH")"
-cp "$DEB_PATH" "$deb_target"
+# Drop legacy package mirrors to keep repo lightweight.
+rm -rf apt/pool
+find rpm/ocr rpm/stt -maxdepth 1 -type f -name '*.rpm' -delete || true
+
+manifest_path="metadata/package-assets.env"
+if [ -f "${manifest_path}" ]; then
+  # shellcheck disable=SC1090
+  source "${manifest_path}"
+fi
+
+OCR_DEB_TAG="${OCR_DEB_TAG:-}"
+OCR_DEB_NAME="${OCR_DEB_NAME:-}"
+OCR_RPM_TAG="${OCR_RPM_TAG:-}"
+OCR_RPM_NAME="${OCR_RPM_NAME:-}"
+STT_DEB_TAG="${STT_DEB_TAG:-}"
+STT_DEB_NAME="${STT_DEB_NAME:-}"
+STT_RPM_TAG="${STT_RPM_TAG:-}"
+STT_RPM_NAME="${STT_RPM_NAME:-}"
+
+if [ "${PACKAGE_COMPONENT}" = "ocr" ]; then
+  OCR_DEB_TAG="${SOURCE_RELEASE_TAG}"
+  OCR_DEB_NAME="$(basename "${DEB_PATH}")"
+  OCR_RPM_TAG="${SOURCE_RELEASE_TAG}"
+  OCR_RPM_NAME="$(basename "${RPM_PATH}")"
+else
+  STT_DEB_TAG="${SOURCE_RELEASE_TAG}"
+  STT_DEB_NAME="$(basename "${DEB_PATH}")"
+  STT_RPM_TAG="${SOURCE_RELEASE_TAG}"
+  STT_RPM_NAME="$(basename "${RPM_PATH}")"
+fi
+
+declare -A COMPONENT_DEB_PATHS
+declare -A COMPONENT_DEB_TAGS
+declare -A COMPONENT_DEB_NAMES
+declare -A COMPONENT_RPM_PATHS
+declare -A COMPONENT_RPM_TAGS
+declare -A COMPONENT_RPM_NAMES
+
+assets_dir="${RUNNER_TEMP}/squigit-component-assets"
+rm -rf "${assets_dir}"
+mkdir -p "${assets_dir}"
+
+for component in ocr stt; do
+  component_deb_tag=""
+  component_deb_name=""
+  component_rpm_tag=""
+  component_rpm_name=""
+
+  case "${component}" in
+    ocr)
+      component_deb_tag="${OCR_DEB_TAG}"
+      component_deb_name="${OCR_DEB_NAME}"
+      component_rpm_tag="${OCR_RPM_TAG}"
+      component_rpm_name="${OCR_RPM_NAME}"
+      ;;
+    stt)
+      component_deb_tag="${STT_DEB_TAG}"
+      component_deb_name="${STT_DEB_NAME}"
+      component_rpm_tag="${STT_RPM_TAG}"
+      component_rpm_name="${STT_RPM_NAME}"
+      ;;
+  esac
+
+  COMPONENT_DEB_TAGS["${component}"]="${component_deb_tag}"
+  COMPONENT_DEB_NAMES["${component}"]="${component_deb_name}"
+  COMPONENT_RPM_TAGS["${component}"]="${component_rpm_tag}"
+  COMPONENT_RPM_NAMES["${component}"]="${component_rpm_name}"
+
+  if [ "${component}" = "${PACKAGE_COMPONENT}" ]; then
+    COMPONENT_DEB_PATHS["${component}"]="${DEB_PATH}"
+    COMPONENT_RPM_PATHS["${component}"]="${RPM_PATH}"
+    continue
+  fi
+
+  component_dir="${assets_dir}/${component}"
+  mkdir -p "${component_dir}"
+
+  if [ -n "${component_deb_tag}" ] && [ -n "${component_deb_name}" ]; then
+    deb_url="${source_release_root}/${component_deb_tag}/${component_deb_name}"
+    deb_target="${component_dir}/${component_deb_name}"
+    download_asset_with_retry "${deb_url}" "${deb_target}"
+    COMPONENT_DEB_PATHS["${component}"]="${deb_target}"
+  fi
+
+  if [ -n "${component_rpm_tag}" ] && [ -n "${component_rpm_name}" ]; then
+    rpm_url="${source_release_root}/${component_rpm_tag}/${component_rpm_name}"
+    rpm_target="${component_dir}/${component_rpm_name}"
+    download_asset_with_retry "${rpm_url}" "${rpm_target}"
+    COMPONENT_RPM_PATHS["${component}"]="${rpm_target}"
+  fi
+done
 
 for component in ocr stt; do
   component_dir="apt/dists/${APT_SUITE}/${component}/binary-amd64"
-  component_pool="apt/pool/${component}"
-  mkdir -p "$component_dir"
-  if find "$component_pool" -maxdepth 1 -type f -name '*.deb' | grep -q .; then
+  packages_file="${component_dir}/Packages"
+  mkdir -p "${component_dir}"
+
+  deb_path_local="${COMPONENT_DEB_PATHS[${component}]:-}"
+  deb_name="${COMPONENT_DEB_NAMES[${component}]:-}"
+  deb_tag="${COMPONENT_DEB_TAGS[${component}]:-}"
+
+  if [ -n "${deb_path_local}" ] && [ -f "${deb_path_local}" ] && [ -n "${deb_name}" ] && [ -n "${deb_tag}" ]; then
+    apt_scan_root="${RUNNER_TEMP}/apt-scan-${component}"
+    rm -rf "${apt_scan_root}"
+    mkdir -p "${apt_scan_root}/pool/${component}"
+    cp "${deb_path_local}" "${apt_scan_root}/pool/${component}/${deb_name}"
+
     (
-      cd apt
-      dpkg-scanpackages --multiversion "pool/${component}" /dev/null > "../${component_dir}/Packages"
+      cd "${apt_scan_root}"
+      dpkg-scanpackages --multiversion "pool/${component}" /dev/null > "${repo_dir}/${packages_file}"
     )
+
+    deb_filename="/${SOURCE_RELEASE_REPO}/releases/download/${deb_tag}/${deb_name}"
+    sed -i "s|^Filename: .*|Filename: ${deb_filename}|" "${packages_file}"
   else
-    : > "${component_dir}/Packages"
+    : > "${packages_file}"
   fi
-  gzip -9 -c "${component_dir}/Packages" > "${component_dir}/Packages.gz"
+
+  gzip -9 -c "${packages_file}" > "${packages_file}.gz"
 done
 
 apt-ftparchive \
@@ -106,71 +228,81 @@ apt-ftparchive \
   -o "APT::FTPArchive::Release::Components=ocr stt" \
   release "apt/dists/${APT_SUITE}" > "apt/dists/${APT_SUITE}/Release"
 
-gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --local-user "$gpg_key_fpr" \
+gpg --batch --yes --pinentry-mode loopback --passphrase "${GPG_PASSPHRASE}" --local-user "${gpg_key_fpr}" \
   --clearsign -o "apt/dists/${APT_SUITE}/InRelease" "apt/dists/${APT_SUITE}/Release"
 
-gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --local-user "$gpg_key_fpr" \
+gpg --batch --yes --pinentry-mode loopback --passphrase "${GPG_PASSPHRASE}" --local-user "${gpg_key_fpr}" \
   --detach-sign --armor -o "apt/dists/${APT_SUITE}/Release.gpg" "apt/dists/${APT_SUITE}/Release"
 
-# Keep one rpm per component lane to avoid stale duplicates.
-find "rpm/${PACKAGE_COMPONENT}" -maxdepth 1 -type f -name '*.rpm' -delete
-rpm_target="rpm/${PACKAGE_COMPONENT}/$(basename "$RPM_PATH")"
-cp "$RPM_PATH" "$rpm_target"
-
-escaped_passphrase="$(escape_single_quotes "$GPG_PASSPHRASE")"
-cat > "${HOME}/.rpmmacros" <<RPMMACROS
-%_signature gpg
-%_gpg_path ${GNUPGHOME}
-%_gpg_name ${gpg_key_fpr}
-%_gpgbin /usr/bin/gpg
-%__gpg /usr/bin/gpg
-%__gpg_sign_cmd %{__gpg} --batch --yes --no-armor --pinentry-mode loopback --passphrase '${escaped_passphrase}' --detach-sign --output %{__signature_filename} %{__plaintext_filename}
-RPMMACROS
-
-rpmsign --addsign "$rpm_target"
-rm -f "${HOME}/.rpmmacros"
-
 for component in ocr stt; do
-  component_dir="rpm/${component}"
-  mkdir -p "$component_dir"
-  createrepo_c --update "$component_dir"
-  gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --local-user "$gpg_key_fpr" \
-    --detach-sign --armor -o "${component_dir}/repodata/repomd.xml.asc" "${component_dir}/repodata/repomd.xml"
+  component_repo_dir="rpm/${component}"
+  temp_repo_dir="${RUNNER_TEMP}/rpm-repo-${component}"
+  rm -rf "${temp_repo_dir}"
+  mkdir -p "${temp_repo_dir}"
+
+  rpm_path_local="${COMPONENT_RPM_PATHS[${component}]:-}"
+  rpm_name="${COMPONENT_RPM_NAMES[${component}]:-}"
+  rpm_tag="${COMPONENT_RPM_TAGS[${component}]:-}"
+
+  if [ -n "${rpm_path_local}" ] && [ -f "${rpm_path_local}" ] && [ -n "${rpm_name}" ] && [ -n "${rpm_tag}" ]; then
+    cp "${rpm_path_local}" "${temp_repo_dir}/${rpm_name}"
+    createrepo_c --simple-md-filenames --baseurl "${source_release_root}/${rpm_tag}/" "${temp_repo_dir}"
+  else
+    createrepo_c --simple-md-filenames "${temp_repo_dir}"
+  fi
+
+  rm -rf "${component_repo_dir}/repodata"
+  mkdir -p "${component_repo_dir}"
+  cp -a "${temp_repo_dir}/repodata" "${component_repo_dir}/"
+
+  gpg --batch --yes --pinentry-mode loopback --passphrase "${GPG_PASSPHRASE}" --local-user "${gpg_key_fpr}" \
+    --detach-sign --armor -o "${component_repo_dir}/repodata/repomd.xml.asc" "${component_repo_dir}/repodata/repomd.xml"
 done
 
 cat > "rpm/squigit.repo" <<EOF_REPO
 [squigit-ocr]
 name=Squigit OCR Packages
-baseurl=${PAGES_BASE_URL}/rpm/ocr
+baseurl=${raw_base_url}/rpm/ocr
 enabled=1
 gpgcheck=1
 repo_gpgcheck=1
-gpgkey=${PAGES_BASE_URL}/keys/squigit-packages.asc
+gpgkey=${raw_base_url}/keys/squigit-packages.asc
 
 [squigit-stt]
 name=Squigit STT Packages
-baseurl=${PAGES_BASE_URL}/rpm/stt
+baseurl=${raw_base_url}/rpm/stt
 enabled=1
 gpgcheck=1
 repo_gpgcheck=1
-gpgkey=${PAGES_BASE_URL}/keys/squigit-packages.asc
+gpgkey=${raw_base_url}/keys/squigit-packages.asc
 EOF_REPO
 
-gpg --batch --yes --output "keys/squigit-packages.gpg" --export "$gpg_key_fpr"
-gpg --batch --yes --armor --output "keys/squigit-packages.asc" --export "$gpg_key_fpr"
+gpg --batch --yes --output "keys/squigit-packages.gpg" --export "${gpg_key_fpr}"
+gpg --batch --yes --armor --output "keys/squigit-packages.asc" --export "${gpg_key_fpr}"
 
-if [ ! -f README.md ]; then
-  cat > README.md <<'EOF_README'
+cat > "${manifest_path}" <<EOF_MANIFEST
+# Autogenerated by .github/actions/publish-linux-packages-repo/publish.sh
+SOURCE_RELEASE_REPO=${SOURCE_RELEASE_REPO}
+OCR_DEB_TAG=${OCR_DEB_TAG}
+OCR_DEB_NAME=${OCR_DEB_NAME}
+OCR_RPM_TAG=${OCR_RPM_TAG}
+OCR_RPM_NAME=${OCR_RPM_NAME}
+STT_DEB_TAG=${STT_DEB_TAG}
+STT_DEB_NAME=${STT_DEB_NAME}
+STT_RPM_TAG=${STT_RPM_TAG}
+STT_RPM_NAME=${STT_RPM_NAME}
+EOF_MANIFEST
+
+cat > README.md <<'EOF_README'
 # Squigit Packages
 
-Signed APT and DNF repositories for Squigit sidecar packages.
+Signed APT and DNF metadata for Squigit sidecar packages.
 
-- APT repo root: `apt/`
-- DNF repo root: `rpm/`
+- APT metadata root: `apt/`
+- DNF metadata root: `rpm/`
 - Public key: `keys/squigit-packages.asc`
-- Latest installable packages are mirrored in this repository.
+- Package binaries are served from `squigit-org/squigit` GitHub Releases.
 EOF_README
-fi
 
 if [ ! -f index.html ]; then
   cat > index.html <<'EOF_INDEX'
@@ -183,7 +315,7 @@ if [ ! -f index.html ]; then
   </head>
   <body>
     <h1>Squigit Packages</h1>
-    <p>Signed Linux package repositories for Squigit OCR and STT sidecars.</p>
+    <p>Signed Linux package repository metadata for Squigit OCR and STT sidecars.</p>
     <p>Use the installation snippets from the Squigit docs.</p>
   </body>
 </html>
@@ -192,16 +324,17 @@ fi
 
 git config user.name "GitHub Actions Bot"
 git config user.email "actions@github.com"
-git add apt rpm keys README.md index.html
+git add -A apt rpm keys metadata README.md index.html
 
 if git diff --cached --quiet; then
   echo "No package metadata changes to publish."
 else
   git commit -m "Publish ${PACKAGE_NAME} ${PACKAGE_VERSION} package metadata"
-  git push origin "$PACKAGES_BRANCH"
+  git push origin "${PACKAGES_BRANCH}"
 fi
 
 {
   echo "repo_url=https://github.com/${PACKAGES_REPO}"
-  echo "apt_source=deb [signed-by=/etc/apt/keyrings/squigit-packages.gpg] ${PAGES_BASE_URL}/apt ${APT_SUITE} ocr stt"
-} >> "$GITHUB_OUTPUT"
+  echo "apt_source=deb [signed-by=/etc/apt/keyrings/squigit-packages.gpg] ${raw_base_url}/apt ${APT_SUITE} ocr stt"
+  echo "dnf_repo_url=${raw_base_url}/rpm/squigit.repo"
+} >> "${GITHUB_OUTPUT}"

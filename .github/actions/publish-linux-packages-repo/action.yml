@@ -21,6 +21,13 @@ inputs:
   package-version:
     description: "Package version"
     required: true
+  source-release-repo:
+    description: "Source releases repository slug hosting package assets"
+    required: false
+    default: "squigit-org/squigit"
+  source-release-tag:
+    description: "Source release tag hosting package assets"
+    required: true
   deb-path:
     description: "Absolute path to .deb package"
     required: true
@@ -48,6 +55,9 @@ outputs:
   apt-source:
     description: "APT source line for docs"
     value: ${{ steps.publish.outputs.apt_source }}
+  dnf-repo-url:
+    description: "DNF .repo file URL"
+    value: ${{ steps.publish.outputs.dnf_repo_url }}
 runs:
   using: "composite"
   steps:
@@ -61,6 +71,8 @@ runs:
         PACKAGE_NAME: ${{ inputs.package-name }}
         PACKAGE_COMPONENT: ${{ inputs.package-component }}
         PACKAGE_VERSION: ${{ inputs.package-version }}
+        SOURCE_RELEASE_REPO: ${{ inputs.source-release-repo }}
+        SOURCE_RELEASE_TAG: ${{ inputs.source-release-tag }}
         DEB_PATH: ${{ inputs.deb-path }}
         RPM_PATH: ${{ inputs.rpm-path }}
         GPG_PRIVATE_KEY: ${{ inputs.gpg-private-key }}
