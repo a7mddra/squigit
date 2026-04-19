@@ -83,21 +83,16 @@ jobs:
           echo "run_dnf=${run_dnf}" >> "$GITHUB_OUTPUT"
           echo "Resolved channels: homebrew=${run_homebrew}, winget=${run_winget}, apt=${run_apt}, dnf=${run_dnf}"
 
-  build-release-stt:
-    name: Build STT macOS Arm64 + Release Asset
+  resolve-release-meta:
+    name: Resolve Release Metadata
     needs: resolve-channel-scope
-    runs-on: macos-14
+    runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}
       release_tag: ${{ steps.meta.outputs.release_tag }}
-      asset_url: ${{ steps.meta.outputs.asset_url }}
-      sha256: ${{ steps.meta.outputs.sha256 }}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v6
-
-      - name: Extract Version
-        id: version
+      - name: Resolve version and release tag
+        id: meta
         shell: bash
         run: |
           set -euo pipefail
@@ -125,6 +120,23 @@ jobs:
 
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Resolved release metadata: tag=${RELEASE_TAG}, version=${VERSION}"
+
+  build-release-stt:
+    name: Build STT macOS Arm64 + Release Asset
+    if: needs.resolve-channel-scope.outputs.run_homebrew == 'true'
+    needs:
+      - resolve-channel-scope
+      - resolve-release-meta
+    runs-on: macos-14
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      asset_url: ${{ steps.meta.outputs.asset_url }}
+      sha256: ${{ steps.meta.outputs.sha256 }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -137,7 +149,7 @@ jobs:
       - name: Run Sidecar Version Smoke Check
         shell: bash
         env:
-          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+          EXPECTED_VERSION: ${{ needs.resolve-release-meta.outputs.version }}
         run: |
           set -euo pipefail
           chmod +x packaging/binaries/whisper-stt-aarch64-apple-darwin/squigit-stt || true
@@ -162,8 +174,8 @@ jobs:
       - name: Upload STT Asset to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.version.outputs.release_tag }}
-          name: STT v${{ steps.version.outputs.version }}
+          tag_name: ${{ needs.resolve-release-meta.outputs.release_tag }}
+          name: STT v${{ needs.resolve-release-meta.outputs.version }}
           files: squigit-stt-mac-aarch64.tar.gz
           overwrite_files: true
           repository: squigit-org/squigit
@@ -173,8 +185,8 @@ jobs:
         id: meta
         shell: bash
         env:
-          VERSION: ${{ steps.version.outputs.version }}
-          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          VERSION: ${{ needs.resolve-release-meta.outputs.version }}
+          RELEASE_TAG: ${{ needs.resolve-release-meta.outputs.release_tag }}
         run: |
           set -euo pipefail
           SHA256="$(shasum -a 256 squigit-stt-mac-aarch64.tar.gz | awk '{ print $1 }')"
@@ -189,11 +201,11 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-stt
+      - resolve-release-meta
     runs-on: windows-latest
     outputs:
-      version: ${{ needs.build-release-stt.outputs.version }}
-      release_tag: ${{ needs.build-release-stt.outputs.release_tag }}
+      version: ${{ needs.resolve-release-meta.outputs.version }}
+      release_tag: ${{ needs.resolve-release-meta.outputs.release_tag }}
       asset_url: ${{ steps.meta.outputs.asset_url }}
       sha256: ${{ steps.meta.outputs.sha256 }}
     steps:
@@ -214,7 +226,7 @@ jobs:
       - name: Run STT Version Smoke Check (Windows)
         shell: pwsh
         env:
-          EXPECTED_VERSION: ${{ needs.build-release-stt.outputs.version }}
+          EXPECTED_VERSION: ${{ needs.resolve-release-meta.outputs.version }}
         run: |
           $ErrorActionPreference = "Stop"
           $sttVersion = & packaging/binaries/whisper-stt-x86_64-pc-windows-msvc/squigit-stt.exe --version
@@ -230,8 +242,8 @@ jobs:
       - name: Upload STT Windows Asset to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ needs.build-release-stt.outputs.release_tag }}
-          name: STT v${{ needs.build-release-stt.outputs.version }}
+          tag_name: ${{ needs.resolve-release-meta.outputs.release_tag }}
+          name: STT v${{ needs.resolve-release-meta.outputs.version }}
           files: ${{ steps.build.outputs.asset-path }}
           overwrite_files: true
           repository: squigit-org/squigit
@@ -241,7 +253,7 @@ jobs:
         id: meta
         shell: pwsh
         env:
-          RELEASE_TAG: ${{ needs.build-release-stt.outputs.release_tag }}
+          RELEASE_TAG: ${{ needs.resolve-release-meta.outputs.release_tag }}
           ASSET_NAME: ${{ steps.build.outputs.asset-name }}
           ASSET_SHA256: ${{ steps.build.outputs.asset-sha256 }}
         run: |
@@ -255,11 +267,11 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_apt == 'true' || needs.resolve-channel-scope.outputs.run_dnf == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-stt
+      - resolve-release-meta
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ needs.build-release-stt.outputs.version }}
-      release_tag: ${{ needs.build-release-stt.outputs.release_tag }}
+      version: ${{ needs.resolve-release-meta.outputs.version }}
+      release_tag: ${{ needs.resolve-release-meta.outputs.release_tag }}
       deb_name: ${{ steps.pkg.outputs.deb_name }}
       deb_sha256: ${{ steps.pkg.outputs.deb_sha256 }}
       deb_asset_url: ${{ steps.meta.outputs.deb_asset_url }}
@@ -297,7 +309,7 @@ jobs:
         uses: ./.github/actions/build-linux-packages
         with:
           package-name: squigit-stt
-          package-version: ${{ needs.build-release-stt.outputs.version }}
+          package-version: ${{ needs.resolve-release-meta.outputs.version }}
           runtime-dir: packaging/binaries/whisper-stt-x86_64-unknown-linux-gnu
           binary-name: squigit-stt
           deb-control-template: ${{ github.workspace }}/packaging/debian/squigit-stt/DEBIAN/control
@@ -309,8 +321,8 @@ jobs:
       - name: Upload Linux Package Assets to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ needs.build-release-stt.outputs.release_tag }}
-          name: STT v${{ needs.build-release-stt.outputs.version }}
+          tag_name: ${{ needs.resolve-release-meta.outputs.release_tag }}
+          name: STT v${{ needs.resolve-release-meta.outputs.version }}
           files: |
             ${{ steps.pkg.outputs.deb_path }}
             ${{ steps.pkg.outputs.rpm_path }}
@@ -322,7 +334,7 @@ jobs:
         id: meta
         shell: bash
         env:
-          RELEASE_TAG: ${{ needs.build-release-stt.outputs.release_tag }}
+          RELEASE_TAG: ${{ needs.resolve-release-meta.outputs.release_tag }}
           DEB_NAME: ${{ steps.pkg.outputs.deb_name }}
           RPM_NAME: ${{ steps.pkg.outputs.rpm_name }}
         run: |
@@ -330,12 +342,59 @@ jobs:
           echo "deb_asset_url=https://github.com/squigit-org/squigit/releases/download/${RELEASE_TAG}/${DEB_NAME}" >> "$GITHUB_OUTPUT"
           echo "rpm_asset_url=https://github.com/squigit-org/squigit/releases/download/${RELEASE_TAG}/${RPM_NAME}" >> "$GITHUB_OUTPUT"
 
+  build-phase-complete:
+    name: Build Phase Complete
+    if: always()
+    needs:
+      - resolve-channel-scope
+      - build-release-stt
+      - build-release-stt-windows
+      - build-release-stt-linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate selected build results
+        shell: bash
+        env:
+          RUN_HOMEBREW: ${{ needs.resolve-channel-scope.outputs.run_homebrew }}
+          RUN_WINGET: ${{ needs.resolve-channel-scope.outputs.run_winget }}
+          RUN_APT: ${{ needs.resolve-channel-scope.outputs.run_apt }}
+          RUN_DNF: ${{ needs.resolve-channel-scope.outputs.run_dnf }}
+          MAC_RESULT: ${{ needs.build-release-stt.result }}
+          WIN_RESULT: ${{ needs.build-release-stt-windows.result }}
+          LINUX_RESULT: ${{ needs.build-release-stt-linux.result }}
+        run: |
+          set -euo pipefail
+
+          failed=0
+
+          if [ "${RUN_HOMEBREW}" = "true" ] && [ "${MAC_RESULT}" != "success" ]; then
+            echo "Homebrew lane selected, but macOS build result is '${MAC_RESULT}'." >&2
+            failed=1
+          fi
+
+          if [ "${RUN_WINGET}" = "true" ] && [ "${WIN_RESULT}" != "success" ]; then
+            echo "Winget lane selected, but Windows build result is '${WIN_RESULT}'." >&2
+            failed=1
+          fi
+
+          if { [ "${RUN_APT}" = "true" ] || [ "${RUN_DNF}" = "true" ]; } && [ "${LINUX_RESULT}" != "success" ]; then
+            echo "APT/DNF lane selected, but Linux build result is '${LINUX_RESULT}'." >&2
+            failed=1
+          fi
+
+          if [ "${failed}" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "Selected STT builds completed successfully."
+
   publish-linux-packages-stt:
     name: Publish Signed Linux Package Metadata (STT)
     if: needs.resolve-channel-scope.outputs.run_apt == 'true' || needs.resolve-channel-scope.outputs.run_dnf == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-stt
+      - resolve-release-meta
+      - build-phase-complete
       - build-release-stt-linux
     runs-on: ubuntu-latest
     concurrency:
@@ -400,7 +459,7 @@ jobs:
           packages-repo: squigit-org/squigit-packages
           package-name: squigit-stt
           package-component: stt
-          package-version: ${{ needs.build-release-stt.outputs.version }}
+          package-version: ${{ needs.resolve-release-meta.outputs.version }}
           deb-path: ${{ steps.assets.outputs.deb_path }}
           rpm-path: ${{ steps.assets.outputs.rpm_path }}
           gpg-private-key: ${{ secrets.LINUX_PACKAGES_GPG_PRIVATE_KEY }}
@@ -413,7 +472,7 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_apt == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-stt
+      - resolve-release-meta
       - publish-linux-packages-stt
     runs-on: ubuntu-latest
     steps:
@@ -449,7 +508,7 @@ jobs:
       - name: Validate Installed STT Version
         shell: bash
         env:
-          EXPECTED_VERSION: ${{ needs.build-release-stt.outputs.version }}
+          EXPECTED_VERSION: ${{ needs.resolve-release-meta.outputs.version }}
         run: |
           set -euo pipefail
           STT_VERSION="$(squigit-stt --version | tr -d '\r' | tail -n 1)"
@@ -469,7 +528,7 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_dnf == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-stt
+      - resolve-release-meta
       - publish-linux-packages-stt
     runs-on: ubuntu-latest
     container: fedora:latest
@@ -526,7 +585,7 @@ jobs:
       - name: Validate Installed STT Version
         shell: bash
         env:
-          EXPECTED_VERSION: ${{ needs.build-release-stt.outputs.version }}
+          EXPECTED_VERSION: ${{ needs.resolve-release-meta.outputs.version }}
         run: |
           set -euo pipefail
           STT_VERSION="$(squigit-stt --version | tr -d '\r' | tail -n 1)"
@@ -546,6 +605,8 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_homebrew == 'true'
     needs:
       - resolve-channel-scope
+      - resolve-release-meta
+      - build-phase-complete
       - build-release-stt
     runs-on: ubuntu-latest
     steps:
@@ -557,19 +618,20 @@ jobs:
         with:
           tap-token: ${{ secrets.TAP_GITHUB_TOKEN }}
           tap-repo: squigit-org/homebrew-tap
-          version: ${{ needs.build-release-stt.outputs.version }}
+          version: ${{ needs.resolve-release-meta.outputs.version }}
           asset-url: ${{ needs.build-release-stt.outputs.asset_url }}
           sha256: ${{ needs.build-release-stt.outputs.sha256 }}
           template-formula-path: ${{ github.workspace }}/packaging/homebrew/squigit-stt.rb
           formula-file: squigit-stt.rb
-          commit-message: Update squigit-stt to v${{ needs.build-release-stt.outputs.version }}
+          commit-message: Update squigit-stt to v${{ needs.resolve-release-meta.outputs.version }}
 
   test-homebrew-stt:
     name: End-user Homebrew Install Smoke (STT)
     if: needs.resolve-channel-scope.outputs.run_homebrew == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-stt
+      - resolve-release-meta
+      - build-phase-complete
       - update-homebrew-tap-stt
     runs-on: macos-14
     steps:
@@ -593,7 +655,7 @@ jobs:
       - name: Validate Installed STT Version
         shell: bash
         env:
-          EXPECTED_VERSION: ${{ needs.build-release-stt.outputs.version }}
+          EXPECTED_VERSION: ${{ needs.resolve-release-meta.outputs.version }}
         run: |
           set -euo pipefail
           STT_VERSION="$(squigit-stt --version | tr -d '\r' | tail -n 1)"
@@ -612,6 +674,7 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
+      - build-phase-complete
       - build-release-stt-windows
       - validate-winget-manifest-stt
     runs-on: windows-latest
@@ -691,6 +754,7 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
+      - build-phase-complete
       - build-release-stt-windows
     runs-on: windows-latest
     steps:
@@ -735,7 +799,7 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-stt-windows
+      - build-phase-complete
       - publish-winget-stt
       - validate-winget-manifest-stt
     runs-on: windows-latest

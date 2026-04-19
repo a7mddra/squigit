@@ -83,21 +83,16 @@ jobs:
           echo "run_dnf=${run_dnf}" >> "$GITHUB_OUTPUT"
           echo "Resolved channels: homebrew=${run_homebrew}, winget=${run_winget}, apt=${run_apt}, dnf=${run_dnf}"
 
-  build-release-ocr:
-    name: Build OCR macOS Arm64 + Release Asset
+  resolve-release-meta:
+    name: Resolve Release Metadata
     needs: resolve-channel-scope
-    runs-on: macos-14
+    runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}
       release_tag: ${{ steps.meta.outputs.release_tag }}
-      asset_url: ${{ steps.meta.outputs.asset_url }}
-      sha256: ${{ steps.meta.outputs.sha256 }}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v6
-
-      - name: Extract Version
-        id: version
+      - name: Resolve version and release tag
+        id: meta
         shell: bash
         run: |
           set -euo pipefail
@@ -125,6 +120,23 @@ jobs:
 
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Resolved release metadata: tag=${RELEASE_TAG}, version=${VERSION}"
+
+  build-release-ocr:
+    name: Build OCR macOS Arm64 + Release Asset
+    if: needs.resolve-channel-scope.outputs.run_homebrew == 'true'
+    needs:
+      - resolve-channel-scope
+      - resolve-release-meta
+    runs-on: macos-14
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      asset_url: ${{ steps.meta.outputs.asset_url }}
+      sha256: ${{ steps.meta.outputs.sha256 }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -138,7 +150,7 @@ jobs:
       - name: Run OCR Version Smoke Check
         shell: bash
         env:
-          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+          EXPECTED_VERSION: ${{ needs.resolve-release-meta.outputs.version }}
         run: |
           set -euo pipefail
           chmod +x packaging/binaries/paddle-ocr-aarch64-apple-darwin/squigit-ocr || true
@@ -206,8 +218,8 @@ jobs:
       - name: Upload OCR Asset to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.version.outputs.release_tag }}
-          name: OCR v${{ steps.version.outputs.version }}
+          tag_name: ${{ needs.resolve-release-meta.outputs.release_tag }}
+          name: OCR v${{ needs.resolve-release-meta.outputs.version }}
           files: squigit-ocr-mac-aarch64.tar.gz
           overwrite_files: true
           repository: squigit-org/squigit
@@ -217,8 +229,8 @@ jobs:
         id: meta
         shell: bash
         env:
-          VERSION: ${{ steps.version.outputs.version }}
-          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          VERSION: ${{ needs.resolve-release-meta.outputs.version }}
+          RELEASE_TAG: ${{ needs.resolve-release-meta.outputs.release_tag }}
         run: |
           set -euo pipefail
           SHA256="$(shasum -a 256 squigit-ocr-mac-aarch64.tar.gz | awk '{ print $1 }')"
@@ -233,11 +245,11 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-ocr
+      - resolve-release-meta
     runs-on: windows-latest
     outputs:
-      version: ${{ needs.build-release-ocr.outputs.version }}
-      release_tag: ${{ needs.build-release-ocr.outputs.release_tag }}
+      version: ${{ needs.resolve-release-meta.outputs.version }}
+      release_tag: ${{ needs.resolve-release-meta.outputs.release_tag }}
       asset_url: ${{ steps.meta.outputs.asset_url }}
       sha256: ${{ steps.meta.outputs.sha256 }}
     steps:
@@ -259,7 +271,7 @@ jobs:
       - name: Run OCR Version Smoke Check (Windows)
         shell: pwsh
         env:
-          EXPECTED_VERSION: ${{ needs.build-release-ocr.outputs.version }}
+          EXPECTED_VERSION: ${{ needs.resolve-release-meta.outputs.version }}
         run: |
           $ErrorActionPreference = "Stop"
           $ocrVersion = & packaging/binaries/paddle-ocr-x86_64-pc-windows-msvc/squigit-ocr.exe --version
@@ -316,8 +328,8 @@ jobs:
       - name: Upload OCR Windows Asset to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ needs.build-release-ocr.outputs.release_tag }}
-          name: OCR v${{ needs.build-release-ocr.outputs.version }}
+          tag_name: ${{ needs.resolve-release-meta.outputs.release_tag }}
+          name: OCR v${{ needs.resolve-release-meta.outputs.version }}
           files: ${{ steps.build.outputs.asset-path }}
           overwrite_files: true
           repository: squigit-org/squigit
@@ -327,7 +339,7 @@ jobs:
         id: meta
         shell: pwsh
         env:
-          RELEASE_TAG: ${{ needs.build-release-ocr.outputs.release_tag }}
+          RELEASE_TAG: ${{ needs.resolve-release-meta.outputs.release_tag }}
           ASSET_NAME: ${{ steps.build.outputs.asset-name }}
           ASSET_SHA256: ${{ steps.build.outputs.asset-sha256 }}
         run: |
@@ -341,11 +353,11 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_apt == 'true' || needs.resolve-channel-scope.outputs.run_dnf == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-ocr
+      - resolve-release-meta
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ needs.build-release-ocr.outputs.version }}
-      release_tag: ${{ needs.build-release-ocr.outputs.release_tag }}
+      version: ${{ needs.resolve-release-meta.outputs.version }}
+      release_tag: ${{ needs.resolve-release-meta.outputs.release_tag }}
       deb_name: ${{ steps.pkg.outputs.deb_name }}
       deb_sha256: ${{ steps.pkg.outputs.deb_sha256 }}
       deb_asset_url: ${{ steps.meta.outputs.deb_asset_url }}
@@ -384,7 +396,7 @@ jobs:
         uses: ./.github/actions/build-linux-packages
         with:
           package-name: squigit-ocr
-          package-version: ${{ needs.build-release-ocr.outputs.version }}
+          package-version: ${{ needs.resolve-release-meta.outputs.version }}
           runtime-dir: packaging/binaries/paddle-ocr-x86_64-unknown-linux-gnu
           binary-name: squigit-ocr
           deb-control-template: ${{ github.workspace }}/packaging/debian/squigit-ocr/DEBIAN/control
@@ -396,8 +408,8 @@ jobs:
       - name: Upload Linux Package Assets to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ needs.build-release-ocr.outputs.release_tag }}
-          name: OCR v${{ needs.build-release-ocr.outputs.version }}
+          tag_name: ${{ needs.resolve-release-meta.outputs.release_tag }}
+          name: OCR v${{ needs.resolve-release-meta.outputs.version }}
           files: |
             ${{ steps.pkg.outputs.deb_path }}
             ${{ steps.pkg.outputs.rpm_path }}
@@ -409,7 +421,7 @@ jobs:
         id: meta
         shell: bash
         env:
-          RELEASE_TAG: ${{ needs.build-release-ocr.outputs.release_tag }}
+          RELEASE_TAG: ${{ needs.resolve-release-meta.outputs.release_tag }}
           DEB_NAME: ${{ steps.pkg.outputs.deb_name }}
           RPM_NAME: ${{ steps.pkg.outputs.rpm_name }}
         run: |
@@ -417,12 +429,59 @@ jobs:
           echo "deb_asset_url=https://github.com/squigit-org/squigit/releases/download/${RELEASE_TAG}/${DEB_NAME}" >> "$GITHUB_OUTPUT"
           echo "rpm_asset_url=https://github.com/squigit-org/squigit/releases/download/${RELEASE_TAG}/${RPM_NAME}" >> "$GITHUB_OUTPUT"
 
+  build-phase-complete:
+    name: Build Phase Complete
+    if: always()
+    needs:
+      - resolve-channel-scope
+      - build-release-ocr
+      - build-release-ocr-windows
+      - build-release-ocr-linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate selected build results
+        shell: bash
+        env:
+          RUN_HOMEBREW: ${{ needs.resolve-channel-scope.outputs.run_homebrew }}
+          RUN_WINGET: ${{ needs.resolve-channel-scope.outputs.run_winget }}
+          RUN_APT: ${{ needs.resolve-channel-scope.outputs.run_apt }}
+          RUN_DNF: ${{ needs.resolve-channel-scope.outputs.run_dnf }}
+          MAC_RESULT: ${{ needs.build-release-ocr.result }}
+          WIN_RESULT: ${{ needs.build-release-ocr-windows.result }}
+          LINUX_RESULT: ${{ needs.build-release-ocr-linux.result }}
+        run: |
+          set -euo pipefail
+
+          failed=0
+
+          if [ "${RUN_HOMEBREW}" = "true" ] && [ "${MAC_RESULT}" != "success" ]; then
+            echo "Homebrew lane selected, but macOS build result is '${MAC_RESULT}'." >&2
+            failed=1
+          fi
+
+          if [ "${RUN_WINGET}" = "true" ] && [ "${WIN_RESULT}" != "success" ]; then
+            echo "Winget lane selected, but Windows build result is '${WIN_RESULT}'." >&2
+            failed=1
+          fi
+
+          if { [ "${RUN_APT}" = "true" ] || [ "${RUN_DNF}" = "true" ]; } && [ "${LINUX_RESULT}" != "success" ]; then
+            echo "APT/DNF lane selected, but Linux build result is '${LINUX_RESULT}'." >&2
+            failed=1
+          fi
+
+          if [ "${failed}" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "Selected OCR builds completed successfully."
+
   publish-linux-packages-ocr:
     name: Publish Signed Linux Package Metadata (OCR)
     if: needs.resolve-channel-scope.outputs.run_apt == 'true' || needs.resolve-channel-scope.outputs.run_dnf == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-ocr
+      - resolve-release-meta
+      - build-phase-complete
       - build-release-ocr-linux
     runs-on: ubuntu-latest
     concurrency:
@@ -487,7 +546,7 @@ jobs:
           packages-repo: squigit-org/squigit-packages
           package-name: squigit-ocr
           package-component: ocr
-          package-version: ${{ needs.build-release-ocr.outputs.version }}
+          package-version: ${{ needs.resolve-release-meta.outputs.version }}
           deb-path: ${{ steps.assets.outputs.deb_path }}
           rpm-path: ${{ steps.assets.outputs.rpm_path }}
           gpg-private-key: ${{ secrets.LINUX_PACKAGES_GPG_PRIVATE_KEY }}
@@ -500,7 +559,7 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_apt == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-ocr
+      - resolve-release-meta
       - publish-linux-packages-ocr
     runs-on: ubuntu-latest
     steps:
@@ -539,7 +598,7 @@ jobs:
       - name: Validate Installed OCR Version
         shell: bash
         env:
-          EXPECTED_VERSION: ${{ needs.build-release-ocr.outputs.version }}
+          EXPECTED_VERSION: ${{ needs.resolve-release-meta.outputs.version }}
         run: |
           set -euo pipefail
           OCR_VERSION="$(squigit-ocr --version | tr -d '\r' | tail -n 1)"
@@ -588,7 +647,7 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_dnf == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-ocr
+      - resolve-release-meta
       - publish-linux-packages-ocr
     runs-on: ubuntu-latest
     container: fedora:latest
@@ -648,7 +707,7 @@ jobs:
       - name: Validate Installed OCR Version
         shell: bash
         env:
-          EXPECTED_VERSION: ${{ needs.build-release-ocr.outputs.version }}
+          EXPECTED_VERSION: ${{ needs.resolve-release-meta.outputs.version }}
         run: |
           set -euo pipefail
           OCR_VERSION="$(squigit-ocr --version | tr -d '\r' | tail -n 1)"
@@ -692,6 +751,8 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_homebrew == 'true'
     needs:
       - resolve-channel-scope
+      - resolve-release-meta
+      - build-phase-complete
       - build-release-ocr
     runs-on: ubuntu-latest
     steps:
@@ -703,19 +764,20 @@ jobs:
         with:
           tap-token: ${{ secrets.TAP_GITHUB_TOKEN }}
           tap-repo: squigit-org/homebrew-tap
-          version: ${{ needs.build-release-ocr.outputs.version }}
+          version: ${{ needs.resolve-release-meta.outputs.version }}
           asset-url: ${{ needs.build-release-ocr.outputs.asset_url }}
           sha256: ${{ needs.build-release-ocr.outputs.sha256 }}
           template-formula-path: ${{ github.workspace }}/packaging/homebrew/squigit-ocr.rb
           formula-file: squigit-ocr.rb
-          commit-message: Update squigit-ocr to v${{ needs.build-release-ocr.outputs.version }}
+          commit-message: Update squigit-ocr to v${{ needs.resolve-release-meta.outputs.version }}
 
   test-homebrew-ocr:
     name: End-user Homebrew Install Smoke (OCR)
     if: needs.resolve-channel-scope.outputs.run_homebrew == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-ocr
+      - resolve-release-meta
+      - build-phase-complete
       - update-homebrew-tap-ocr
     runs-on: macos-14
     steps:
@@ -751,7 +813,7 @@ jobs:
       - name: Validate Installed OCR Version
         shell: bash
         env:
-          EXPECTED_VERSION: ${{ needs.build-release-ocr.outputs.version }}
+          EXPECTED_VERSION: ${{ needs.resolve-release-meta.outputs.version }}
         run: |
           set -euo pipefail
           OCR_VERSION="$(squigit-ocr --version | tr -d '\r' | tail -n 1)"
@@ -812,6 +874,7 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
+      - build-phase-complete
       - build-release-ocr-windows
       - validate-winget-manifest-ocr
     runs-on: windows-latest
@@ -891,6 +954,7 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
+      - build-phase-complete
       - build-release-ocr-windows
     runs-on: windows-latest
     steps:
@@ -935,7 +999,7 @@ jobs:
     if: needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
-      - build-release-ocr-windows
+      - build-phase-complete
       - publish-winget-ocr
       - validate-winget-manifest-ocr
     runs-on: windows-latest
