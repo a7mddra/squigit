@@ -477,7 +477,7 @@ jobs:
 
   publish-linux-packages-ocr:
     name: Publish Signed Linux Package Metadata (OCR)
-    if: needs.resolve-channel-scope.outputs.run_apt == 'true' || needs.resolve-channel-scope.outputs.run_dnf == 'true'
+    if: always() && (needs.resolve-channel-scope.outputs.run_apt == 'true' || needs.resolve-channel-scope.outputs.run_dnf == 'true')
     needs:
       - resolve-channel-scope
       - resolve-release-meta
@@ -556,7 +556,7 @@ jobs:
 
   test-apt-ocr:
     name: End-user APT Install Smoke (OCR)
-    if: needs.resolve-channel-scope.outputs.run_apt == 'true'
+    if: always() && needs.resolve-channel-scope.outputs.run_apt == 'true'
     needs:
       - resolve-channel-scope
       - resolve-release-meta
@@ -644,7 +644,7 @@ jobs:
 
   test-dnf-ocr:
     name: End-user DNF Install Smoke (OCR)
-    if: needs.resolve-channel-scope.outputs.run_dnf == 'true'
+    if: always() && needs.resolve-channel-scope.outputs.run_dnf == 'true'
     needs:
       - resolve-channel-scope
       - resolve-release-meta
@@ -748,7 +748,7 @@ jobs:
 
   update-homebrew-tap-ocr:
     name: Update Homebrew Tap Formula (OCR)
-    if: needs.resolve-channel-scope.outputs.run_homebrew == 'true'
+    if: always() && needs.resolve-channel-scope.outputs.run_homebrew == 'true'
     needs:
       - resolve-channel-scope
       - resolve-release-meta
@@ -773,7 +773,7 @@ jobs:
 
   test-homebrew-ocr:
     name: End-user Homebrew Install Smoke (OCR)
-    if: needs.resolve-channel-scope.outputs.run_homebrew == 'true'
+    if: always() && needs.resolve-channel-scope.outputs.run_homebrew == 'true'
     needs:
       - resolve-channel-scope
       - resolve-release-meta
@@ -871,7 +871,7 @@ jobs:
 
   publish-winget-ocr:
     name: Publish Winget Manifest (OCR)
-    if: needs.resolve-channel-scope.outputs.run_winget == 'true'
+    if: always() && needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
       - build-phase-complete
@@ -951,7 +951,7 @@ jobs:
 
   validate-winget-manifest-ocr:
     name: Validate Winget Manifest (OCR)
-    if: needs.resolve-channel-scope.outputs.run_winget == 'true'
+    if: always() && needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
       - build-phase-complete
@@ -996,7 +996,7 @@ jobs:
 
   test-winget-ocr:
     name: End-user Winget Install Smoke (OCR)
-    if: needs.resolve-channel-scope.outputs.run_winget == 'true'
+    if: always() && needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
       - build-phase-complete

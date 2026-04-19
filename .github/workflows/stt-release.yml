@@ -390,7 +390,7 @@ jobs:
 
   publish-linux-packages-stt:
     name: Publish Signed Linux Package Metadata (STT)
-    if: needs.resolve-channel-scope.outputs.run_apt == 'true' || needs.resolve-channel-scope.outputs.run_dnf == 'true'
+    if: always() && (needs.resolve-channel-scope.outputs.run_apt == 'true' || needs.resolve-channel-scope.outputs.run_dnf == 'true')
     needs:
       - resolve-channel-scope
       - resolve-release-meta
@@ -469,7 +469,7 @@ jobs:
 
   test-apt-stt:
     name: End-user APT Install Smoke (STT)
-    if: needs.resolve-channel-scope.outputs.run_apt == 'true'
+    if: always() && needs.resolve-channel-scope.outputs.run_apt == 'true'
     needs:
       - resolve-channel-scope
       - resolve-release-meta
@@ -525,7 +525,7 @@ jobs:
 
   test-dnf-stt:
     name: End-user DNF Install Smoke (STT)
-    if: needs.resolve-channel-scope.outputs.run_dnf == 'true'
+    if: always() && needs.resolve-channel-scope.outputs.run_dnf == 'true'
     needs:
       - resolve-channel-scope
       - resolve-release-meta
@@ -602,7 +602,7 @@ jobs:
 
   update-homebrew-tap-stt:
     name: Update Homebrew Tap Formula (STT)
-    if: needs.resolve-channel-scope.outputs.run_homebrew == 'true'
+    if: always() && needs.resolve-channel-scope.outputs.run_homebrew == 'true'
     needs:
       - resolve-channel-scope
       - resolve-release-meta
@@ -627,7 +627,7 @@ jobs:
 
   test-homebrew-stt:
     name: End-user Homebrew Install Smoke (STT)
-    if: needs.resolve-channel-scope.outputs.run_homebrew == 'true'
+    if: always() && needs.resolve-channel-scope.outputs.run_homebrew == 'true'
     needs:
       - resolve-channel-scope
       - resolve-release-meta
@@ -671,7 +671,7 @@ jobs:
 
   publish-winget-stt:
     name: Publish Winget Manifest (STT)
-    if: needs.resolve-channel-scope.outputs.run_winget == 'true'
+    if: always() && needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
       - build-phase-complete
@@ -751,7 +751,7 @@ jobs:
 
   validate-winget-manifest-stt:
     name: Validate Winget Manifest (STT)
-    if: needs.resolve-channel-scope.outputs.run_winget == 'true'
+    if: always() && needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
       - build-phase-complete
@@ -796,7 +796,7 @@ jobs:
 
   test-winget-stt:
     name: End-user Winget Install Smoke (STT)
-    if: needs.resolve-channel-scope.outputs.run_winget == 'true'
+    if: always() && needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
       - build-phase-complete
