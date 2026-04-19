@@ -138,15 +138,39 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v6
 
+      - name: Reuse Existing macOS STT Asset
+        id: reuse-macos
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.resolve-release-meta.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          ASSET_NAME="squigit-stt-mac-aarch64.tar.gz"
+          ASSET_URL="https://github.com/squigit-org/squigit/releases/download/${RELEASE_TAG}/${ASSET_NAME}"
+
+          if curl --fail --silent --show-error --location --head --max-time 30 "${ASSET_URL}" >/dev/null; then
+            ASSET_PATH="${RUNNER_TEMP}/${ASSET_NAME}"
+            curl --fail --silent --show-error --location "${ASSET_URL}" -o "${ASSET_PATH}"
+            SHA256="$(shasum -a 256 "${ASSET_PATH}" | awk '{ print $1 }')"
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "asset_name=${ASSET_NAME}" >> "$GITHUB_OUTPUT"
+            echo "asset_sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          else
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Rust
+        if: steps.reuse-macos.outputs.hit != 'true'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build Whisper STT Sidecar
+        if: steps.reuse-macos.outputs.hit != 'true'
         uses: ./.github/actions/build-whisper-stt
         with:
           python-version: "3.12"
 
       - name: Run Sidecar Version Smoke Check
+        if: steps.reuse-macos.outputs.hit != 'true'
         shell: bash
         env:
           EXPECTED_VERSION: ${{ needs.resolve-release-meta.outputs.version }}
@@ -166,12 +190,14 @@ jobs:
           fi
 
       - name: Create Release Tarball
+        if: steps.reuse-macos.outputs.hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
           tar -czvf squigit-stt-mac-aarch64.tar.gz -C packaging/binaries/whisper-stt-aarch64-apple-darwin .
 
       - name: Upload STT Asset to GitHub Release
+        if: steps.reuse-macos.outputs.hit != 'true'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.resolve-release-meta.outputs.release_tag }}
@@ -187,9 +213,15 @@ jobs:
         env:
           VERSION: ${{ needs.resolve-release-meta.outputs.version }}
           RELEASE_TAG: ${{ needs.resolve-release-meta.outputs.release_tag }}
+          CACHE_HIT: ${{ steps.reuse-macos.outputs.hit }}
+          CACHED_SHA256: ${{ steps.reuse-macos.outputs.asset_sha256 }}
         run: |
           set -euo pipefail
-          SHA256="$(shasum -a 256 squigit-stt-mac-aarch64.tar.gz | awk '{ print $1 }')"
+          if [ "${CACHE_HIT}" = "true" ]; then
+            SHA256="${CACHED_SHA256}"
+          else
+            SHA256="$(shasum -a 256 squigit-stt-mac-aarch64.tar.gz | awk '{ print $1 }')"
+          fi
           ASSET_URL="https://github.com/squigit-org/squigit/releases/download/${RELEASE_TAG}/squigit-stt-mac-aarch64.tar.gz"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
@@ -212,10 +244,34 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v6
 
+      - name: Reuse Existing Windows STT Asset
+        id: reuse-windows
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ needs.resolve-release-meta.outputs.release_tag }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $assetName = "squigit-stt-win-x64.zip"
+          $assetUrl = "https://github.com/squigit-org/squigit/releases/download/$env:RELEASE_TAG/$assetName"
+
+          try {
+            Invoke-WebRequest -Method Head -Uri $assetUrl -MaximumRetryCount 0 -ErrorAction Stop | Out-Null
+            $assetPath = Join-Path $env:RUNNER_TEMP $assetName
+            Invoke-WebRequest -Uri $assetUrl -OutFile $assetPath -ErrorAction Stop
+            $sha = (Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            "hit=true" >> $env:GITHUB_OUTPUT
+            "asset_name=$assetName" >> $env:GITHUB_OUTPUT
+            "asset_sha256=$sha" >> $env:GITHUB_OUTPUT
+          } catch {
+            "hit=false" >> $env:GITHUB_OUTPUT
+          }
+
       - name: Setup Rust
+        if: steps.reuse-windows.outputs.hit != 'true'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build Whisper STT Sidecar (Windows x64)
+        if: steps.reuse-windows.outputs.hit != 'true'
         id: build
         uses: ./.github/actions/build-whisper-stt
         with:
@@ -224,6 +280,7 @@ jobs:
           windows-asset-name: "squigit-stt-win-x64.zip"
 
       - name: Run STT Version Smoke Check (Windows)
+        if: steps.reuse-windows.outputs.hit != 'true'
         shell: pwsh
         env:
           EXPECTED_VERSION: ${{ needs.resolve-release-meta.outputs.version }}
@@ -240,6 +297,7 @@ jobs:
           }
 
       - name: Upload STT Windows Asset to GitHub Release
+        if: steps.reuse-windows.outputs.hit != 'true'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.resolve-release-meta.outputs.release_tag }}
@@ -254,13 +312,16 @@ jobs:
         shell: pwsh
         env:
           RELEASE_TAG: ${{ needs.resolve-release-meta.outputs.release_tag }}
-          ASSET_NAME: ${{ steps.build.outputs.asset-name }}
-          ASSET_SHA256: ${{ steps.build.outputs.asset-sha256 }}
+          CACHE_HIT: ${{ steps.reuse-windows.outputs.hit }}
+          CACHED_SHA256: ${{ steps.reuse-windows.outputs.asset_sha256 }}
+          BUILT_SHA256: ${{ steps.build.outputs.asset-sha256 }}
         run: |
           $ErrorActionPreference = "Stop"
-          $assetUrl = "https://github.com/squigit-org/squigit/releases/download/$env:RELEASE_TAG/$env:ASSET_NAME"
+          $assetName = "squigit-stt-win-x64.zip"
+          $sha = if ($env:CACHE_HIT -eq "true") { $env:CACHED_SHA256 } else { $env:BUILT_SHA256 }
+          $assetUrl = "https://github.com/squigit-org/squigit/releases/download/$env:RELEASE_TAG/$assetName"
           "asset_url=$assetUrl" >> $env:GITHUB_OUTPUT
-          "sha256=$env:ASSET_SHA256" >> $env:GITHUB_OUTPUT
+          "sha256=$sha" >> $env:GITHUB_OUTPUT
 
   build-release-stt-linux:
     name: Build STT Linux x64 + Release Package Assets
@@ -272,20 +333,55 @@ jobs:
     outputs:
       version: ${{ needs.resolve-release-meta.outputs.version }}
       release_tag: ${{ needs.resolve-release-meta.outputs.release_tag }}
-      deb_name: ${{ steps.pkg.outputs.deb_name }}
-      deb_sha256: ${{ steps.pkg.outputs.deb_sha256 }}
+      deb_name: ${{ steps.meta.outputs.deb_name }}
+      deb_sha256: ${{ steps.meta.outputs.deb_sha256 }}
       deb_asset_url: ${{ steps.meta.outputs.deb_asset_url }}
-      rpm_name: ${{ steps.pkg.outputs.rpm_name }}
-      rpm_sha256: ${{ steps.pkg.outputs.rpm_sha256 }}
+      rpm_name: ${{ steps.meta.outputs.rpm_name }}
+      rpm_sha256: ${{ steps.meta.outputs.rpm_sha256 }}
       rpm_asset_url: ${{ steps.meta.outputs.rpm_asset_url }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
 
+      - name: Reuse Existing Linux STT Packages
+        id: reuse-linux
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.resolve-release-meta.outputs.release_tag }}
+          VERSION: ${{ needs.resolve-release-meta.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          DEB_NAME="squigit-stt_${VERSION}_amd64.deb"
+          RPM_NAME="squigit-stt-${VERSION}-1.x86_64.rpm"
+          DEB_ASSET_URL="https://github.com/squigit-org/squigit/releases/download/${RELEASE_TAG}/${DEB_NAME}"
+          RPM_ASSET_URL="https://github.com/squigit-org/squigit/releases/download/${RELEASE_TAG}/${RPM_NAME}"
+
+          if curl --fail --silent --show-error --location --head --max-time 30 "${DEB_ASSET_URL}" >/dev/null \
+            && curl --fail --silent --show-error --location --head --max-time 30 "${RPM_ASSET_URL}" >/dev/null; then
+            DEB_PATH="${RUNNER_TEMP}/${DEB_NAME}"
+            RPM_PATH="${RUNNER_TEMP}/${RPM_NAME}"
+            curl --fail --silent --show-error --location "${DEB_ASSET_URL}" -o "${DEB_PATH}"
+            curl --fail --silent --show-error --location "${RPM_ASSET_URL}" -o "${RPM_PATH}"
+
+            DEB_SHA256="$(sha256sum "${DEB_PATH}" | awk '{print $1}')"
+            RPM_SHA256="$(sha256sum "${RPM_PATH}" | awk '{print $1}')"
+
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "deb_name=${DEB_NAME}" >> "$GITHUB_OUTPUT"
+            echo "deb_sha256=${DEB_SHA256}" >> "$GITHUB_OUTPUT"
+            echo "rpm_name=${RPM_NAME}" >> "$GITHUB_OUTPUT"
+            echo "rpm_sha256=${RPM_SHA256}" >> "$GITHUB_OUTPUT"
+          else
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Rust
+        if: steps.reuse-linux.outputs.hit != 'true'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Linux Packaging Toolchain
+        if: steps.reuse-linux.outputs.hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -293,11 +389,13 @@ jobs:
           sudo apt-get install -y rpm createrepo-c dpkg-dev apt-utils
 
       - name: Build Whisper STT Sidecar (Linux x64)
+        if: steps.reuse-linux.outputs.hit != 'true'
         uses: ./.github/actions/build-whisper-stt
         with:
           python-version: "3.12"
 
       - name: Validate STT Runtime Layout
+        if: steps.reuse-linux.outputs.hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -305,6 +403,7 @@ jobs:
           test -f packaging/binaries/whisper-stt-x86_64-unknown-linux-gnu/_internal/models/ggml-tiny.en.bin
 
       - name: Build Linux Package Files (.deb/.rpm)
+        if: steps.reuse-linux.outputs.hit != 'true'
         id: pkg
         uses: ./.github/actions/build-linux-packages
         with:
@@ -319,6 +418,7 @@ jobs:
           description-line-2: Includes local runtime libraries and the ggml-tiny.en.bin model for Linux x86_64.
 
       - name: Upload Linux Package Assets to GitHub Release
+        if: steps.reuse-linux.outputs.hit != 'true'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.resolve-release-meta.outputs.release_tag }}
@@ -335,10 +435,34 @@ jobs:
         shell: bash
         env:
           RELEASE_TAG: ${{ needs.resolve-release-meta.outputs.release_tag }}
-          DEB_NAME: ${{ steps.pkg.outputs.deb_name }}
-          RPM_NAME: ${{ steps.pkg.outputs.rpm_name }}
+          CACHE_HIT: ${{ steps.reuse-linux.outputs.hit }}
+          CACHED_DEB_NAME: ${{ steps.reuse-linux.outputs.deb_name }}
+          CACHED_DEB_SHA256: ${{ steps.reuse-linux.outputs.deb_sha256 }}
+          CACHED_RPM_NAME: ${{ steps.reuse-linux.outputs.rpm_name }}
+          CACHED_RPM_SHA256: ${{ steps.reuse-linux.outputs.rpm_sha256 }}
+          BUILT_DEB_NAME: ${{ steps.pkg.outputs.deb_name }}
+          BUILT_DEB_SHA256: ${{ steps.pkg.outputs.deb_sha256 }}
+          BUILT_RPM_NAME: ${{ steps.pkg.outputs.rpm_name }}
+          BUILT_RPM_SHA256: ${{ steps.pkg.outputs.rpm_sha256 }}
         run: |
           set -euo pipefail
+
+          if [ "${CACHE_HIT}" = "true" ]; then
+            DEB_NAME="${CACHED_DEB_NAME}"
+            DEB_SHA256="${CACHED_DEB_SHA256}"
+            RPM_NAME="${CACHED_RPM_NAME}"
+            RPM_SHA256="${CACHED_RPM_SHA256}"
+          else
+            DEB_NAME="${BUILT_DEB_NAME}"
+            DEB_SHA256="${BUILT_DEB_SHA256}"
+            RPM_NAME="${BUILT_RPM_NAME}"
+            RPM_SHA256="${BUILT_RPM_SHA256}"
+          fi
+
+          echo "deb_name=${DEB_NAME}" >> "$GITHUB_OUTPUT"
+          echo "deb_sha256=${DEB_SHA256}" >> "$GITHUB_OUTPUT"
+          echo "rpm_name=${RPM_NAME}" >> "$GITHUB_OUTPUT"
+          echo "rpm_sha256=${RPM_SHA256}" >> "$GITHUB_OUTPUT"
           echo "deb_asset_url=https://github.com/squigit-org/squigit/releases/download/${RELEASE_TAG}/${DEB_NAME}" >> "$GITHUB_OUTPUT"
           echo "rpm_asset_url=https://github.com/squigit-org/squigit/releases/download/${RELEASE_TAG}/${RPM_NAME}" >> "$GITHUB_OUTPUT"
 
