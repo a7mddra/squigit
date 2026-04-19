@@ -663,7 +663,7 @@ jobs:
           echo "Selected STT builds completed successfully."
 
   publish-linux-packages-stt:
-    name: Publish Signed Linux Package Metadata (STT)
+    name: Publish Signed Linux Package Metadata
     if: always() && (needs.resolve-channel-scope.outputs.run_apt == 'true' || needs.resolve-channel-scope.outputs.run_dnf == 'true')
     needs:
       - resolve-channel-scope
@@ -748,7 +748,7 @@ jobs:
           apt-suite: stable
 
   test-apt-stt:
-    name: End-user APT Install Smoke (STT)
+    name: End-user APT Install Smoke
     if: always() && needs.resolve-channel-scope.outputs.run_apt == 'true'
     needs:
       - resolve-channel-scope
@@ -805,7 +805,7 @@ jobs:
           test -f /usr/lib/squigit-stt/_internal/models/ggml-tiny.en.bin
 
   test-dnf-stt:
-    name: End-user DNF Install Smoke (STT)
+    name: End-user DNF Install Smoke
     if: always() && needs.resolve-channel-scope.outputs.run_dnf == 'true'
     needs:
       - resolve-channel-scope
@@ -884,7 +884,7 @@ jobs:
           test -f /usr/lib/squigit-stt/_internal/models/ggml-tiny.en.bin
 
   update-homebrew-tap-stt:
-    name: Update Homebrew Tap Formula (STT)
+    name: Update Homebrew Tap Formula
     if: always() && needs.resolve-channel-scope.outputs.run_homebrew == 'true'
     needs:
       - resolve-channel-scope
@@ -909,7 +909,7 @@ jobs:
           commit-message: Update squigit-stt to v${{ needs.resolve-release-meta.outputs.version }}
 
   test-homebrew-stt:
-    name: End-user Homebrew Install Smoke (STT)
+    name: End-user Homebrew Install Smoke
     if: always() && needs.resolve-channel-scope.outputs.run_homebrew == 'true'
     needs:
       - resolve-channel-scope
@@ -953,7 +953,7 @@ jobs:
           fi
 
   publish-winget-stt:
-    name: Publish Winget Manifest (STT)
+    name: Publish Winget Manifest
     if: needs.resolve-channel-scope.outputs.run_winget == 'true' && needs.build-phase-complete.result == 'success' && needs.build-release-stt-windows.result == 'success' && needs.validate-winget-manifest-stt.result == 'success'
     needs:
       - resolve-channel-scope
@@ -965,7 +965,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v6
 
-      - name: Generate Winget Manifest (STT)
+      - name: Generate Winget Manifest
         id: manifest
         uses: ./.github/actions/generate-winget-portable-manifest
         with:
@@ -980,7 +980,7 @@ jobs:
           nested-installer-path: squigit-stt.exe
           output-dir: ${{ github.workspace }}/target/winget-manifest-stt
 
-      - name: Upload Winget Manifest (STT)
+      - name: Upload Winget Manifest
         uses: actions/upload-artifact@v7
         with:
           name: winget-manifest-stt
@@ -1033,7 +1033,7 @@ jobs:
           Write-Host "This workflow auto-detects first publication vs update and will submit the generated manifest accordingly."
 
   validate-winget-manifest-stt:
-    name: Validate Winget Manifest (STT)
+    name: Validate Winget Manifest
     if: always() && needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
@@ -1059,7 +1059,7 @@ jobs:
           nested-installer-path: squigit-stt.exe
           output-dir: ${{ github.workspace }}/target/winget-manifest-stt-validate
 
-      - name: Validate Manifest with Winget CLI (STT)
+      - name: Validate Manifest with Winget CLI
         shell: pwsh
         env:
           MANIFEST_DIR: ${{ steps.manifest.outputs.manifest-dir }}
@@ -1078,7 +1078,7 @@ jobs:
           }
 
   test-winget-stt:
-    name: End-user Winget Install Smoke (STT)
+    name: End-user Winget Install Smoke
     if: always() && needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
@@ -1091,7 +1091,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v6
 
-      - name: Install via Winget (STT)
+      - name: Install via Winget
         id: install-winget
         shell: pwsh
         env:

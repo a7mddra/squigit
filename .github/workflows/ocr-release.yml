@@ -756,7 +756,7 @@ jobs:
           echo "Selected OCR builds completed successfully."
 
   publish-linux-packages-ocr:
-    name: Publish Signed Linux Package Metadata (OCR)
+    name: Publish Signed Linux Package Metadata
     if: always() && (needs.resolve-channel-scope.outputs.run_apt == 'true' || needs.resolve-channel-scope.outputs.run_dnf == 'true')
     needs:
       - resolve-channel-scope
@@ -841,7 +841,7 @@ jobs:
           apt-suite: stable
 
   test-apt-ocr:
-    name: End-user APT Install Smoke (OCR)
+    name: End-user APT Install Smoke
     if: always() && needs.resolve-channel-scope.outputs.run_apt == 'true'
     needs:
       - resolve-channel-scope
@@ -930,7 +930,7 @@ jobs:
           PY
 
   test-dnf-ocr:
-    name: End-user DNF Install Smoke (OCR)
+    name: End-user DNF Install Smoke
     if: always() && needs.resolve-channel-scope.outputs.run_dnf == 'true'
     needs:
       - resolve-channel-scope
@@ -1036,7 +1036,7 @@ jobs:
           PY
 
   update-homebrew-tap-ocr:
-    name: Update Homebrew Tap Formula (OCR)
+    name: Update Homebrew Tap Formula
     if: always() && needs.resolve-channel-scope.outputs.run_homebrew == 'true'
     needs:
       - resolve-channel-scope
@@ -1061,7 +1061,7 @@ jobs:
           commit-message: Update squigit-ocr to v${{ needs.resolve-release-meta.outputs.version }}
 
   test-homebrew-ocr:
-    name: End-user Homebrew Install Smoke (OCR)
+    name: End-user Homebrew Install Smoke
     if: always() && needs.resolve-channel-scope.outputs.run_homebrew == 'true'
     needs:
       - resolve-channel-scope
@@ -1159,7 +1159,7 @@ jobs:
           PY
 
   publish-winget-ocr:
-    name: Publish Winget Manifest (OCR)
+    name: Publish Winget Manifest
     if: needs.resolve-channel-scope.outputs.run_winget == 'true' && needs.build-phase-complete.result == 'success' && needs.build-release-ocr-windows.result == 'success' && needs.validate-winget-manifest-ocr.result == 'success'
     needs:
       - resolve-channel-scope
@@ -1171,7 +1171,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v6
 
-      - name: Generate Winget Manifest (OCR)
+      - name: Generate Winget Manifest
         id: manifest
         uses: ./.github/actions/generate-winget-portable-manifest
         with:
@@ -1186,7 +1186,7 @@ jobs:
           nested-installer-path: squigit-ocr.exe
           output-dir: ${{ github.workspace }}/target/winget-manifest-ocr
 
-      - name: Upload Winget Manifest (OCR)
+      - name: Upload Winget Manifest
         uses: actions/upload-artifact@v7
         with:
           name: winget-manifest-ocr
@@ -1239,7 +1239,7 @@ jobs:
           Write-Host "This workflow auto-detects first publication vs update and will submit the generated manifest accordingly."
 
   validate-winget-manifest-ocr:
-    name: Validate Winget Manifest (OCR)
+    name: Validate Winget Manifest
     if: always() && needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
@@ -1265,7 +1265,7 @@ jobs:
           nested-installer-path: squigit-ocr.exe
           output-dir: ${{ github.workspace }}/target/winget-manifest-ocr-validate
 
-      - name: Validate Manifest with Winget CLI (OCR)
+      - name: Validate Manifest with Winget CLI
         shell: pwsh
         env:
           MANIFEST_DIR: ${{ steps.manifest.outputs.manifest-dir }}
@@ -1284,7 +1284,7 @@ jobs:
           }
 
   test-winget-ocr:
-    name: End-user Winget Install Smoke (OCR)
+    name: End-user Winget Install Smoke
     if: always() && needs.resolve-channel-scope.outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
@@ -1308,7 +1308,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pillow
 
-      - name: Install via Winget (OCR)
+      - name: Install via Winget
         id: install-winget
         shell: pwsh
         env:
