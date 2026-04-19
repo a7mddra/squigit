@@ -32,20 +32,38 @@ outputs:
   deb-path:
     description: "Absolute path to built .deb package"
     value: ${{ steps.build.outputs.deb_path }}
+  deb_path:
+    description: "Absolute path to built .deb package (underscore alias)"
+    value: ${{ steps.build.outputs.deb_path }}
   deb-name:
     description: "Debian package file name"
+    value: ${{ steps.build.outputs.deb_name }}
+  deb_name:
+    description: "Debian package file name (underscore alias)"
     value: ${{ steps.build.outputs.deb_name }}
   deb-sha256:
     description: "Debian package SHA256"
     value: ${{ steps.build.outputs.deb_sha256 }}
+  deb_sha256:
+    description: "Debian package SHA256 (underscore alias)"
+    value: ${{ steps.build.outputs.deb_sha256 }}
   rpm-path:
     description: "Absolute path to built .rpm package"
+    value: ${{ steps.build.outputs.rpm_path }}
+  rpm_path:
+    description: "Absolute path to built .rpm package (underscore alias)"
     value: ${{ steps.build.outputs.rpm_path }}
   rpm-name:
     description: "RPM package file name"
     value: ${{ steps.build.outputs.rpm_name }}
+  rpm_name:
+    description: "RPM package file name (underscore alias)"
+    value: ${{ steps.build.outputs.rpm_name }}
   rpm-sha256:
     description: "RPM package SHA256"
+    value: ${{ steps.build.outputs.rpm_sha256 }}
+  rpm_sha256:
+    description: "RPM package SHA256 (underscore alias)"
     value: ${{ steps.build.outputs.rpm_sha256 }}
 runs:
   using: "composite"
