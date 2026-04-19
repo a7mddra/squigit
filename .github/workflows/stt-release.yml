@@ -345,7 +345,7 @@ jobs:
 
       - name: Restore Linux Package Build Cache
         id: linux-pkg-cache
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@v5
         with:
           path: ${{ runner.temp }}/linux-package-cache/stt
           key: linux-package-cache-stt-${{ github.sha }}-${{ needs.resolve-release-meta.outputs.release_tag }}
@@ -562,7 +562,7 @@ jobs:
 
       - name: Save Linux Package Build Cache
         if: steps.reuse-linux.outputs.hit != 'true' && steps.reuse-linux.outputs.cache_hit != 'true'
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@v5
         with:
           path: ${{ runner.temp }}/linux-package-cache/stt
           key: linux-package-cache-stt-${{ github.sha }}-${{ needs.resolve-release-meta.outputs.release_tag }}
