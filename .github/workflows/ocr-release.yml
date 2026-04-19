@@ -129,7 +129,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build PaddleOCR Sidecar (onefile)
+      - name: Build PaddleOCR Sidecar
         uses: ./.github/actions/build-paddle-ocr
         with:
           python-version: "3.12"
@@ -247,12 +247,12 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build PaddleOCR Sidecar (Windows x64)
+      - name: Build PaddleOCR Sidecar
         id: build
         uses: ./.github/actions/build-paddle-ocr
         with:
           python-version: "3.12"
-          pyi-mode: "onedir"
+          pyi-mode: "onefile"
           package-windows-asset: "true"
           windows-asset-name: "squigit-ocr-win-x64.zip"
 
