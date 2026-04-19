@@ -18,12 +18,12 @@ on:
       release_homebrew:
         description: "Run Homebrew lane"
         required: false
-        default: true
+        default: false
         type: boolean
       release_winget:
         description: "Run Winget lane"
         required: false
-        default: true
+        default: false
         type: boolean
       submit_winget_pr:
         description: "Submit/update winget-pkgs PR"
@@ -33,12 +33,12 @@ on:
       release_apt:
         description: "Run APT lane"
         required: false
-        default: true
+        default: false
         type: boolean
       release_dnf:
         description: "Run DNF lane"
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -437,7 +437,7 @@ jobs:
 
       - name: Restore Linux Package Build Cache
         id: linux-pkg-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/linux-package-cache/ocr
           key: linux-package-cache-ocr-${{ github.sha }}-${{ needs.resolve-release-meta.outputs.release_tag }}
@@ -655,7 +655,7 @@ jobs:
 
       - name: Save Linux Package Build Cache
         if: steps.reuse-linux.outputs.hit != 'true' && steps.reuse-linux.outputs.cache_hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/linux-package-cache/ocr
           key: linux-package-cache-ocr-${{ github.sha }}-${{ needs.resolve-release-meta.outputs.release_tag }}
@@ -1160,7 +1160,7 @@ jobs:
 
   publish-winget-ocr:
     name: Publish Winget Manifest (OCR)
-    if: always() && needs.resolve-channel-scope.outputs.run_winget == 'true'
+    if: needs.resolve-channel-scope.outputs.run_winget == 'true' && needs.build-phase-complete.result == 'success' && needs.build-release-ocr-windows.result == 'success' && needs.validate-winget-manifest-ocr.result == 'success'
     needs:
       - resolve-channel-scope
       - build-phase-complete
