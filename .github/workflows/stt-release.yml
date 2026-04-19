@@ -733,6 +733,7 @@ jobs:
           gpg-private-key: ${{ secrets.LINUX_PACKAGES_GPG_PRIVATE_KEY }}
           gpg-passphrase: ${{ secrets.LINUX_PACKAGES_GPG_PASSPHRASE }}
           pages-base-url: https://squigit-org.github.io/squigit-packages
+          publish-dnf-repo: ${{ needs.resolve-channel-scope.outputs.run_dnf }}
           apt-suite: stable
 
   test-apt-stt:

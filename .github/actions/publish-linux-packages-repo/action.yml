@@ -40,6 +40,10 @@ inputs:
   gpg-passphrase:
     description: "Passphrase for the GPG private key"
     required: true
+  publish-dnf-repo:
+    description: "Whether to regenerate the published DNF repo metadata"
+    required: false
+    default: "true"
   pages-base-url:
     description: "Public GitHub Pages base URL for squigit-packages"
     required: false
@@ -80,6 +84,7 @@ runs:
         RPM_PATH: ${{ inputs.rpm-path }}
         GPG_PRIVATE_KEY: ${{ inputs.gpg-private-key }}
         GPG_PASSPHRASE: ${{ inputs.gpg-passphrase }}
+        PUBLISH_DNF_REPO: ${{ inputs.publish-dnf-repo }}
         PAGES_BASE_URL: ${{ inputs.pages-base-url }}
         APT_SUITE: ${{ inputs.apt-suite }}
       run: |

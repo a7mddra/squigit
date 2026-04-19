@@ -29,6 +29,8 @@ export function usePlatform(): PlatformInfo {
     "debian" | "rpm" | "unknown"
   >("unknown");
   const linuxPackagesBaseUrl = "https://squigit-org.github.io/squigit-packages";
+  const linuxAptRepoBaseUrl =
+    "https://github.com/squigit-org/squigit-packages/raw/main/apt";
 
   const base = useMemo(() => {
     const ua = navigator.userAgent.toLowerCase();
@@ -71,7 +73,7 @@ export function usePlatform(): PlatformInfo {
           "# 1) add repo",
           "sudo mkdir -p /etc/apt/keyrings",
           `curl -fsSL ${linuxPackagesBaseUrl}/keys/squigit-packages.asc | gpg --dearmor | sudo tee /etc/apt/keyrings/squigit-packages.gpg >/dev/null`,
-          `echo "deb [signed-by=/etc/apt/keyrings/squigit-packages.gpg] ${linuxPackagesBaseUrl}/apt stable ocr stt" | sudo tee /etc/apt/sources.list.d/squigit-packages.list >/dev/null`,
+          `echo "deb [signed-by=/etc/apt/keyrings/squigit-packages.gpg] ${linuxAptRepoBaseUrl} stable ocr stt" | sudo tee /etc/apt/sources.list.d/squigit-packages.list >/dev/null`,
           "",
           "# 2) update",
           "sudo apt update",
@@ -96,7 +98,7 @@ export function usePlatform(): PlatformInfo {
         "# Debian/Ubuntu",
         "sudo mkdir -p /etc/apt/keyrings",
         `curl -fsSL ${linuxPackagesBaseUrl}/keys/squigit-packages.asc | gpg --dearmor | sudo tee /etc/apt/keyrings/squigit-packages.gpg >/dev/null`,
-        `echo "deb [signed-by=/etc/apt/keyrings/squigit-packages.gpg] ${linuxPackagesBaseUrl}/apt stable ocr stt" | sudo tee /etc/apt/sources.list.d/squigit-packages.list >/dev/null`,
+        `echo "deb [signed-by=/etc/apt/keyrings/squigit-packages.gpg] ${linuxAptRepoBaseUrl} stable ocr stt" | sudo tee /etc/apt/sources.list.d/squigit-packages.list >/dev/null`,
         "sudo apt update",
         `sudo apt install ${pkg}`,
         "",

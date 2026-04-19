@@ -7,6 +7,7 @@ License:        Apache-2.0
 URL:            https://github.com/squigit-org/squigit
 BuildArch:      x86_64
 Source0:        %{name}-%{version}.tar.gz
+AutoReqProv:    no
 
 %description
 __DESCRIPTION__

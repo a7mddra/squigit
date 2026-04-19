@@ -13,7 +13,7 @@ Squigit on Linux expects `squigit-ocr` and `squigit-stt` to be installed from th
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL https://squigit-org.github.io/squigit-packages/keys/squigit-packages.asc | \
   gpg --dearmor | sudo tee /etc/apt/keyrings/squigit-packages.gpg >/dev/null
-echo "deb [signed-by=/etc/apt/keyrings/squigit-packages.gpg] https://squigit-org.github.io/squigit-packages/apt stable ocr stt" | \
+echo "deb [signed-by=/etc/apt/keyrings/squigit-packages.gpg] https://github.com/squigit-org/squigit-packages/raw/main/apt stable ocr stt" | \
   sudo tee /etc/apt/sources.list.d/squigit-packages.list >/dev/null
 
 # 2) update

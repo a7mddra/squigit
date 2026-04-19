@@ -52,6 +52,12 @@ require_env PAGES_BASE_URL
 require_env APT_SUITE
 require_env GITHUB_OUTPUT
 
+PUBLISH_DNF_REPO="${PUBLISH_DNF_REPO:-true}"
+if [ "${PUBLISH_DNF_REPO}" != "true" ] && [ "${PUBLISH_DNF_REPO}" != "false" ]; then
+  echo "PUBLISH_DNF_REPO must be 'true' or 'false', got: ${PUBLISH_DNF_REPO}" >&2
+  exit 1
+fi
+
 if [ "${PACKAGE_COMPONENT}" != "ocr" ] && [ "${PACKAGE_COMPONENT}" != "stt" ]; then
   echo "PACKAGE_COMPONENT must be 'ocr' or 'stt', got: ${PACKAGE_COMPONENT}" >&2
   exit 1
@@ -92,15 +98,18 @@ cd "${repo_dir}"
 git checkout "${PACKAGES_BRANCH}"
 
 raw_base_url="https://github.com/${PACKAGES_REPO}/raw/${PACKAGES_BRANCH}"
+raw_main_base_url="https://github.com/${PACKAGES_REPO}/raw/main"
+public_base_url="${PAGES_BASE_URL%/}"
 source_release_root="https://github.com/${SOURCE_RELEASE_REPO}/releases/download"
 
 mkdir -p "apt/dists/${APT_SUITE}/ocr/binary-amd64"
 mkdir -p "apt/dists/${APT_SUITE}/stt/binary-amd64"
 mkdir -p "rpm/ocr" "rpm/stt" "keys" "metadata"
 
-# Drop legacy package mirrors to keep repo lightweight.
 rm -rf apt/pool
-find rpm/ocr rpm/stt -maxdepth 1 -type f -name '*.rpm' -delete || true
+if [ "${PUBLISH_DNF_REPO}" = "true" ]; then
+  find rpm/ocr rpm/stt -maxdepth 1 -type f -name '*.rpm' -delete || true
+fi
 
 manifest_path="metadata/package-assets.env"
 if [ -f "${manifest_path}" ]; then
@@ -210,7 +219,7 @@ for component in ocr stt; do
       dpkg-scanpackages --multiversion "pool/${component}" /dev/null > "${repo_dir}/${packages_file}"
     )
 
-    deb_filename="../../../../${SOURCE_RELEASE_REPO}/releases/download/${deb_tag}/${deb_name}"
+    deb_filename="../../../../../${SOURCE_RELEASE_REPO}/releases/download/${deb_tag}/${deb_name}"
     sed -i "s|^Filename: .*|Filename: ${deb_filename}|" "${packages_file}"
   else
     : > "${packages_file}"
@@ -234,47 +243,49 @@ gpg --batch --yes --pinentry-mode loopback --passphrase "${GPG_PASSPHRASE}" --lo
 gpg --batch --yes --pinentry-mode loopback --passphrase "${GPG_PASSPHRASE}" --local-user "${gpg_key_fpr}" \
   --detach-sign --armor -o "apt/dists/${APT_SUITE}/Release.gpg" "apt/dists/${APT_SUITE}/Release"
 
-for component in ocr stt; do
-  component_repo_dir="rpm/${component}"
-  temp_repo_dir="${RUNNER_TEMP}/rpm-repo-${component}"
-  rm -rf "${temp_repo_dir}"
-  mkdir -p "${temp_repo_dir}"
+if [ "${PUBLISH_DNF_REPO}" = "true" ]; then
+  for component in ocr stt; do
+    component_repo_dir="rpm/${component}"
+    temp_repo_dir="${RUNNER_TEMP}/rpm-repo-${component}"
+    rm -rf "${temp_repo_dir}"
+    mkdir -p "${temp_repo_dir}"
 
-  rpm_path_local="${COMPONENT_RPM_PATHS[${component}]:-}"
-  rpm_name="${COMPONENT_RPM_NAMES[${component}]:-}"
-  rpm_tag="${COMPONENT_RPM_TAGS[${component}]:-}"
+    rpm_path_local="${COMPONENT_RPM_PATHS[${component}]:-}"
+    rpm_name="${COMPONENT_RPM_NAMES[${component}]:-}"
+    rpm_tag="${COMPONENT_RPM_TAGS[${component}]:-}"
 
-  if [ -n "${rpm_path_local}" ] && [ -f "${rpm_path_local}" ] && [ -n "${rpm_name}" ] && [ -n "${rpm_tag}" ]; then
-    cp "${rpm_path_local}" "${temp_repo_dir}/${rpm_name}"
-    createrepo_c --simple-md-filenames --baseurl "${source_release_root}/${rpm_tag}/" "${temp_repo_dir}"
-  else
-    createrepo_c --simple-md-filenames "${temp_repo_dir}"
-  fi
+    if [ -n "${rpm_path_local}" ] && [ -f "${rpm_path_local}" ] && [ -n "${rpm_name}" ] && [ -n "${rpm_tag}" ]; then
+      cp "${rpm_path_local}" "${temp_repo_dir}/${rpm_name}"
+      createrepo_c --simple-md-filenames --baseurl "${source_release_root}/${rpm_tag}/" "${temp_repo_dir}"
+    else
+      createrepo_c --simple-md-filenames "${temp_repo_dir}"
+    fi
 
-  rm -rf "${component_repo_dir}/repodata"
-  mkdir -p "${component_repo_dir}"
-  cp -a "${temp_repo_dir}/repodata" "${component_repo_dir}/"
+    rm -rf "${component_repo_dir}/repodata"
+    mkdir -p "${component_repo_dir}"
+    cp -a "${temp_repo_dir}/repodata" "${component_repo_dir}/"
 
-  gpg --batch --yes --pinentry-mode loopback --passphrase "${GPG_PASSPHRASE}" --local-user "${gpg_key_fpr}" \
-    --detach-sign --armor -o "${component_repo_dir}/repodata/repomd.xml.asc" "${component_repo_dir}/repodata/repomd.xml"
-done
+    gpg --batch --yes --pinentry-mode loopback --passphrase "${GPG_PASSPHRASE}" --local-user "${gpg_key_fpr}" \
+      --detach-sign --armor -o "${component_repo_dir}/repodata/repomd.xml.asc" "${component_repo_dir}/repodata/repomd.xml"
+  done
+fi
 
 cat > "rpm/squigit.repo" <<EOF_REPO
 [squigit-ocr]
 name=Squigit OCR Packages
-baseurl=${raw_base_url}/rpm/ocr
+baseurl=${public_base_url}/rpm/ocr
 enabled=1
 gpgcheck=1
 repo_gpgcheck=1
-gpgkey=${raw_base_url}/keys/squigit-packages.asc
+gpgkey=${public_base_url}/keys/squigit-packages.asc
 
 [squigit-stt]
 name=Squigit STT Packages
-baseurl=${raw_base_url}/rpm/stt
+baseurl=${public_base_url}/rpm/stt
 enabled=1
 gpgcheck=1
 repo_gpgcheck=1
-gpgkey=${raw_base_url}/keys/squigit-packages.asc
+gpgkey=${public_base_url}/keys/squigit-packages.asc
 EOF_REPO
 
 gpg --batch --yes --output "keys/squigit-packages.gpg" --export "${gpg_key_fpr}"
@@ -301,26 +312,96 @@ Signed APT and DNF metadata for Squigit sidecar packages.
 - APT metadata root: `apt/`
 - DNF metadata root: `rpm/`
 - Public key: `keys/squigit-packages.asc`
+- Current Debian package filenames/tags are tracked in `metadata/package-assets.env`
 - Package binaries are served from `squigit-org/squigit` GitHub Releases.
 EOF_README
 
-if [ ! -f index.html ]; then
-  cat > index.html <<'EOF_INDEX'
+cat > index.html <<EOF_INDEX
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Squigit Packages</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        font-family: "Instrument Sans", "Inter", "Segoe UI", sans-serif;
+        background: linear-gradient(135deg, #f6f8ff 0%, #f2fff8 100%);
+        color: #1f2937;
+      }
+      main {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 48px 20px 72px;
+      }
+      h1 {
+        margin-top: 0;
+        font-size: 2rem;
+      }
+      code,
+      pre {
+        font-family: "JetBrains Mono", "Fira Code", monospace;
+      }
+      pre {
+        background: #0f172a;
+        color: #e2e8f0;
+        padding: 14px;
+        border-radius: 10px;
+        overflow-x: auto;
+      }
+      .card {
+        background: #ffffff;
+        border: 1px solid #dbe6ff;
+        border-radius: 14px;
+        padding: 18px;
+        margin-top: 18px;
+      }
+      a {
+        color: #0f4fd3;
+      }
+    </style>
   </head>
   <body>
-    <h1>Squigit Packages</h1>
-    <p>Signed Linux package repository metadata for Squigit OCR and STT sidecars.</p>
-    <p>Use the installation snippets from the Squigit docs.</p>
+    <main>
+      <h1>Squigit Linux Packages</h1>
+      <p>
+        Signed APT and DNF metadata for <code>squigit-ocr</code> and
+        <code>squigit-stt</code>. Install these sidecars using the standard
+        package-manager flow.
+      </p>
+
+      <div class="card">
+        <h2>Debian/Ubuntu (APT repo)</h2>
+        <pre>sudo mkdir -p /etc/apt/keyrings
+curl -fsSL ${public_base_url}/keys/squigit-packages.asc | \
+  gpg --dearmor | sudo tee /etc/apt/keyrings/squigit-packages.gpg >/dev/null
+echo "deb [signed-by=/etc/apt/keyrings/squigit-packages.gpg] ${raw_main_base_url}/apt ${APT_SUITE} ocr stt" | \
+  sudo tee /etc/apt/sources.list.d/squigit-packages.list >/dev/null
+sudo apt update
+sudo apt install squigit-ocr squigit-stt</pre>
+      </div>
+
+      <div class="card">
+        <h2>Fedora/RHEL (DNF repo)</h2>
+        <pre>sudo curl -fsSL ${public_base_url}/rpm/squigit.repo -o /etc/yum.repos.d/squigit.repo
+sudo dnf makecache
+sudo dnf install squigit-ocr squigit-stt</pre>
+      </div>
+
+      <p>
+        Public key files:
+        <a href="keys/squigit-packages.asc">ASCII</a> /
+        <a href="keys/squigit-packages.gpg">Binary</a>
+      </p>
+      <p><a href="metadata/package-assets.env">Latest package asset manifest</a></p>
+    </main>
   </body>
 </html>
 EOF_INDEX
-fi
 
 git config user.name "GitHub Actions Bot"
 git config user.email "actions@github.com"
@@ -338,6 +419,6 @@ packages_sha="$(git rev-parse HEAD)"
 {
   echo "repo_url=https://github.com/${PACKAGES_REPO}"
   echo "apt_source=deb [signed-by=/etc/apt/keyrings/squigit-packages.gpg] ${raw_base_url}/apt ${APT_SUITE} ocr stt"
-  echo "dnf_repo_url=${raw_base_url}/rpm/squigit.repo"
+  echo "dnf_repo_url=${public_base_url}/rpm/squigit.repo"
   echo "packages_sha=${packages_sha}"
 } >> "${GITHUB_OUTPUT}"
