@@ -82,12 +82,19 @@ rm -rf "$work_dir"
 mkdir -p "$work_dir"
 
 runtime_dir_abs="$(cd "$RUNTIME_DIR" && pwd)"
+runtime_root="/usr/lib/${PACKAGE_NAME}"
+runtime_internal="${runtime_root}/_internal"
 
 # Build .deb
 pkgroot="${work_dir}/${PACKAGE_NAME}-deb-root"
 mkdir -p "$pkgroot/DEBIAN" "$pkgroot/usr/lib/${PACKAGE_NAME}" "$pkgroot/usr/bin"
 cp -a "${runtime_dir_abs}/." "$pkgroot/usr/lib/${PACKAGE_NAME}/"
-ln -s "../lib/${PACKAGE_NAME}/${BINARY_NAME}" "$pkgroot/usr/bin/${BINARY_NAME}"
+cat > "$pkgroot/usr/bin/${BINARY_NAME}" <<EOF_WRAPPER
+#!/usr/bin/env bash
+export LD_LIBRARY_PATH="${runtime_internal}:${runtime_root}:\${LD_LIBRARY_PATH:-}"
+exec "${runtime_root}/${BINARY_NAME}" "\$@"
+EOF_WRAPPER
+chmod 0755 "$pkgroot/usr/bin/${BINARY_NAME}"
 render_template "$DEB_CONTROL_TEMPLATE" "$pkgroot/DEBIAN/control"
 chmod 0755 "$pkgroot/usr/lib/${PACKAGE_NAME}/${BINARY_NAME}" || true
 
@@ -104,7 +111,12 @@ src_root_name="${PACKAGE_NAME}-${PACKAGE_VERSION}"
 src_root="${work_dir}/${src_root_name}"
 mkdir -p "$src_root/usr/lib/${PACKAGE_NAME}" "$src_root/usr/bin"
 cp -a "${runtime_dir_abs}/." "$src_root/usr/lib/${PACKAGE_NAME}/"
-ln -s "../lib/${PACKAGE_NAME}/${BINARY_NAME}" "$src_root/usr/bin/${BINARY_NAME}"
+cat > "$src_root/usr/bin/${BINARY_NAME}" <<EOF_WRAPPER
+#!/usr/bin/env bash
+export LD_LIBRARY_PATH="${runtime_internal}:${runtime_root}:\${LD_LIBRARY_PATH:-}"
+exec "${runtime_root}/${BINARY_NAME}" "\$@"
+EOF_WRAPPER
+chmod 0755 "$src_root/usr/bin/${BINARY_NAME}"
 
 tar -czf "${rpm_top}/SOURCES/${src_root_name}.tar.gz" -C "$work_dir" "$src_root_name"
 rpm_spec_path="${rpm_top}/SPECS/${PACKAGE_NAME}.spec"

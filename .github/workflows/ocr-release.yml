@@ -448,8 +448,16 @@ jobs:
         env:
           RELEASE_TAG: ${{ needs.resolve-release-meta.outputs.release_tag }}
           VERSION: ${{ needs.resolve-release-meta.outputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
+
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            echo "workflow_dispatch detected: forcing Linux package rebuild (skip existing release asset reuse)."
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "cache_hit=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           CACHE_DIR="${RUNNER_TEMP}/linux-package-cache/ocr"
           DEB_NAME="squigit-ocr_${VERSION}_amd64.deb"
