@@ -12,6 +12,17 @@ class SquigitOcr < Formula
     end
 
     libexec.install Dir["*"]
+    # Homebrew rewrites Mach-O dylib IDs after install. The vendored pydantic_core
+    # extension ships with limited header padding and fails when rewritten to a long
+    # path under libexec/_internal/...; keep runtime imports stable via a symlink,
+    # but relocate the real file to a much shorter libexec path.
+    Dir[(libexec/"_internal/pydantic_core/_pydantic_core.cpython-*-darwin.so").to_s].sort.each_with_index do |path, idx|
+      ext = Pathname(path)
+      short_name = "p#{idx}.so"
+      relocated = libexec/short_name
+      mv ext, relocated
+      ln_sf Pathname("../../#{short_name}"), ext
+    end
     bin.install_symlink libexec/"squigit-ocr"
   end
 
