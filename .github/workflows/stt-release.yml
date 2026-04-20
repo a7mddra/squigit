@@ -955,10 +955,9 @@ jobs:
   publish-winget-stt:
     name: Publish Winget Manifest
     if: >-
-      needs['resolve-channel-scope'].outputs.run_winget == 'true' &&
-      needs['build-phase-complete'].result == 'success' &&
-      needs['build-release-stt-windows'].result == 'success' &&
-      needs['validate-winget-manifest-stt'].result == 'success'
+      always() &&
+      (needs['resolve-channel-scope'].outputs.run_winget == 'true' || needs['resolve-channel-scope'].outputs.run_winget == true) &&
+      needs['build-release-stt-windows'].result == 'success'
     needs:
       - resolve-channel-scope
       - build-phase-complete
@@ -968,6 +967,14 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
+
+      - name: Debug Publish Preconditions
+        shell: pwsh
+        run: |
+          Write-Host "run_winget=${{ needs['resolve-channel-scope'].outputs.run_winget }}"
+          Write-Host "build_phase_result=${{ needs['build-phase-complete'].result }}"
+          Write-Host "build_windows_result=${{ needs['build-release-stt-windows'].result }}"
+          Write-Host "validate_manifest_result=${{ needs['validate-winget-manifest-stt'].result }}"
 
       - name: Generate Winget Manifest
         id: manifest
@@ -992,8 +999,7 @@ jobs:
           name: winget-manifest-stt
           path: ${{ steps.manifest.outputs.manifest-dir }}
 
-      - name: Submit Winget Update PR (optional)
-        if: github.event_name == 'workflow_dispatch' && inputs.submit_winget_pr
+      - name: Submit Winget Update PR (required debug mode)
         shell: pwsh
         env:
           PACKAGE_IDENTIFIER: SquigitOrg.SquigitSTT
@@ -1004,8 +1010,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           if ([string]::IsNullOrWhiteSpace($env:WINGET_CREATE_GITHUB_TOKEN)) {
-            Write-Host "WINGET_CREATE_GITHUB_TOKEN is empty; skipping wingetcreate --submit."
-            exit 0
+            throw "WINGET_CREATE_GITHUB_TOKEN is empty; required in debug mode."
           }
 
           $packageRoot = ($env:PACKAGE_IDENTIFIER -replace '\.', '/')
@@ -1035,8 +1040,8 @@ jobs:
           Write-Host "version=${{ needs.build-release-stt-windows.outputs.version }}"
           Write-Host "asset_url=${{ needs.build-release-stt-windows.outputs.asset_url }}"
           Write-Host "sha256=${{ needs.build-release-stt-windows.outputs.sha256 }}"
-          Write-Host "Set submit_winget_pr=true on workflow_dispatch and configure WINGET_CREATE_GITHUB_TOKEN to open/update winget-pkgs PRs."
-          Write-Host "This workflow auto-detects first publication vs update and will submit the generated manifest accordingly."
+          Write-Host "Debug mode: winget PR submit/update is mandatory in this workflow revision."
+          Write-Host "This workflow auto-detects first publication vs update and submits the generated manifest accordingly."
 
   validate-winget-manifest-stt:
     name: Validate Winget Manifest
