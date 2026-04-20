@@ -1160,7 +1160,11 @@ jobs:
 
   publish-winget-ocr:
     name: Publish Winget Manifest
-    if: needs.resolve-channel-scope.outputs.run_winget == 'true' && needs.build-phase-complete.result == 'success' && needs.build-release-ocr-windows.result == 'success' && needs.validate-winget-manifest-ocr.result == 'success'
+    if: >-
+      needs['resolve-channel-scope'].outputs.run_winget == 'true' &&
+      needs['build-phase-complete'].result == 'success' &&
+      needs['build-release-ocr-windows'].result == 'success' &&
+      needs['validate-winget-manifest-ocr'].result == 'success'
     needs:
       - resolve-channel-scope
       - build-phase-complete
@@ -1240,7 +1244,7 @@ jobs:
 
   validate-winget-manifest-ocr:
     name: Validate Winget Manifest
-    if: always() && needs.resolve-channel-scope.outputs.run_winget == 'true'
+    if: always() && needs['resolve-channel-scope'].outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
       - build-phase-complete
@@ -1285,7 +1289,7 @@ jobs:
 
   test-winget-ocr:
     name: End-user Winget Install Smoke
-    if: always() && needs.resolve-channel-scope.outputs.run_winget == 'true'
+    if: always() && needs['resolve-channel-scope'].outputs.run_winget == 'true'
     needs:
       - resolve-channel-scope
       - build-phase-complete
