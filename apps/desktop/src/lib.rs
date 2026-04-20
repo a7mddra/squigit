@@ -183,8 +183,11 @@ pub fn run() {
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
-            let ocr_service = app.state::<services::ocr::DesktopOcrService>();
-            ocr_service.start_monitor();
+            let handle_clone = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                let ocr_service = handle_clone.state::<services::ocr::DesktopOcrService>();
+                ocr_service.start_monitor();
+            });
 
             let start_in_background = crate::utils::launched_in_background();
             let launch_args: Vec<String> = std::env::args().skip(1).collect();
