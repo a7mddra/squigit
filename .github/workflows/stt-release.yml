@@ -978,6 +978,8 @@ jobs:
           installer-sha256: ${{ needs.build-release-stt-windows.outputs.sha256 }}
           command-alias: squigit-stt
           nested-installer-path: squigit-stt.exe
+          manifest-version: 1.9.0
+          archive-binaries-depend-on-path: "true"
           output-dir: ${{ github.workspace }}/target/winget-manifest-stt
 
       - name: Upload Winget Manifest
@@ -1057,6 +1059,8 @@ jobs:
           installer-sha256: ${{ needs.build-release-stt-windows.outputs.sha256 }}
           command-alias: squigit-stt
           nested-installer-path: squigit-stt.exe
+          manifest-version: 1.9.0
+          archive-binaries-depend-on-path: "true"
           output-dir: ${{ github.workspace }}/target/winget-manifest-stt-validate
 
       - name: Validate Manifest with Winget CLI

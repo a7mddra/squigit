@@ -44,6 +44,10 @@ inputs:
     description: "Winget manifest schema version"
     required: false
     default: "1.6.0"
+  archive-binaries-depend-on-path:
+    description: "Set true when archive portable binaries require install-dir PATH instead of link shims"
+    required: false
+    default: "false"
   output-dir:
     description: "Directory where manifest files will be written"
     required: false
@@ -72,6 +76,7 @@ runs:
         PACKAGE_LOCALE: ${{ inputs.package-locale }}
         LICENSE: ${{ inputs.license }}
         MANIFEST_VERSION: ${{ inputs.manifest-version }}
+        ARCHIVE_BINARIES_DEPEND_ON_PATH: ${{ inputs.archive-binaries-depend-on-path }}
         OUTPUT_DIR: ${{ inputs.output-dir }}
       run: |
         set -euo pipefail
@@ -81,6 +86,26 @@ runs:
         VERSION_FILE="${OUTPUT_DIR}/${PACKAGE_IDENTIFIER}.yaml"
         LOCALE_FILE="${OUTPUT_DIR}/${PACKAGE_IDENTIFIER}.locale.${PACKAGE_LOCALE}.yaml"
         INSTALLER_FILE="${OUTPUT_DIR}/${PACKAGE_IDENTIFIER}.installer.yaml"
+        ARCHIVE_FLAG="$(printf '%s' "${ARCHIVE_BINARIES_DEPEND_ON_PATH}" | tr '[:upper:]' '[:lower:]' | xargs)"
+
+        if [ "${ARCHIVE_FLAG}" != "true" ] && [ "${ARCHIVE_FLAG}" != "false" ] && [ -n "${ARCHIVE_FLAG}" ]; then
+          echo "archive-binaries-depend-on-path must be true or false, got: ${ARCHIVE_BINARIES_DEPEND_ON_PATH}" >&2
+          exit 1
+        fi
+
+        ARCHIVE_LINE=""
+        if [ "${ARCHIVE_FLAG}" = "true" ]; then
+          if ! [[ "${MANIFEST_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "manifest-version must be semver when archive-binaries-depend-on-path=true (got ${MANIFEST_VERSION})" >&2
+            exit 1
+          fi
+          MANIFEST_MINOR="$(printf '%s' "${MANIFEST_VERSION}" | awk -F. '{print $2}')"
+          if [ -z "${MANIFEST_MINOR}" ] || [ "${MANIFEST_MINOR}" -lt 9 ]; then
+            echo "archive-binaries-depend-on-path=true requires manifest-version >= 1.9.0 (got ${MANIFEST_VERSION})" >&2
+            exit 1
+          fi
+          ARCHIVE_LINE="ArchiveBinariesDependOnPath: true"
+        fi
 
         cat > "${VERSION_FILE}" <<EOF
         PackageIdentifier: ${PACKAGE_IDENTIFIER}
@@ -107,6 +132,7 @@ runs:
         PackageVersion: ${PACKAGE_VERSION}
         InstallerType: zip
         NestedInstallerType: portable
+        ${ARCHIVE_LINE}
         Installers:
           - Architecture: ${ARCHITECTURE}
             InstallerUrl: ${INSTALLER_URL}
