@@ -1,0 +1,4 @@
+#pragma once
+
+#define APP_VERSION "@PROJECT_VERSION@"
+#define ORG_NAME "Squigit"
