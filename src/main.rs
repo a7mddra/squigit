@@ -1,0 +1,182 @@
+mod instance;
+mod paths;
+mod sandbox;
+
+use anyhow::{Context, Result};
+use instance::Instance;
+use paths::RuntimePaths;
+use sandbox::audio_guard::AudioGuard;
+use std::path::{Path, PathBuf};
+use std::process::{Command, ExitCode, Stdio};
+
+const HELP: &str = "Squigit
+
+Usage:
+  squigit [MODE] [--output-dir <DIR>]
+  squigit --authorize
+  squigit --preflight
+  squigit --help
+  squigit --version
+
+Capture modes:
+  --squiggle     Capture a freeform squiggle selection (default)
+  --traditional  Capture a rectangular selection
+
+Options:
+  --output-dir <DIR>  Save the captured image into DIR (default: Pictures/squigit)
+  --authorize         Request screenshot access without opening the selection overlay
+  --preflight         Check screenshot access without requesting permission
+  -h, --help          Print this help
+  -V, --version       Print the squigit version";
+
+enum CaptureCommand {
+    Preflight,
+    Authorize,
+    Capture {
+        mode: String,
+        output_dir: Option<String>,
+    },
+}
+
+fn main() -> ExitCode {
+    match run() {
+        Ok(code) => code,
+        Err(e) => {
+            eprintln!("[squigit] Error: {:#}", e);
+            AudioGuard::unmute();
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn run() -> Result<ExitCode> {
+    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if arguments
+        .iter()
+        .any(|argument| argument == "--help" || argument == "-h")
+    {
+        println!("{HELP}");
+        return Ok(ExitCode::SUCCESS);
+    }
+    if arguments
+        .iter()
+        .any(|argument| argument == "--version" || argument == "-V")
+    {
+        verify_runtime()?;
+        println!("squigit {}", env!("CARGO_PKG_VERSION"));
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let command = parse_arguments(arguments)?;
+    let mut instance = match command {
+        CaptureCommand::Preflight => Instance::preflight(),
+        CaptureCommand::Authorize => Instance::authorize(),
+        CaptureCommand::Capture { mode, output_dir } => {
+            Instance::capture(mode).with_output_dir(output_dir)
+        }
+    };
+    instance.run()
+}
+
+fn parse_arguments(arguments: Vec<String>) -> Result<CaptureCommand> {
+    let mut mode = None;
+    let mut output_dir = None;
+    let mut authorize = false;
+    let mut preflight = false;
+    let mut index = 0;
+
+    while index < arguments.len() {
+        match arguments[index].as_str() {
+            "--squiggle" | "--traditional" => {
+                if mode.is_some() {
+                    anyhow::bail!("Capture modes are mutually exclusive");
+                }
+                mode = Some(arguments[index].clone());
+            }
+            "--output-dir" => {
+                if output_dir.is_some() {
+                    anyhow::bail!("--output-dir may only be provided once");
+                }
+                let Some(value) = arguments.get(index + 1) else {
+                    anyhow::bail!("--output-dir requires a directory");
+                };
+                output_dir = Some(resolve_output_dir(value)?);
+                index += 1;
+            }
+            "--authorize" => {
+                if authorize {
+                    anyhow::bail!("--authorize may only be provided once");
+                }
+                authorize = true;
+            }
+            "--preflight" => {
+                if preflight {
+                    anyhow::bail!("--preflight may only be provided once");
+                }
+                preflight = true;
+            }
+            argument => anyhow::bail!("Unknown capture argument: {argument}"),
+        }
+        index += 1;
+    }
+
+    if authorize || preflight {
+        if mode.is_some() || output_dir.is_some() {
+            anyhow::bail!("Permission commands cannot be combined with capture options");
+        }
+        if authorize && preflight {
+            anyhow::bail!("--authorize and --preflight are mutually exclusive");
+        }
+        return Ok(if authorize {
+            CaptureCommand::Authorize
+        } else {
+            CaptureCommand::Preflight
+        });
+    }
+
+    Ok(CaptureCommand::Capture {
+        mode: mode.unwrap_or_else(|| "--squiggle".to_string()),
+        output_dir,
+    })
+}
+
+fn resolve_output_dir(value: &str) -> Result<String> {
+    let candidate = if value == "~" {
+        home()?
+    } else if let Some(stripped) = value.strip_prefix("~/") {
+        home()?.join(stripped)
+    } else if Path::new(value).is_absolute() {
+        PathBuf::from(value)
+    } else {
+        std::env::current_dir()
+            .context("Could not resolve the current directory")?
+            .join(value)
+    };
+    Ok(candidate.to_string_lossy().into_owned())
+}
+
+fn home() -> Result<PathBuf> {
+    dirs::home_dir().context("Could not resolve the home directory")
+}
+
+fn verify_runtime() -> Result<()> {
+    let RuntimePaths { bin, env_vars } = RuntimePaths::resolve()?;
+    let mut command = Command::new(&bin);
+    command
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit());
+    for (key, value) in env_vars {
+        command.env(key, value);
+    }
+    let status = command
+        .status()
+        .with_context(|| format!("Could not start the packaged Qt runtime at {}", bin.display()))?;
+    if !status.success() {
+        anyhow::bail!(
+            "The packaged Qt runtime failed its version check with exit code {:?}",
+            status.code()
+        );
+    }
+    Ok(())
+}
