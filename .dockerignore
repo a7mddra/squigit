@@ -1,0 +1,7 @@
+target
+binaries
+.git
+.github
+native/build
+native/_internal
+logs
