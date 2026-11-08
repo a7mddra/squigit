@@ -110,16 +110,16 @@ The Rust wrapper and the Qt runtime (`squigit-qt`) exchange single-line
 markers on stdout. Keep both sides (`src/instance.rs`, `native/src/`) in sync
 whenever a marker changes. The wrapper forwards its verdict to the user.
 
-| Marker                        | Direction | Meaning                                        |
-| ----------------------------- | --------- | ---------------------------------------------- |
-| `AUDIO_MUTE` / `REQ_MUTE`     | Qt → Rust | open a shutter-sound suppression scope         |
-| `AUDIO_UNMUTE`                | Qt → Rust | close the suppression scope                    |
-| `CAPTURE_AUTHORIZED`          | Qt → Rust | screenshot access request accepted             |
-| `CAPTURE_PERMISSION_GRANTED`  | Qt → Rust | headless permission probe passed               |
-| `CAPTURE_PERMISSION_DENIED`   | Qt → Rust | headless permission probe failed               |
-| `CAPTURE_CANCELLED`           | Qt → Rust | the user dismissed the overlay (exit code 2)   |
-| `CAPTURE_FAIL`                | Qt → Rust | grab/crop/save failed (exit code 1)            |
-| `SQUIGIT_SAVED:<abs path>`    | Qt → Rust | the PNG was written; the wrapper prints `path` |
+| Marker                       | Direction | Meaning                                        |
+| ---------------------------- | --------- | ---------------------------------------------- |
+| `AUDIO_MUTE` / `REQ_MUTE`    | Qt → Rust | open a shutter-sound suppression scope         |
+| `AUDIO_UNMUTE`               | Qt → Rust | close the suppression scope                    |
+| `CAPTURE_AUTHORIZED`         | Qt → Rust | screenshot access request accepted             |
+| `CAPTURE_PERMISSION_GRANTED` | Qt → Rust | headless permission probe passed               |
+| `CAPTURE_PERMISSION_DENIED`  | Qt → Rust | headless permission probe failed               |
+| `CAPTURE_CANCELLED`          | Qt → Rust | the user dismissed the overlay (exit code 2)   |
+| `CAPTURE_FAIL`               | Qt → Rust | grab/crop/save failed (exit code 1)            |
+| `SQUIGIT_SAVED:<abs path>`   | Qt → Rust | the PNG was written; the wrapper prints `path` |
 
 Other contracts:
 

@@ -123,7 +123,10 @@ fn package(repo_root: &Path, native_dir: &Path) -> Result<()> {
         anyhow::bail!("Rust binary not found: {}", binary_source.display());
     }
     let binary_destination = destination.join(binary_name);
-    println!("  Copying squigit binary to {}", binary_destination.display());
+    println!(
+        "  Copying squigit binary to {}",
+        binary_destination.display()
+    );
     fs::copy(&binary_source, &binary_destination).with_context(|| {
         format!(
             "Could not copy {} to {}",

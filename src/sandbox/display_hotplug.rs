@@ -110,7 +110,9 @@ impl DisplayMonitor {
             .arg("SPDisplaysDataType")
             .output();
         if let Ok(o) = out {
-            String::from_utf8_lossy(&o.stdout).matches("Resolution:").count() as i32
+            String::from_utf8_lossy(&o.stdout)
+                .matches("Resolution:")
+                .count() as i32
         } else {
             1
         }

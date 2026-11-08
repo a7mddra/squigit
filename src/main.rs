@@ -169,9 +169,12 @@ fn verify_runtime() -> Result<()> {
     for (key, value) in env_vars {
         command.env(key, value);
     }
-    let status = command
-        .status()
-        .with_context(|| format!("Could not start the packaged Qt runtime at {}", bin.display()))?;
+    let status = command.status().with_context(|| {
+        format!(
+            "Could not start the packaged Qt runtime at {}",
+            bin.display()
+        )
+    })?;
     if !status.success() {
         anyhow::bail!(
             "The packaged Qt runtime failed its version check with exit code {:?}",

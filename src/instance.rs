@@ -85,7 +85,8 @@ impl Instance {
             cmd.env("SQUIGIT_OUTPUT_DIR", dir);
         }
 
-        cmd.spawn().context("Failed to spawn the squigit Qt runtime")
+        cmd.spawn()
+            .context("Failed to spawn the squigit Qt runtime")
     }
 
     fn handle_ipc(&self, child: &mut Child) -> Result<ExitCode> {

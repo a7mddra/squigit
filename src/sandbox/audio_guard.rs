@@ -95,9 +95,7 @@ impl AudioGuard {
                         changed_by_us: true,
                     }
                 } else {
-                    eprintln!(
-                        "[squigit] Audio suppression disabled: failed to mute output device"
-                    );
+                    eprintln!("[squigit] Audio suppression disabled: failed to mute output device");
                     SuppressionSession::Disabled
                 }
             }
