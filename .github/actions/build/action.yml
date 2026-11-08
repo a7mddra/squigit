@@ -1,0 +1,99 @@
+name: "Build Squigit"
+description: "Builds, deploys, and signs the standalone Squigit screenshot tool via xtask"
+inputs:
+  target:
+    description: "Rust target triple"
+    required: true
+  distro:
+    description: "Linux distro for container build (ubuntu or fedora)"
+    required: false
+    default: "ubuntu"
+runs:
+  using: "composite"
+  steps:
+    - name: Install Rust
+      if: runner.os != 'Linux'
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Build Linux Artifacts (Docker)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -euo pipefail
+        DOCKERFILE="docker/Dockerfile.${{ inputs.distro }}"
+        if [ ! -f "$DOCKERFILE" ]; then
+          echo "Error: Dockerfile not found at $DOCKERFILE"
+          exit 1
+        fi
+        IMAGE="squigit-screenshot-builder-${{ inputs.distro }}"
+        docker build -t "$IMAGE" -f "$DOCKERFILE" .
+        docker run --rm \
+          -v "$PWD:/build" \
+          -w /build \
+          -e CARGO_HTTP_MULTIPLEXING=false \
+          "$IMAGE" \
+          bash -lc 'cargo xtask build && binaries/${{ inputs.target }}/squigit --version'
+        for path in target binaries native/build; do
+          if [ -e "$path" ]; then
+            sudo chown -R "$(id -u):$(id -g)" "$path"
+          fi
+        done
+
+    - name: Install Qt (macOS)
+      if: runner.os == 'macOS'
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: "6.6.0"
+        host: "mac"
+        target: "desktop"
+        modules: "qt5compat qtshadertools qtimageformats"
+
+    - name: Install Qt (Windows)
+      if: runner.os == 'Windows'
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: "6.6.0"
+        host: "windows"
+        target: "desktop"
+        arch: "win64_msvc2019_64"
+        modules: "qt5compat qtshadertools qtimageformats"
+
+    - name: Build Squigit (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: cargo xtask build
+
+    - name: Sign Squigit (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -euo pipefail
+        IDENTITY="-"
+        DIR="binaries/${{ inputs.target }}"
+        APP_BUNDLE="$DIR/_internal/Squigit.app"
+
+        if [ -d "$DIR" ]; then
+          find "$DIR" -type f \( -name "*.dylib" -o -name "squigit-qt" -o -name "squigit" \) -print0 | while IFS= read -r -d '' f; do
+            codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$f"
+          done
+
+          if [ -d "$APP_BUNDLE" ]; then
+            find "$APP_BUNDLE" -type d -name "*.framework" -print0 | while IFS= read -r -d '' fw; do
+              codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$fw"
+            done
+          fi
+
+          codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$APP_BUNDLE"
+        fi
+
+        "$DIR/squigit" --version
+
+    - name: Build Squigit (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = "Stop"
+        cargo xtask build
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & "binaries/${{ inputs.target }}/squigit.exe" --version
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

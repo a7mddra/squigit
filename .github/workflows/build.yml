@@ -1,0 +1,80 @@
+name: "Build Squigit"
+
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Darwin (ARM64)"
+            os: macos-14
+            target: aarch64-apple-darwin
+            distro: ""
+            artifact_name: squigit-darwin-arm64
+            archive_name: squigit-darwin-arm64.tar.gz
+
+          - name: "Windows (x86_64)"
+            # Qt 6.6's msvc2019_64 kit is incompatible with VS 2026's MSVC 19.51 headers.
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+            distro: ""
+            artifact_name: squigit-windows-x86_64
+            archive_name: squigit-windows-x86_64.zip
+
+          - name: "Ubuntu (x86_64)"
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            distro: ubuntu
+            artifact_name: squigit-ubuntu-x86_64
+            archive_name: squigit-ubuntu-x86_64.tar.gz
+
+          - name: "Fedora (x86_64)"
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            distro: fedora
+            artifact_name: squigit-fedora-x86_64
+            archive_name: squigit-fedora-x86_64.tar.gz
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Build Squigit
+        uses: ./.github/actions/build
+        with:
+          target: ${{ matrix.target }}
+          distro: ${{ matrix.distro }}
+
+      - name: Archive Squigit (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C "binaries/${{ matrix.target }}" \
+            -czf "${{ matrix.archive_name }}" \
+            .
+
+      - name: Archive Squigit (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Compress-Archive -Path "binaries/${{ matrix.target }}/*" -DestinationPath "${{ matrix.archive_name }}" -Force
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.archive_name }}
+          if-no-files-found: error
