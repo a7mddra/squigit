@@ -1,4 +1,5 @@
 [workspace]
+members = ["xtask"]
 resolver = "2"
 
 [package]
