@@ -20,6 +20,9 @@ public:
 private:
   ULONG_PTR m_gdiplusToken;
   bool m_gdiplusReady;
+
+  static BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor,
+                                       LPRECT lprcMonitor, LPARAM dwData);
 #endif
 };
 

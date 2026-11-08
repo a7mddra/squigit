@@ -26,6 +26,10 @@ if(UNIX AND NOT APPLE)
     find_package(Qt6 REQUIRED COMPONENTS DBus)
 endif()
 
+if(QT_VERSION VERSION_GREATER_EQUAL 6.5)
+    qt_policy(SET QTP0001 OLD)
+endif()
+
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/config/config.h.in"
     "${CMAKE_CURRENT_BINARY_DIR}/generated/config.h"

@@ -1,23 +1,23 @@
+#include <QByteArray>
 #include <QGuiApplication>
+#include <QHash>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQmlContext>
-#include <QHash>
 #include <QQuickImageProvider>
 #include <QQuickWindow>
 #include <QScreen>
 #include <QString>
-#include <QByteArray>
 #include <QTimer>
-#include <iostream>
 #include <atomic>
 #include <chrono>
+#include <iostream>
 #include <string>
 #include <vector>
 
-#include "config.h"
 #include "CaptureEngine.h"
 #include "Grabber.h"
+#include "config.h"
 
 #ifdef Q_OS_MAC
 #include "GrabberMac.h"
@@ -98,13 +98,12 @@ static void applyPlatformWindowHacks(QQuickWindow *window) {
   id nsView = reinterpret_cast<id>(nativeId);
   if (nsView) {
     id nsWindow =
-        ((id(*)(id, SEL))objc_msgSend)(nsView, sel_registerName("window"));
+        ((id (*)(id, SEL))objc_msgSend)(nsView, sel_registerName("window"));
     if (nsWindow) {
       ((void (*)(id, SEL, long))objc_msgSend)(
           nsWindow, sel_registerName("setAnimationBehavior:"), 2);
-      ((void (*)(id, SEL, BOOL))objc_msgSend)(nsWindow,
-                                              sel_registerName("setHasShadow:"),
-                                              NO);
+      ((void (*)(id, SEL, BOOL))objc_msgSend)(
+          nsWindow, sel_registerName("setHasShadow:"), NO);
       ((void (*)(id, SEL, long))objc_msgSend)(nsWindow,
                                               sel_registerName("setLevel:"), 5);
     }
@@ -218,8 +217,7 @@ int main(int argc, char *argv[]) {
   app.setApplicationVersion(APP_VERSION);
   app.setQuitOnLastWindowClosed(true);
 
-  const QString captureMode =
-      traditionalRequested ? "traditional" : "squiggle";
+  const QString captureMode = traditionalRequested ? "traditional" : "squiggle";
 
   Grabber *engine = nullptr;
 #ifdef Q_OS_WIN
@@ -229,8 +227,9 @@ int main(int argc, char *argv[]) {
 #endif
 
   if (!engine) {
-    std::cerr << "CAPTURE_NATIVE_ERROR: failed to create platform screen grabber"
-              << std::endl;
+    std::cerr
+        << "CAPTURE_NATIVE_ERROR: failed to create platform screen grabber"
+        << std::endl;
     return 1;
   }
 
@@ -256,8 +255,7 @@ int main(int argc, char *argv[]) {
   auto *backgroundProvider = new BackgroundImageProvider();
   qmlEngine.addImageProvider("backgrounds", backgroundProvider);
 
-  QQmlComponent component(&qmlEngine,
-                          QUrl("qrc:/views/CaptureWindow.qml"));
+  QQmlComponent component(&qmlEngine, QUrl("qrc:/views/CaptureWindow.qml"));
   if (component.isError()) {
     const auto errors = component.errors();
     for (const QQmlError &err : errors) {
