@@ -1,9 +1,9 @@
 # Squigit
 
-Standalone screenshot tool. Qt 6 provides the on-screen selection overlays and
-screen grabbing; Rust is the entrypoint, session guardian, and packager. There
-is no Electron: the built binary saves the cutout into a folder and prints the
-absolute path of the saved image.
+Native screenshot tool. Qt 6 provides the on-screen selection overlays and
+screen grabbing; Rust is the entrypoint, session guardian, and packager. The
+built binary saves the cutout into a folder and prints the absolute path of
+the saved image.
 
 ## Features
 

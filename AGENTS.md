@@ -1,6 +1,6 @@
 # Squigit — Agent & Contributor Guide
 
-Welcome to **Squigit**, the standalone Qt 6 + Rust screenshot tool. This
+Welcome to **Squigit**, the native Qt 6 + Rust screenshot tool. This
 document outlines the architecture boundaries, naming rules, build workflows,
 and the runtime protocol that all AI agents and contributors must strictly
 adhere to.
@@ -35,9 +35,8 @@ squigit/
 └── README.md
 ```
 
-The repository is **root-first**: the Rust package lives at the repo root and
-there is no sidecar directory nesting. The only user-facing, distributed
-binary is `squigit`.
+The Rust package lives at the repository root; the only user-facing,
+distributed binary is `squigit`.
 
 ---
 
@@ -45,8 +44,7 @@ binary is `squigit`.
 
 1. **Binary naming.** The delivered binary is `squigit` (Rust entrypoint). The
    Qt helper inside the deployed runtime is `squigit-qt` (`Squigit.app` bundle
-   on macOS). Never name a binary `capture`, `capture-engine`, `capture-bin`,
-   or any similarly nested sidecar name.
+   on macOS), so every user-visible name stays anchored on `squigit`.
 2. **Rust naming.** Functions, modules, and variables are `snake_case`; types
    are `CamelCase`. The current binary is a single crate; keep modules
    shallow.

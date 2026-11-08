@@ -1,5 +1,5 @@
 name: "Build Squigit"
-description: "Builds, deploys, and signs the standalone Squigit screenshot tool via xtask"
+description: "Builds, deploys, and signs the native Squigit screenshot tool via xtask"
 inputs:
   target:
     description: "Rust target triple"
