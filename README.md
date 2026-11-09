@@ -15,7 +15,7 @@ the saved image.
 - Wayland capture via the desktop portal (with permission preflight), native
   grabs on X11, macOS (CoreGraphics), and Windows (GDI+).
 - Single-instance lock, display hotplug watchdog, and shutter-sound
-  suppression on macOS and Wayland.
+  suppression on the Linux Wayland capture path.
 - Output: `<output-dir>/squigit-<timestamp>.png`, the path is printed on
   stdout (the only stdout line on success). Exit codes: `0` success, `2`
   cancelled, `1` failure.

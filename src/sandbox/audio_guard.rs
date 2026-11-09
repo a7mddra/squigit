@@ -1,27 +1,17 @@
-#[cfg(target_os = "linux")]
 use std::env;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
 use std::process::Command;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
-use std::sync::Mutex;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
-#[cfg(target_os = "linux")]
 static HAS_WPCTL: OnceLock<bool> = OnceLock::new();
-#[cfg(target_os = "linux")]
 static HAS_PACTL: OnceLock<bool> = OnceLock::new();
-#[cfg(any(target_os = "macos", target_os = "linux"))]
 static AUDIO_STATE: OnceLock<Mutex<AudioState>> = OnceLock::new();
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
 #[derive(Default)]
 struct AudioState {
     depth: usize,
     session: Option<SuppressionSession>,
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
 enum SuppressionSession {
     Disabled,
     Managed {
@@ -30,7 +20,6 @@ enum SuppressionSession {
     },
 }
 
-#[cfg(target_os = "linux")]
 #[derive(Clone, Copy)]
 enum Backend {
     Wpctl,
@@ -38,21 +27,11 @@ enum Backend {
     Amixer,
 }
 
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy)]
-enum Backend {
-    OsaScript,
-}
-
 pub struct AudioGuard;
 
 impl AudioGuard {
     #[inline]
     pub fn mute() {
-        #[cfg(target_os = "macos")]
-        Self::mute_scoped();
-
-        #[cfg(target_os = "linux")]
         if Self::is_wayland() {
             Self::mute_scoped();
         }
@@ -60,21 +39,15 @@ impl AudioGuard {
 
     #[inline]
     pub fn unmute() {
-        #[cfg(target_os = "macos")]
-        Self::unmute_scoped();
-
-        #[cfg(target_os = "linux")]
         if Self::is_wayland() {
             Self::unmute_scoped();
         }
     }
 
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
     fn state() -> &'static Mutex<AudioState> {
         AUDIO_STATE.get_or_init(|| Mutex::new(AudioState::default()))
     }
 
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
     fn mute_scoped() {
         let mut state = Self::state().lock().unwrap_or_else(|e| e.into_inner());
         state.depth = state.depth.saturating_add(1);
@@ -106,7 +79,6 @@ impl AudioGuard {
         });
     }
 
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
     fn unmute_scoped() {
         let session = {
             let mut state = Self::state().lock().unwrap_or_else(|e| e.into_inner());
@@ -133,50 +105,6 @@ impl AudioGuard {
         }
     }
 
-    #[cfg(target_os = "macos")]
-    fn detect_backend_and_state() -> Result<(Backend, bool), String> {
-        Self::query_macos_mute_state()
-            .map(|muted| (Backend::OsaScript, muted))
-            .ok_or_else(|| "unable to query macOS mute state via osascript".to_string())
-    }
-
-    #[cfg(target_os = "macos")]
-    fn query_macos_mute_state() -> Option<bool> {
-        let output = Command::new("osascript")
-            .args(["-e", "output muted of (get volume settings)"])
-            .output()
-            .ok()?;
-        if !output.status.success() {
-            return None;
-        }
-
-        match String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .to_ascii_lowercase()
-            .as_str()
-        {
-            "true" => Some(true),
-            "false" => Some(false),
-            _ => None,
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    fn set_muted(_backend: Backend, muted: bool) -> bool {
-        let script = if muted {
-            "set volume with output muted"
-        } else {
-            "set volume without output muted"
-        };
-
-        Command::new("osascript")
-            .args(["-e", script])
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-    }
-
-    #[cfg(target_os = "linux")]
     fn detect_backend_and_state() -> Result<(Backend, bool), String> {
         if *HAS_WPCTL.get_or_init(|| Self::has_cmd("wpctl")) {
             return Self::query_wpctl_mute_state()
@@ -200,7 +128,6 @@ impl AudioGuard {
         )
     }
 
-    #[cfg(target_os = "linux")]
     fn set_muted(backend: Backend, muted: bool) -> bool {
         match backend {
             Backend::Wpctl => Command::new("wpctl")
@@ -234,7 +161,6 @@ impl AudioGuard {
         }
     }
 
-    #[cfg(target_os = "linux")]
     fn query_wpctl_mute_state() -> Option<bool> {
         let output = Command::new("wpctl")
             .args(["get-volume", "@DEFAULT_AUDIO_SINK@"])
@@ -254,7 +180,6 @@ impl AudioGuard {
         }
     }
 
-    #[cfg(target_os = "linux")]
     fn query_pactl_mute_state() -> Option<bool> {
         let output = Command::new("pactl")
             .args(["get-sink-mute", "@DEFAULT_SINK@"])
@@ -279,7 +204,6 @@ impl AudioGuard {
         None
     }
 
-    #[cfg(target_os = "linux")]
     fn query_amixer_mute_state() -> Option<bool> {
         let output = Command::new("amixer")
             .args(["sget", "Master"])
@@ -296,14 +220,12 @@ impl AudioGuard {
         }
     }
 
-    #[cfg(target_os = "linux")]
     fn is_wayland() -> bool {
         env::var("XDG_SESSION_TYPE")
             .map(|v| v.eq_ignore_ascii_case("wayland"))
             .unwrap_or(false)
     }
 
-    #[cfg(target_os = "linux")]
     fn has_cmd(cmd: &str) -> bool {
         Command::new("which")
             .arg(cmd)

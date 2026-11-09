@@ -1,9 +1,7 @@
 name: "Build Squigit"
 
 on:
-  push:
-    branches: [main]
-    tags: ["*"]
+  # push:
   workflow_dispatch:
 
 permissions:

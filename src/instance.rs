@@ -1,4 +1,5 @@
 use crate::paths::RuntimePaths;
+#[cfg(target_os = "linux")]
 use crate::sandbox::audio_guard::AudioGuard;
 use crate::sandbox::display_hotplug::DisplayWatcher;
 use crate::sandbox::single_instance::InstanceLock;
@@ -59,6 +60,7 @@ impl Instance {
 
         watcher.stop();
         let _ = child.wait();
+        #[cfg(target_os = "linux")]
         AudioGuard::unmute();
 
         exit_code
@@ -112,8 +114,14 @@ impl Instance {
             }
             let trimmed = line.trim();
             match trimmed {
-                "AUDIO_MUTE" | "REQ_MUTE" => AudioGuard::mute(),
-                "AUDIO_UNMUTE" => AudioGuard::unmute(),
+                "AUDIO_MUTE" | "REQ_MUTE" => {
+                    #[cfg(target_os = "linux")]
+                    AudioGuard::mute();
+                }
+                "AUDIO_UNMUTE" => {
+                    #[cfg(target_os = "linux")]
+                    AudioGuard::unmute();
+                }
                 "CAPTURE_AUTHORIZED" => {
                     capture_authorized = true;
                     break;

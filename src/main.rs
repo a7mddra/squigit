@@ -5,6 +5,7 @@ mod sandbox;
 use anyhow::{Context, Result};
 use instance::Instance;
 use paths::RuntimePaths;
+#[cfg(target_os = "linux")]
 use sandbox::audio_guard::AudioGuard;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
@@ -43,6 +44,7 @@ fn main() -> ExitCode {
         Ok(code) => code,
         Err(e) => {
             eprintln!("[squigit] Error: {:#}", e);
+            #[cfg(target_os = "linux")]
             AudioGuard::unmute();
             ExitCode::from(1)
         }
