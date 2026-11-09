@@ -55,7 +55,7 @@ impl RuntimePaths {
                 .join("Squigit.app")
                 .join("Contents")
                 .join("MacOS")
-                .join("squigit-qt");
+                .join("Squigit");
             if !bin.exists() {
                 anyhow::bail!("squigit Qt runtime not found at {}", bin.display());
             }

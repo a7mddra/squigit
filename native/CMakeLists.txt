@@ -26,7 +26,7 @@ if(UNIX AND NOT APPLE)
     find_package(Qt6 REQUIRED COMPONENTS DBus)
 endif()
 
-if(QT_VERSION VERSION_GREATER_EQUAL 6.5)
+if(COMMAND qt_policy)
     qt_policy(SET QTP0001 OLD)
 endif()
 
@@ -105,8 +105,8 @@ endif()
 
 if(APPLE)
     set_target_properties(squigit-qt PROPERTIES
+        OUTPUT_NAME "Squigit"
         MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_OUTPUT_NAME "Squigit"
         MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.a7mddra.squigit"
         MACOSX_BUNDLE_BUNDLE_NAME "Squigit"
         MACOSX_BUNDLE_INFO_STRING "Squigit Screen Capture"
