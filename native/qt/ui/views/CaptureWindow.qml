@@ -7,7 +7,7 @@ import "../components"
 Window {
     id: root
 
-    flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.BypassWindowManagerHint | Qt.Tool
+    flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
 
     x: Screen.virtualX
     y: Screen.virtualY

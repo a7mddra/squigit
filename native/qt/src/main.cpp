@@ -1,6 +1,8 @@
 #include <QByteArray>
+#include <QEvent>
 #include <QGuiApplication>
 #include <QHash>
+#include <QObject>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQmlContext>
@@ -60,6 +62,33 @@ public:
 
 private:
   QHash<QString, QImage> m_images;
+};
+
+class CaptureWindowFocus : public QObject {
+public:
+  CaptureWindowFocus(QQuickWindow *window, CaptureEngine *controller)
+      : QObject(window), m_window(window), m_controller(controller) {
+    window->installEventFilter(this);
+  }
+
+protected:
+  bool eventFilter(QObject *object, QEvent *event) override {
+    const auto type = event->type();
+    if (m_controller->hasSelection() &&
+        (type == QEvent::MouseButtonPress ||
+         type == QEvent::MouseButtonDblClick || type == QEvent::TouchBegin)) {
+      m_window->requestActivate();
+      if (!m_window->setKeyboardGrabEnabled(true)) {
+        std::cerr << "CAPTURE_NATIVE_ERROR: could not restore keyboard input after clicking the capture overlay"
+                  << std::endl;
+      }
+    }
+    return QObject::eventFilter(object, event);
+  }
+
+private:
+  QQuickWindow *m_window;
+  CaptureEngine *m_controller;
 };
 
 static bool isTimingEnabled() {
@@ -351,6 +380,7 @@ int main(int argc, char *argv[]) {
     }
 
     applyPlatformWindowHacks(window);
+    new CaptureWindowFocus(window, controller);
     QObject::connect(
         window, &QQuickWindow::frameSwapped, window,
         [timingStart, &firstFrameLogged]() {
