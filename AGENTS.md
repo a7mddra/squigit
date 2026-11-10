@@ -156,6 +156,14 @@ Escape clears OCR text selection before dismissing the capture on a subsequent
 press. Clicking blank space or starting a crop move/resize clears text selection.
 Keyboard focus stays in the overlay throughout text selection and deselection.
 
+Keep the overlay managed by the window manager; do not use
+`BypassWindowManagerHint`, which suppresses normal X11 click activation. Once a
+crop exists, every mouse press, double click, or touch press anywhere in its
+window must request native activation and refresh that window's keyboard grab
+before QML dispatch. This includes text, resize handles, controls, and blank
+space. The window event filter must not consume the input event. Clicking back
+from another display must restore keyboard input without toggling OCR.
+
 Other capture contracts:
 
 - Exit codes of direct capture: `0` success, `2` cancelled, `1` failure or
