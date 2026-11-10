@@ -245,7 +245,7 @@ Item {
         }
 
         Glow {
-            anchors.fill: selectionBorderCanvas
+            anchors.fill: parent
             source: selectionBorderCanvas
             radius: root.isDrawing ? 8 : 24 * root.glowIntensity
             samples: root.isDrawing ? 8 : 24
@@ -263,7 +263,7 @@ Item {
         }
 
         Glow {
-            anchors.fill: selectionBorderCanvas
+            anchors.fill: parent
             source: selectionBorderCanvas
             visible: !root.isDrawing
             radius: 10 * root.glowIntensity
@@ -282,7 +282,7 @@ Item {
         }
 
         Glow {
-            anchors.fill: selectionBorderCanvas
+            anchors.fill: parent
             source: selectionBorderCanvas
             visible: !root.isDrawing
             radius: 4
