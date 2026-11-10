@@ -2,6 +2,8 @@
     <qresource prefix="/">
         <file>components/SquiggleCanvas.qml</file>
         <file>components/TraditionalCanvas.qml</file>
+        <file>components/SelectionCrop.qml</file>
+        <file>components/OcrTextLayer.qml</file>
         <file>views/CaptureWindow.qml</file>
     </qresource>
 </RCC>

@@ -1,13 +1,11 @@
 import QtQuick
 import QtQuick.Window
+import "../components"
 
 Window {
     id: root
 
-    flags: Qt.FramelessWindowHint
-           | Qt.WindowStaysOnTopHint
-           | Qt.BypassWindowManagerHint
-           | Qt.Tool
+    flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.BypassWindowManagerHint | Qt.Tool
 
     x: Screen.virtualX
     y: Screen.virtualY
@@ -30,9 +28,9 @@ Window {
 
         onStatusChanged: {
             if (status === Image.Error) {
-                const fallbackSource = root.controller.ensureBackgroundFileFallback()
+                const fallbackSource = root.controller.ensureBackgroundFileFallback();
                 if (fallbackSource && source !== fallbackSource) {
-                    source = fallbackSource
+                    source = fallbackSource;
                 }
             }
         }
@@ -45,12 +43,19 @@ Window {
         visible: !root.controller.hasSelection && root.controller.captureMode !== "traditional"
 
         gradient: Gradient {
-            GradientStop { position: 0.0; color: Qt.rgba(0, 0, 0, 0.5) }
-            GradientStop { position: 1.0; color: "transparent" }
+            GradientStop {
+                position: 0.0
+                color: Qt.rgba(0, 0, 0, 0.5)
+            }
+            GradientStop {
+                position: 1.0
+                color: "transparent"
+            }
         }
 
-        NumberAnimation on opacity {
-            from: 0; to: 1
+        NumberAnimation on opacity  {
+            from: 0
+            to: 1
             duration: 200
             running: dimOverlay.visible
             easing.type: Easing.OutQuad
@@ -63,14 +68,12 @@ Window {
         focus: true
         visible: !root.controller.hasSelection
 
-        source: root.controller.captureMode === "traditional"
-            ? "../components/TraditionalCanvas.qml"
-            : "../components/SquiggleCanvas.qml"
+        source: root.controller.captureMode === "traditional" ? "../components/TraditionalCanvas.qml" : "../components/SquiggleCanvas.qml"
 
         onLoaded: {
             if (item) {
-                item.controller = root.controller
-                item.forceActiveFocus()
+                item.controller = root.controller;
+                item.forceActiveFocus();
             }
         }
     }
@@ -80,48 +83,8 @@ Window {
         visible: root.controller.hasSelection
         property rect area: root.controller.selection
 
-        Rectangle { x: 0; y: 0; width: parent.width; height: parent.area.y; color: "#70000000" }
-        Rectangle { x: 0; y: parent.area.y + parent.area.height; width: parent.width; height: parent.height - y; color: "#70000000" }
-        Rectangle { x: 0; y: parent.area.y; width: parent.area.x; height: parent.area.height; color: "#70000000" }
-        Rectangle { x: parent.area.x + parent.area.width; y: parent.area.y; width: parent.width - x; height: parent.area.height; color: "#70000000" }
-        Rectangle {
-            x: parent.area.x; y: parent.area.y
-            width: parent.area.width; height: parent.area.height
-            color: "transparent"
-            border.color: "white"
-            border.width: 1
-        }
-
-        Repeater {
-            model: root.controller.textBoxes
-            delegate: Item {
-                required property var modelData
-                readonly property var box: modelData.box
-                readonly property real ratio: root.controller.pixelRatio
-                x: root.controller.selection.x + box[0][0] / ratio
-                y: root.controller.selection.y + box[0][1] / ratio
-                width: Math.hypot(box[1][0] - box[0][0], box[1][1] - box[0][1]) / ratio
-                height: Math.hypot(box[3][0] - box[0][0], box[3][1] - box[0][1]) / ratio
-                rotation: Math.atan2(box[1][1] - box[0][1], box[1][0] - box[0][0]) * 180 / Math.PI
-                transformOrigin: Item.TopLeft
-
-                Rectangle { anchors.fill: parent; color: "#185daaff" }
-                TextEdit {
-                    id: selectableLine
-                    text: modelData.text
-                    width: Math.max(1, implicitWidth)
-                    height: parent.height
-                    font.pixelSize: Math.max(1, parent.height * 0.85)
-                    textFormat: TextEdit.PlainText
-                    wrapMode: TextEdit.NoWrap
-                    readOnly: true
-                    selectByMouse: true
-                    color: "transparent"
-                    selectedTextColor: "transparent"
-                    selectionColor: "#805daaff"
-                    transform: Scale { xScale: selectableLine.parent.width / selectableLine.width }
-                }
-            }
+        SelectionCrop {
+            controller: root.controller
         }
 
         Rectangle {
@@ -140,17 +103,25 @@ Window {
                     model: ["Save", "OCR"]
                     delegate: Rectangle {
                         required property string modelData
-                        width: 76; height: 32; radius: 4
-                        color: actionMouse.containsMouse ? "#505154" : "#353639"
+                        readonly property bool checked: modelData === "OCR" && root.controller.ocrVisible
+                        width: 76
+                        height: 32
+                        radius: 4
+                        color: checked ? "#356ab0" : actionMouse.containsMouse ? "#505154" : "#353639"
                         opacity: modelData === "OCR" && root.controller.ocrPending ? 0.5 : 1
-                        Text { anchors.centerIn: parent; text: parent.modelData; color: "white"; font.pixelSize: 14 }
+                        Text {
+                            anchors.centerIn: parent
+                            text: parent.modelData
+                            color: "white"
+                            font.pixelSize: 14
+                        }
                         MouseArea {
                             id: actionMouse
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             enabled: modelData !== "OCR" || !root.controller.ocrPending
-                            onClicked: modelData === "Save" ? root.controller.save() : root.controller.recognize()
+                            onClicked: modelData === "Save" ? root.controller.save() : root.controller.toggleOcr()
                         }
                     }
                 }
@@ -191,5 +162,4 @@ Window {
         sequence: "Q"
         onActivated: root.controller.cancel()
     }
-
 }

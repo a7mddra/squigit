@@ -1,0 +1,190 @@
+import QtQuick
+
+Item {
+    id: root
+    anchors.fill: parent
+
+    required property var controller
+    readonly property rect area: controller.selection
+    property bool interacting: false
+    property rect startArea
+    property point pressPoint
+    property int horizontalEdge: 0
+    property int verticalEdge: 0
+    property bool moving: false
+
+    function begin(item, mouse, horizontal, vertical, move) {
+        startArea = area;
+        pressPoint = item.mapToItem(root, mouse.x, mouse.y);
+        horizontalEdge = horizontal;
+        verticalEdge = vertical;
+        moving = move;
+        interacting = true;
+    }
+
+    function update(item, mouse) {
+        if (!interacting)
+            return;
+        const point = item.mapToItem(root, mouse.x, mouse.y);
+        const dx = point.x - pressPoint.x;
+        const dy = point.y - pressPoint.y;
+        let left = startArea.x;
+        let top = startArea.y;
+        let right = left + startArea.width;
+        let bottom = top + startArea.height;
+        if (moving) {
+            left = Math.max(0, Math.min(width - startArea.width, left + dx));
+            top = Math.max(0, Math.min(height - startArea.height, top + dy));
+            right = left + startArea.width;
+            bottom = top + startArea.height;
+        } else {
+            const minimumWidth = Math.min(24, startArea.width);
+            const minimumHeight = Math.min(24, startArea.height);
+            if (horizontalEdge < 0)
+                left = Math.max(0, Math.min(right - minimumWidth, left + dx));
+            if (horizontalEdge > 0)
+                right = Math.min(width, Math.max(left + minimumWidth, right + dx));
+            if (verticalEdge < 0)
+                top = Math.max(0, Math.min(bottom - minimumHeight, top + dy));
+            if (verticalEdge > 0)
+                bottom = Math.min(height, Math.max(top + minimumHeight, bottom + dy));
+        }
+        controller.setSelection(Qt.rect(left, top, right - left, bottom - top));
+    }
+
+    Rectangle {
+        x: 0
+        y: 0
+        width: root.width
+        height: root.area.y
+        color: "#70000000"
+    }
+    Rectangle {
+        x: 0
+        y: root.area.y + root.area.height
+        width: root.width
+        height: root.height - y
+        color: "#70000000"
+    }
+    Rectangle {
+        x: 0
+        y: root.area.y
+        width: root.area.x
+        height: root.area.height
+        color: "#70000000"
+    }
+    Rectangle {
+        x: root.area.x + root.area.width
+        y: root.area.y
+        width: root.width - x
+        height: root.area.height
+        color: "#70000000"
+    }
+
+    MouseArea {
+        x: root.area.x
+        y: root.area.y
+        width: root.area.width
+        height: root.area.height
+        preventStealing: true
+        cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+        onPressed: function (mouse) {
+            root.begin(this, mouse, 0, 0, true);
+        }
+        onPositionChanged: function (mouse) {
+            if (pressed)
+                root.update(this, mouse);
+        }
+        onReleased: function (mouse) {
+            root.update(this, mouse);
+            root.interacting = false;
+        }
+        onCanceled: root.interacting = false
+    }
+
+    OcrTextLayer {
+        controller: root.controller
+        interacting: root.interacting
+    }
+
+    Rectangle {
+        x: root.area.x
+        y: root.area.y
+        width: root.area.width
+        height: root.area.height
+        color: "transparent"
+        border.color: "white"
+        border.width: 1
+    }
+
+    Repeater {
+        model: [{
+                "horizontal": -1,
+                "vertical": -1,
+                "cursor": Qt.SizeFDiagCursor
+            }, {
+                "horizontal": 1,
+                "vertical": -1,
+                "cursor": Qt.SizeBDiagCursor
+            }, {
+                "horizontal": -1,
+                "vertical": 1,
+                "cursor": Qt.SizeBDiagCursor
+            }, {
+                "horizontal": 1,
+                "vertical": 1,
+                "cursor": Qt.SizeFDiagCursor
+            }, {
+                "horizontal": -1,
+                "vertical": 0,
+                "cursor": Qt.SizeHorCursor
+            }, {
+                "horizontal": 1,
+                "vertical": 0,
+                "cursor": Qt.SizeHorCursor
+            }, {
+                "horizontal": 0,
+                "vertical": -1,
+                "cursor": Qt.SizeVerCursor
+            }, {
+                "horizontal": 0,
+                "vertical": 1,
+                "cursor": Qt.SizeVerCursor
+            }]
+
+        delegate: Item {
+            required property var modelData
+            x: root.area.x + root.area.width * (modelData.horizontal + 1) / 2 - width / 2
+            y: root.area.y + root.area.height * (modelData.vertical + 1) / 2 - height / 2
+            width: 24
+            height: 24
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: 8
+                height: 8
+                radius: 2
+                color: "white"
+                border.color: "#404040"
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                preventStealing: true
+                cursorShape: modelData.cursor
+                onPressed: function (mouse) {
+                    root.begin(this, mouse, modelData.horizontal, modelData.vertical, false);
+                }
+                onPositionChanged: function (mouse) {
+                    if (pressed)
+                        root.update(this, mouse);
+                }
+                onReleased: function (mouse) {
+                    root.update(this, mouse);
+                    root.interacting = false;
+                }
+                onCanceled: root.interacting = false
+            }
+        }
+    }
+}
