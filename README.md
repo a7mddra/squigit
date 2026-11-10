@@ -2,11 +2,11 @@
 
 Squigit is a screenshot-first desktop proof of concept built with Rust, Rune, Qt 6, and PaddleX. It starts in the system tray with no home page.
 
-- **Take screenshot** waits 300 ms for the tray menu to close, then starts the Qt overlay using the configured default capture type. Draw a squiggle or select a rectangle; the selection stays open with **Save** and **OCR** actions.
-- **Save** writes a PNG to `Pictures/squigit` and closes the overlay. Tray captures then show a native **Image saved** notification with the filename, an image preview, and an **Open in folder** action. Clicking the notification also reveals the image.
-- **OCR** asks Rust to run the installed `squigit-ocr` LTS from PATH for that selection. Qt receives JSON and places transparent, selectable text over the frozen screen. Drag within a text line and press Ctrl+C to copy it; Ctrl+Shift+C copies all recognized text. Escape cancels the overlay.
+- **Take screenshot** waits 300 ms for the tray menu to close, then starts the Qt overlay using the configured default capture type. Draw a squiggle or select a rectangle; it becomes a crop with resize handles and **Save** and **OCR** actions. Drag blank space inside the crop to move it.
+- **Save** writes the current crop as a PNG to `Pictures/squigit` and closes the overlay. Tray captures then show a native **Image saved** notification with the filename, an image preview, and an **Open in folder** action. Clicking the notification also reveals the image.
+- **OCR** asks Rust to run the installed `squigit-ocr` LTS from PATH on the whole chosen display's frozen image. Text inside the crop is highlighted blue and selectable; text outside is highlighted grey. Moving or resizing the crop updates which characters are selectable without rescanning. The first OCR click scans, or retries a failed scan. After a successful scan, the button toggles all OCR highlights and text selection. Drag within a blue text line and press Ctrl+C to copy it; Ctrl+Shift+C copies text inside the crop while OCR is visible. Escape cancels the overlay.
 - **Open savepath** opens `Pictures/squigit` in the OS file manager.
-- **Configuration** opens a framed Rune window inspired by `rune-settings`. **General → Default capture type** chooses Squiggle or Traditional for the next tray capture and persists across restarts. The other controls remain demonstration options. Settings are saved to the OS config directory at `squigit/config.toml` (`~/.config/squigit/config.toml` on Linux by default). Explicit CLI capture flags override the tray default.
+- **Configuration** opens a framed Rune window inspired by `rune-settings`. **General → Default capture type** chooses Squiggle or Traditional. **Auto OCR**, off by default, starts recognition once the initial area is selected. Both settings apply to the next tray capture and persist across restarts. The other controls remain demonstration options. Settings are saved to the OS config directory at `squigit/config.toml` (`~/.config/squigit/config.toml` on Linux by default). Direct CLI captures use their explicit flags, including `--auto-ocr` for automatic recognition.
 - **About** opens a separate Rune dialog. **Quit** stops the resident application and its active capture.
 
 Only Rust stays resident. Qt and OCR run on demand. OCR temporarily uses the published LTS while the local Python fork's frozen SciPy dependency is repaired. Install the LTS so `squigit-ocr` is on PATH; normal builds skip the local OCR fork. There is no chat, history, model manager, or persistent OCR worker.
@@ -55,6 +55,7 @@ For direct capture and window development:
 ```sh
 cargo xtask run -- --traditional --output-dir /tmp/shots
 cargo xtask run -- --squiggle
+cargo xtask run -- --traditional --auto-ocr
 cargo xtask run -- --configuration
 cargo xtask run -- --about
 ```
@@ -73,7 +74,7 @@ Platform limits:
 
 ## Process protocol
 
-Qt writes capture markers and newline-delimited OCR requests to stdout; diagnostics go to stderr. Rust owns both sidecar processes. Each OCR click creates one OCR process and Rust replies to Qt on stdin:
+Qt writes capture markers and newline-delimited OCR requests to stdout; diagnostics go to stderr. Rust owns both sidecar processes. Automatic recognition or the first OCR click creates one OCR process. Failed scans can be retried; successful results are cached for the lifetime of the frozen overlay, so visibility toggles and crop changes create no further processes. Rust replies to Qt on stdin:
 
 ```text
 Qt → Rust: OCR_REQUEST:{"id":"0-1","image":"/tmp/squigit-ocr-xxxxxx.png"}
@@ -81,6 +82,6 @@ Rust → Qt: {"id":"0-1","boxes":[{"text":"Hello","confidence":0.99,"box":[[1,2]
 Rust → Qt: {"id":"0-1","error":"An actionable OCR failure"}
 ```
 
-Boxes use physical pixels relative to the selected image. Qt applies the selection offset, display pixel ratio, text width, and rotation. Temporary selection files belong to Qt and are removed after a response or when the overlay exits. OCR is cancelled when the overlay closes and has a two-minute limit.
+Boxes use physical pixels relative to the entire frozen image of the chosen display. Qt applies the display pixel ratio, text width, and rotation without adding a crop offset. Character centers determine crop membership, using measured text advances and grapheme boundaries so partial lines can become selectable as the crop expands. Temporary full-display files belong to Qt and are removed after a response or when the overlay exits. Save crops the original frozen image, without OCR decorations. OCR is cancelled when the overlay closes and has a two-minute limit.
 
 `SQUIGIT_SAVED:<absolute path>` reports a successful save; direct capture prints just that path and exits 0. Cancellation exits 2; failure exits 1. The existing permission and audio suppression markers remain part of the capture protocol. `SQUIGIT_OUTPUT_DIR` is passed by Rust from `--output-dir` when provided.

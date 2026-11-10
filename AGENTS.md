@@ -116,7 +116,11 @@ newline-delimited JSON response on Qt stdin, with the same `id` and either
 from PATH for each request; normal builds skip the local OCR fork. The OCR
 CLI prints exactly one JSON array of `{text, confidence, box}` on success,
 or an `{error}` object on failure. Coordinates are physical pixels relative
-to the selection. Keep this contract in sync across both Rust crates and Qt.
+to the entire frozen image of the chosen display. Qt caches successful results
+and partitions characters by the current crop. `--auto-ocr` starts recognition
+after the initial selection; subsequent OCR button clicks toggle visibility.
+Failed scans remain retryable. Keep this contract in sync across both Rust
+crates and Qt.
 
 Other capture contracts:
 
