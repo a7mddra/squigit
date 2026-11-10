@@ -1,4 +1,6 @@
 import os
+from importlib.metadata import requires
+from packaging.requirements import Requirement
 
 os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
 
@@ -11,8 +13,12 @@ for package in packages:
     datas.extend(data)
     binaries.extend(libraries)
     hiddenimports.extend(modules)
-for distribution in ("paddlepaddle", "paddlex", "paddleocr", "pyclipper", "python-bidi", "shapely", "imagesize"):
-    datas.extend(copy_metadata(distribution))
+for distribution in ("paddlepaddle", "paddleocr", "paddlex"):
+    datas.extend(copy_metadata(distribution, recursive=True))
+for dependency in requires("paddlex"):
+    requirement = Requirement(dependency)
+    if requirement.marker is not None and requirement.marker.evaluate({"extra": "ocr"}):
+        datas.extend(copy_metadata(requirement.name, recursive=True))
 datas.append(("models", "models"))
 
 a = Analysis(["src/main.py"], pathex=[], binaries=binaries, datas=datas,
