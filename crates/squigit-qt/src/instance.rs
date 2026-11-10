@@ -5,6 +5,7 @@ use crate::sandbox::display_hotplug::DisplayWatcher;
 use crate::sandbox::single_instance::InstanceLock;
 use crate::CaptureOutcome;
 use anyhow::{Context, Result};
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, ExitCode, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -28,17 +29,35 @@ pub fn cancel_active() {
     }
 }
 
+struct OcrJob {
+    cancelled: Arc<AtomicBool>,
+    worker: JoinHandle<Result<(), String>>,
+}
+
 #[derive(Default)]
 struct OcrJobs {
-    cancelled: Arc<AtomicBool>,
-    workers: Vec<JoinHandle<()>>,
+    workers: HashMap<String, OcrJob>,
+}
+
+impl OcrJobs {
+    fn cancel(&mut self, id: &str) -> Result<(), String> {
+        if let Some(job) = self.workers.remove(id) {
+            job.cancelled.store(true, Ordering::Release);
+            job.worker
+                .join()
+                .map_err(|_| "OCR worker stopped unexpectedly".to_owned())??;
+        }
+        Ok(())
+    }
 }
 
 impl Drop for OcrJobs {
     fn drop(&mut self) {
-        self.cancelled.store(true, Ordering::Release);
-        for worker in self.workers.drain(..) {
-            let _ = worker.join();
+        for job in self.workers.values() {
+            job.cancelled.store(true, Ordering::Release);
+        }
+        for (_, job) in self.workers.drain() {
+            let _ = job.worker.join();
         }
     }
 }
@@ -202,18 +221,51 @@ impl Instance {
                             request["image"].as_str().context("Missing OCR image")?,
                         );
                         let input = Arc::clone(&stdin);
-                        let cancelled = Arc::clone(&jobs.cancelled);
-                        jobs.workers.push(std::thread::spawn(move || {
+                        let cancelled = Arc::new(AtomicBool::new(false));
+                        let cancel_job = Arc::clone(&cancelled);
+                        let job_id = id.clone();
+                        jobs.workers.retain(|_, job| !job.worker.is_finished());
+                        let worker = std::thread::spawn(move || {
                             let response = match squigit_ocr::recognize(&image, &cancelled) {
-                                Ok(boxes) => serde_json::json!({"id": id, "boxes": boxes}),
+                                Ok(squigit_ocr::Recognition::Text(boxes)) => {
+                                    serde_json::json!({"id": id, "boxes": boxes})
+                                }
+                                Ok(squigit_ocr::Recognition::Cancelled) => return Ok(()),
                                 Err(error) => {
+                                    if cancelled.load(Ordering::Acquire) {
+                                        return Err(format!("{error:#}"));
+                                    }
                                     serde_json::json!({"id": id, "error": format!("{error:#}")})
                                 }
                             };
                             if let Ok(mut input) = input.lock() {
                                 let _ = writeln!(input, "{response}");
                             }
-                        }));
+                            Ok(())
+                        });
+                        jobs.workers.insert(
+                            job_id,
+                            OcrJob {
+                                cancelled: cancel_job,
+                                worker,
+                            },
+                        );
+                    }
+                    if let Some(payload) = trimmed.strip_prefix("OCR_CANCEL:") {
+                        let request: serde_json::Value =
+                            serde_json::from_str(payload).context("Invalid Qt OCR cancellation")?;
+                        let id = request["id"]
+                            .as_str()
+                            .context("Missing OCR cancellation id")?;
+                        let response = match jobs.cancel(id) {
+                            Ok(()) => serde_json::json!({"id": id, "cancelled": true}),
+                            Err(error) => {
+                                serde_json::json!({"id": id, "cancelled": false, "error": error})
+                            }
+                        };
+                        if let Ok(mut input) = stdin.lock() {
+                            let _ = writeln!(input, "{response}");
+                        }
                     }
                     if let Some(path) = trimmed.strip_prefix("SQUIGIT_SAVED:") {
                         capture_saved = Some(path.to_string());

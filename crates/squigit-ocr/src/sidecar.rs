@@ -1,12 +1,16 @@
-use crate::TextBox;
+use crate::{Recognition, TextBox};
 use anyhow::{Context, Result};
+use process_wrap::std::{ChildWrapper, CommandWrap};
 use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-pub fn recognize(image: &Path, cancelled: &AtomicBool) -> Result<Vec<TextBox>> {
+pub fn recognize(image: &Path, cancelled: &AtomicBool) -> Result<Recognition> {
+    if cancelled.load(Ordering::Acquire) {
+        return Ok(Recognition::Cancelled);
+    }
     let binary = if cfg!(windows) {
         "squigit-ocr.exe"
     } else {
@@ -18,37 +22,54 @@ pub fn recognize(image: &Path, cancelled: &AtomicBool) -> Result<Vec<TextBox>> {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit());
+    let mut command = CommandWrap::from(command);
+    #[cfg(unix)]
+    command.wrap(process_wrap::std::ProcessGroup::leader());
     #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x08000000);
-    }
+    command
+        .wrap(process_wrap::std::CreationFlags(
+            windows::Win32::System::Threading::CREATE_NO_WINDOW,
+        ))
+        .wrap(process_wrap::std::JobObject);
     let mut child = command.spawn().with_context(|| {
         format!("Could not start installed {binary}; ensure the OCR LTS is on PATH")
     })?;
-    let mut stdout = child.stdout.take().context("Missing OCR stdout")?;
+    let Some(mut stdout) = child.stdout().take() else {
+        stop(child.as_mut())?;
+        anyhow::bail!("Missing OCR stdout");
+    };
     let reader = std::thread::spawn(move || {
         let mut bytes = Vec::new();
         stdout.read_to_end(&mut bytes).map(|_| bytes)
     });
     let started = Instant::now();
+    let mut exited = None;
     let status = loop {
-        if cancelled.load(Ordering::Acquire) || started.elapsed() > Duration::from_secs(120) {
-            let _ = child.kill();
-            let _ = child.wait();
+        let cancel_requested = cancelled.load(Ordering::Acquire);
+        if cancel_requested || started.elapsed() > Duration::from_secs(120) {
+            stop(child.as_mut())?;
             let _ = reader.join();
-            anyhow::bail!("OCR cancelled or exceeded two minutes");
+            if cancel_requested {
+                return Ok(Recognition::Cancelled);
+            }
+            anyhow::bail!("OCR exceeded two minutes");
         }
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = reader.join();
-                return Err(error.into());
+        if exited.is_none() {
+            match child.try_wait() {
+                Ok(status) => exited = status,
+                Err(error) => {
+                    stop(child.as_mut())?;
+                    let _ = reader.join();
+                    return Err(error.into());
+                }
             }
         }
+        if let Some(status) = exited {
+            if reader.is_finished() {
+                break status;
+            }
+        }
+        std::thread::sleep(Duration::from_millis(50));
     };
     let output = reader
         .join()
@@ -70,5 +91,17 @@ pub fn recognize(image: &Path, cancelled: &AtomicBool) -> Result<Vec<TextBox>> {
             "OCR returned invalid coordinates"
         );
     }
-    Ok(boxes)
+    Ok(Recognition::Text(boxes))
+}
+
+fn stop(child: &mut dyn ChildWrapper) -> Result<()> {
+    if let Err(error) = child.kill() {
+        if child.try_wait()?.is_none() {
+            return Err(error).context("Could not stop the OCR process tree");
+        }
+    }
+    child
+        .wait()
+        .context("Could not reap the OCR process tree")?;
+    Ok(())
 }
