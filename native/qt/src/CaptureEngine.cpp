@@ -181,8 +181,9 @@ void CaptureEngine::select(const QRectF &logicalRect) {
       clipped.height() * m_devicePixelRatio < 1 || clipped == m_selection)
     return;
   m_selection = clipped;
-  m_selectedText.clear();
   const bool textChanged = rebuildTextBoxes();
+  if (textChanged)
+    m_selectedText.clear();
   emit selectionChanged();
   if (textChanged)
     emit ocrChanged();
