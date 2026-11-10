@@ -13,6 +13,9 @@
 #include <QLineF>
 #include <QStandardPaths>
 #include <QTextBoundaryFinder>
+#include <QKeyEvent>
+#include <QKeySequence>
+#include <QTimer>
 #include <cmath>
 #include <iostream>
 
@@ -84,6 +87,50 @@ void CaptureEngine::cancel() {
   QGuiApplication::exit(2);
 }
 
+bool CaptureEngine::eventFilter(QObject *object, QEvent *event) {
+  if (event->type() != QEvent::ShortcutOverride && event->type() != QEvent::KeyPress)
+    return QObject::eventFilter(object, event);
+  auto *key = static_cast<QKeyEvent *>(event);
+  const auto modifiers = key->modifiers() & ~Qt::KeypadModifier;
+  const bool dismiss = key->key() == Qt::Key_Escape ||
+      (key->key() == Qt::Key_Q && modifiers == Qt::NoModifier);
+  const bool copy = key->matches(QKeySequence::Copy);
+  const bool copyCrop = key->key() == Qt::Key_C &&
+      (modifiers == (Qt::ControlModifier | Qt::ShiftModifier) ||
+       modifiers == (Qt::MetaModifier | Qt::ShiftModifier));
+  if (!dismiss && !copy && !copyCrop)
+    return QObject::eventFilter(object, event);
+  event->accept();
+  if (event->type() == QEvent::ShortcutOverride)
+    return true;
+  if (dismiss)
+    cancel();
+  else if (copyCrop)
+    copyText();
+  else if (m_ocrVisible && hasSelection() && !m_selectedText.isEmpty())
+    QGuiApplication::clipboard()->setText(m_selectedText);
+  return true;
+}
+
+void CaptureEngine::beginSelection() {
+  if (m_captureStarted)
+    return;
+  m_captureStarted = true;
+  emit selectionStarted();
+  if (m_autoOcr)
+    QTimer::singleShot(0, this, [this]() { recognize(); });
+}
+
+void CaptureEngine::cancelOcr() {
+  if (!m_ocrPending || m_ocrCancelling)
+    return;
+  m_ocrCancelling = true;
+  m_status = "Stopping OCR...";
+  emit ocrChanged();
+  const QJsonObject request{{"id", m_requestId}};
+  std::cout << "OCR_CANCEL:" << QJsonDocument(request).toJson(QJsonDocument::Compact).toStdString() << std::endl;
+}
+
 void CaptureEngine::finishSquiggleCapture(const QVariantList &points) {
   if (points.isEmpty()) {
     fail();
@@ -133,14 +180,12 @@ void CaptureEngine::select(const QRectF &logicalRect) {
   if (clipped.width() * m_devicePixelRatio < 1 ||
       clipped.height() * m_devicePixelRatio < 1 || clipped == m_selection)
     return;
-  const bool firstSelection = !hasSelection();
   m_selection = clipped;
+  m_selectedText.clear();
   const bool textChanged = rebuildTextBoxes();
   emit selectionChanged();
   if (textChanged)
     emit ocrChanged();
-  if (firstSelection && m_autoOcr)
-    recognize();
 }
 
 void CaptureEngine::setSelection(const QRectF &logicalRect) {
@@ -156,11 +201,12 @@ void CaptureEngine::toggleOcr() {
     return;
   }
   m_ocrVisible = !m_ocrVisible;
+  m_selectedText.clear();
   emit ocrChanged();
 }
 
 void CaptureEngine::recognize() {
-  if (!hasSelection() || m_ocrPending || m_ocrReady) return;
+  if (!m_captureStarted || m_ocrPending || m_ocrReady) return;
   m_ocrFile = std::make_unique<QTemporaryFile>(QDir::temp().filePath("squigit-ocr-XXXXXX.png"));
   QImage image = m_backgroundImage.convertToFormat(QImage::Format_RGB888);
   image.setDevicePixelRatio(1.0);
@@ -182,8 +228,17 @@ void CaptureEngine::recognize() {
 void CaptureEngine::acceptOcrResponse(const QByteArray &line) {
   const QJsonObject response = QJsonDocument::fromJson(line).object();
   if (!m_ocrPending || response["id"].toString() != m_requestId) return;
+  if (m_ocrCancelling && !response.contains("cancelled"))
+    return;
   m_ocrPending = false;
+  m_ocrCancelling = false;
   m_ocrFile.reset();
+  if (response["cancelled"].toBool()) {
+    m_requestId.clear();
+    m_status = "OCR cancelled. Click OCR to scan.";
+    emit ocrChanged();
+    return;
+  }
   const QString error = response["error"].toString();
   if (!error.isEmpty()) {
     m_status = error + ". Click OCR to retry.";
@@ -263,7 +318,7 @@ bool CaptureEngine::rebuildTextBoxes() {
 }
 
 void CaptureEngine::copyText() {
-  if (!m_ocrVisible)
+  if (!m_ocrVisible || !hasSelection())
     return;
   QStringList lines;
   for (const auto &box : m_textBoxes) {

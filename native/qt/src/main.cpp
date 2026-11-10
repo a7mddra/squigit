@@ -273,6 +273,7 @@ int main(int argc, char *argv[]) {
 
   std::vector<CaptureEngine *> controllers;
   std::vector<QQuickWindow *> windows;
+  CaptureEngine *activeController = nullptr;
   std::atomic<bool> firstFrameLogged{false};
 
   for (const auto &frame : frames) {
@@ -300,6 +301,26 @@ int main(int argc, char *argv[]) {
     controller->setAutoOcr(autoOcrRequested);
     controller->setBackgroundImage(frame.image, frame.devicePixelRatio);
     controllers.push_back(controller);
+    QObject::connect(controller, &CaptureEngine::selectionStarted, &app, [&, controller]() {
+      if (activeController)
+        app.removeEventFilter(activeController);
+      activeController = controller;
+      app.installEventFilter(controller);
+      QQuickWindow *selectedWindow = nullptr;
+      for (size_t i = 0; i < controllers.size(); ++i) {
+        if (controllers[i] == controller) {
+          selectedWindow = windows[i];
+        } else {
+          windows[i]->setKeyboardGrabEnabled(false);
+          windows[i]->hide();
+        }
+      }
+      if (selectedWindow) {
+        selectedWindow->raise();
+        selectedWindow->requestActivate();
+        selectedWindow->setKeyboardGrabEnabled(true);
+      }
+    });
     QObject::connect(controller, &CaptureEngine::selectionChanged, &app, [&, controller]() {
       if (!controller->hasSelection()) return;
       for (size_t i = 0; i < controllers.size(); ++i) {
@@ -339,6 +360,8 @@ int main(int argc, char *argv[]) {
         });
     window->showFullScreen();
     QTimer::singleShot(0, window, [window]() {
+      if (!window->isVisible())
+        return;
       window->raise();
       window->requestActivate();
       window->setKeyboardGrabEnabled(true);
@@ -346,6 +369,9 @@ int main(int argc, char *argv[]) {
   }
 
   logTimingStage("windows_shown", timingStart);
+
+  activeController = controllers.front();
+  app.installEventFilter(activeController);
 
   std::thread([&app, controllers]() {
     std::string line;

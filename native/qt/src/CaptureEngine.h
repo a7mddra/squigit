@@ -20,6 +20,7 @@ class CaptureEngine : public QObject {
   Q_PROPERTY(QRectF selection READ selection NOTIFY selectionChanged)
   Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
   Q_PROPERTY(bool ocrPending READ ocrPending NOTIFY ocrChanged)
+  Q_PROPERTY(bool ocrCancelling READ ocrCancelling NOTIFY ocrChanged)
   Q_PROPERTY(bool ocrVisible READ ocrVisible NOTIFY ocrChanged)
   Q_PROPERTY(QVariantList textBoxes READ textBoxes NOTIFY ocrChanged)
   Q_PROPERTY(QString status READ status NOTIFY ocrChanged)
@@ -37,6 +38,7 @@ public:
   QRectF selection() const { return m_selection; }
   bool hasSelection() const { return !m_selection.isEmpty(); }
   bool ocrPending() const { return m_ocrPending; }
+  bool ocrCancelling() const { return m_ocrCancelling; }
   bool ocrVisible() const { return m_ocrVisible; }
   QVariantList textBoxes() const { return m_textBoxes; }
   QString status() const { return m_ocrReady && !m_ocrVisible ? QString() : m_status; }
@@ -45,6 +47,9 @@ public:
 
   Q_INVOKABLE QString ensureBackgroundFileFallback();
   Q_INVOKABLE void cancel();
+  Q_INVOKABLE void beginSelection();
+  Q_INVOKABLE void cancelOcr();
+  Q_INVOKABLE void setSelectedText(const QString &text) { m_selectedText = text; }
   Q_INVOKABLE void finishSquiggleCapture(const QVariantList &points);
   Q_INVOKABLE void finishTraditionalCapture(QPointF start, QPointF end);
   Q_INVOKABLE void save();
@@ -53,11 +58,15 @@ public:
   Q_INVOKABLE void copyText();
 
 signals:
+  void selectionStarted();
   void backgroundSourceChanged();
   void captureModeChanged();
   void displayIndexChanged();
   void selectionChanged();
   void ocrChanged();
+
+protected:
+  bool eventFilter(QObject *object, QEvent *event) override;
 
 private:
   struct Character {
@@ -86,6 +95,8 @@ private:
   QString m_captureMode = "squiggle";
   int m_displayIndex = 0;
   bool m_ocrPending = false;
+  bool m_ocrCancelling = false;
+  bool m_captureStarted = false;
   bool m_autoOcr = false;
   bool m_ocrReady = false;
   bool m_ocrVisible = false;
@@ -93,5 +104,6 @@ private:
   QVariantList m_textBoxes;
   QString m_status;
   QString m_requestId;
+  QString m_selectedText;
   int m_requestSequence = 0;
 };
