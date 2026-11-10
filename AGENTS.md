@@ -50,6 +50,16 @@ Refactors replace old formats; do not introduce legacy compatibility paths.
 
 Project tasks are orchestrated using `cargo xtask`:
 
+Use Rust's debug profile and Qt Debug for feature iteration. Release builds and
+runtime deployment are reserved for an explicit packaging request. For Qt-only
+changes, rebuild only Qt and refresh its executable in the existing package;
+do not rebuild Rust or redeploy unchanged Qt libraries.
+
+```bash
+cmake -S native/qt -B native/qt/build -DCMAKE_BUILD_TYPE=Debug
+cmake --build native/qt/build --config Debug --parallel 2
+```
+
 ```bash
 # Full pipeline: CMake build -> runtime deploy -> cargo release build -> package
 cargo xtask build
@@ -129,10 +139,14 @@ open and does not change the Auto OCR preference. Unix process groups and
 Windows Job Objects contain each OCR job. Closing the overlay stops its jobs.
 Keep this contract in sync across both Rust crates and Qt.
 
-The first selection press transfers activation and the keyboard grab to the
-chosen display and hides the other overlays. Only that display's controller
-handles application-level Escape and copy shortcuts, including when an OCR
-text field has focus.
+The first selection press chooses the sole owner of application shortcuts and
+starts Auto OCR silently. OCR controls and status stay hidden until selection
+finishes. Do not change native activation, keyboard grabs, or window visibility
+inside the drawing press. After release, hide the other overlays and transfer
+activation and the keyboard grab to the chosen display once. Crop changes do
+not repeat that transfer. Drawing canvases must stop on a cancelled press and
+must not draw on hover. Escape and copy-all use application shortcuts enabled
+only for the chosen overlay; text fields own normal copy handling.
 
 Other capture contracts:
 
