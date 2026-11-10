@@ -1,5 +1,5 @@
 [workspace]
-members = ["squigit", "crates/squigit-qt", "xtask"]
+members = ["squigit", "crates/squigit-qt", "crates/squigit-ocr", "xtask"]
 default-members = ["squigit"]
 resolver = "2"
 

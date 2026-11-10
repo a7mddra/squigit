@@ -1,0 +1,19 @@
+from PyInstaller.utils.hooks import collect_all, copy_metadata
+
+packages = ("paddle", "paddlex", "paddleocr")
+datas, binaries, hiddenimports = [], [], []
+for package in packages:
+    data, libraries, modules = collect_all(package)
+    datas.extend(data)
+    binaries.extend(libraries)
+    hiddenimports.extend(modules)
+for distribution in ("paddlepaddle", "paddlex", "paddleocr", "pyclipper", "python-bidi", "shapely", "imagesize"):
+    datas.extend(copy_metadata(distribution))
+datas.append(("models", "models"))
+
+a = Analysis(["src/main.py"], pathex=[], binaries=binaries, datas=datas,
+    hiddenimports=hiddenimports, excludes=["torch", "tensorflow", "matplotlib", "IPython", "pytest"],
+    noarchive=False)
+pyz = PYZ(a.pure)
+exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="squigit-ocr", console=True, upx=False)
+coll = COLLECT(exe, a.binaries, a.datas, name="squigit-ocr", upx=False)

@@ -1,0 +1,4 @@
+paddlepaddle==3.3.0
+paddleocr==3.4.0
+paddlex[ocr]==3.4.2
+pyinstaller==6.19.0
