@@ -33,20 +33,6 @@ Item {
     readonly property int dragFrameIntervalMs: 16
     readonly property real minDragDistance: 0.5
 
-    property real glowIntensity: 0.0
-    readonly property real targetGlowIntensity: (isDrawing || hasSelection) ? 0.55 : 0.0
-
-    Behavior on glowIntensity {
-        NumberAnimation {
-            duration: 800
-            easing.type: Easing.InOutCubic
-        }
-    }
-
-    onTargetGlowIntensityChanged: {
-        glowIntensity = targetGlowIntensity
-    }
-
     function queueRepaint() {
         root.repaintPending = true
         if (!paintTimer.running) {
@@ -106,9 +92,6 @@ Item {
 
             dimCanvas.requestPaint()
             selectionBorderCanvas.requestPaint()
-            if (glowWrapper.visible && glowWrapper.layer.enabled) {
-                glowMask.requestPaint()
-            }
         }
     }
 
@@ -174,6 +157,19 @@ Item {
         ctx.closePath()
     }
 
+    Glow {
+        anchors.fill: selectionBorderCanvas
+        source: selectionBorderCanvas
+        visible: selectionBorderCanvas.visible
+        radius: 8
+        samples: 17
+        color: Qt.rgba(1, 1, 1, 0.6)
+        opacity: 0.35
+        spread: 0
+        transparentBorder: false
+        cached: false
+    }
+
     Canvas {
         id: selectionBorderCanvas
         anchors.fill: parent
@@ -209,96 +205,6 @@ Item {
         }
     }
 
-    Canvas {
-        id: glowMask
-        anchors.fill: parent
-        renderStrategy: Canvas.Threaded
-        visible: false
-
-        onPaint: {
-            var ctx = getContext("2d")
-            ctx.reset()
-
-            ctx.fillStyle = "black"
-            ctx.fillRect(0, 0, width, height)
-
-            if ((root.isDrawing || root.hasSelection) && root.selW > 0 && root.selH > 0) {
-                ctx.globalCompositeOperation = "destination-out"
-                ctx.fillStyle = "white"
-                root.drawSelectionPath(ctx, root.selX, root.selY, root.selW, root.selH)
-                ctx.fill()
-            }
-        }
-    }
-
-    Item {
-        id: glowWrapper
-        anchors.fill: parent
-        visible: selectionBorderCanvas.visible
-        opacity: root.isDrawing ? 0.35 : root.glowIntensity
-
-        Behavior on opacity {
-            NumberAnimation {
-                duration: 800
-                easing.type: Easing.InOutCubic
-            }
-        }
-
-        Glow {
-            anchors.fill: parent
-            source: selectionBorderCanvas
-            radius: root.isDrawing ? 8 : 24 * root.glowIntensity
-            samples: root.isDrawing ? 8 : 24
-            color: Qt.rgba(1, 1, 1, 0.6)
-            spread: root.isDrawing ? 0.08 : 0.0
-            transparentBorder: true
-            cached: !root.isDrawing
-
-            Behavior on radius {
-                NumberAnimation {
-                    duration: 800
-                    easing.type: Easing.InOutCubic
-                }
-            }
-        }
-
-        Glow {
-            anchors.fill: parent
-            source: selectionBorderCanvas
-            visible: !root.isDrawing
-            radius: 10 * root.glowIntensity
-            samples: 16
-            color: Qt.rgba(1, 1, 1, 0.8)
-            spread: 0.15
-            transparentBorder: true
-            cached: true
-
-            Behavior on radius {
-                NumberAnimation {
-                    duration: 800
-                    easing.type: Easing.InOutCubic
-                }
-            }
-        }
-
-        Glow {
-            anchors.fill: parent
-            source: selectionBorderCanvas
-            visible: !root.isDrawing
-            radius: 4
-            samples: 8
-            color: Qt.rgba(1, 1, 1, 0.9)
-            spread: 0.3
-            transparentBorder: true
-            cached: true
-        }
-
-        layer.enabled: glowWrapper.visible && !root.isDrawing
-        layer.effect: OpacityMask {
-            maskSource: glowMask
-        }
-    }
-
     MouseArea {
         id: mouseArea
         anchors.fill: parent
@@ -314,6 +220,7 @@ Item {
             root.isDrawing = true
             root.hasSelection = false
             root.queueRepaint()
+            root.controller.beginSelection()
         }
 
         onPositionChanged: function(mouse) {
