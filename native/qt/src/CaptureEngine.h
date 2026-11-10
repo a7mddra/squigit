@@ -2,6 +2,7 @@
 
 #include <QImage>
 #include <QObject>
+#include <QPolygonF>
 #include <QRectF>
 #include <QTemporaryFile>
 #include <QUrl>
@@ -19,6 +20,7 @@ class CaptureEngine : public QObject {
   Q_PROPERTY(QRectF selection READ selection NOTIFY selectionChanged)
   Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
   Q_PROPERTY(bool ocrPending READ ocrPending NOTIFY ocrChanged)
+  Q_PROPERTY(bool ocrVisible READ ocrVisible NOTIFY ocrChanged)
   Q_PROPERTY(QVariantList textBoxes READ textBoxes NOTIFY ocrChanged)
   Q_PROPERTY(QString status READ status NOTIFY ocrChanged)
   Q_PROPERTY(qreal pixelRatio READ pixelRatio CONSTANT)
@@ -35,8 +37,9 @@ public:
   QRectF selection() const { return m_selection; }
   bool hasSelection() const { return !m_selection.isEmpty(); }
   bool ocrPending() const { return m_ocrPending; }
+  bool ocrVisible() const { return m_ocrVisible; }
   QVariantList textBoxes() const { return m_textBoxes; }
-  QString status() const { return m_status; }
+  QString status() const { return m_ocrReady && !m_ocrVisible ? QString() : m_status; }
   qreal pixelRatio() const { return m_devicePixelRatio; }
   void acceptOcrResponse(const QByteArray &line);
 
@@ -45,7 +48,8 @@ public:
   Q_INVOKABLE void finishSquiggleCapture(const QVariantList &points);
   Q_INVOKABLE void finishTraditionalCapture(QPointF start, QPointF end);
   Q_INVOKABLE void save();
-  Q_INVOKABLE void recognize();
+  Q_INVOKABLE void toggleOcr();
+  Q_INVOKABLE void setSelection(const QRectF &logicalRect);
   Q_INVOKABLE void copyText();
 
 signals:
@@ -56,11 +60,24 @@ signals:
   void ocrChanged();
 
 private:
+  struct Character {
+    int begin;
+    int end;
+    qreal left;
+    qreal right;
+    QPointF center;
+  };
+  struct TextRegion {
+    QString text;
+    QPolygonF box;
+    QList<Character> characters;
+  };
   void select(const QRectF &logicalRect);
+  void recognize();
+  void rebuildTextBoxes();
   QString saveImage(const QImage &rgb) const;
   void fail();
   QImage m_backgroundImage;
-  QImage m_selectedImage;
   std::unique_ptr<QTemporaryFile> m_backgroundFile;
   std::unique_ptr<QTemporaryFile> m_ocrFile;
   QUrl m_backgroundSource;
@@ -70,6 +87,9 @@ private:
   int m_displayIndex = 0;
   bool m_ocrPending = false;
   bool m_autoOcr = false;
+  bool m_ocrReady = false;
+  bool m_ocrVisible = false;
+  QList<TextRegion> m_regions;
   QVariantList m_textBoxes;
   QString m_status;
   QString m_requestId;

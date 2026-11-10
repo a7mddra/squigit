@@ -9,7 +9,10 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QFontMetricsF>
+#include <QLineF>
 #include <QStandardPaths>
+#include <QTextBoundaryFinder>
 #include <cmath>
 #include <iostream>
 
@@ -124,33 +127,52 @@ void CaptureEngine::finishTraditionalCapture(QPointF start, QPointF end) {
 }
 
 void CaptureEngine::select(const QRectF &logicalRect) {
-  const QRect pixels(qFloor(logicalRect.x() * m_devicePixelRatio),
-                     qFloor(logicalRect.y() * m_devicePixelRatio),
-                     qCeil(logicalRect.width() * m_devicePixelRatio),
-                     qCeil(logicalRect.height() * m_devicePixelRatio));
-  const QRect clipped = pixels.intersected(m_backgroundImage.rect());
-  if (clipped.isEmpty()) return;
-  m_selectedImage = m_backgroundImage.copy(clipped).convertToFormat(QImage::Format_RGB888);
-  m_selectedImage.setDevicePixelRatio(1.0);
-  m_selection = QRectF(clipped.x() / m_devicePixelRatio,
-                       clipped.y() / m_devicePixelRatio,
-                       clipped.width() / m_devicePixelRatio,
-                       clipped.height() / m_devicePixelRatio);
+  const QRectF bounds(0, 0, m_backgroundImage.width() / m_devicePixelRatio,
+                      m_backgroundImage.height() / m_devicePixelRatio);
+  const QRectF clipped = logicalRect.normalized().intersected(bounds);
+  if (clipped.width() * m_devicePixelRatio < 1 ||
+      clipped.height() * m_devicePixelRatio < 1 || clipped == m_selection)
+    return;
+  const bool firstSelection = !hasSelection();
+  m_selection = clipped;
+  rebuildTextBoxes();
   emit selectionChanged();
+  emit ocrChanged();
+  if (firstSelection && m_autoOcr)
+    recognize();
+}
+
+void CaptureEngine::setSelection(const QRectF &logicalRect) {
+  if (hasSelection())
+    select(logicalRect);
+}
+
+void CaptureEngine::toggleOcr() {
+  if (!hasSelection() || m_ocrPending)
+    return;
+  if (!m_ocrReady) {
+    recognize();
+    return;
+  }
+  m_ocrVisible = !m_ocrVisible;
+  emit ocrChanged();
 }
 
 void CaptureEngine::recognize() {
-  if (!hasSelection() || m_ocrPending) return;
+  if (!hasSelection() || m_ocrPending || m_ocrReady) return;
   m_ocrFile = std::make_unique<QTemporaryFile>(QDir::temp().filePath("squigit-ocr-XXXXXX.png"));
-  if (!m_ocrFile->open() || !m_selectedImage.save(m_ocrFile.get(), "PNG")) {
-    m_status = "Could not prepare the selected image";
+  QImage image = m_backgroundImage.convertToFormat(QImage::Format_RGB888);
+  image.setDevicePixelRatio(1.0);
+  if (!m_ocrFile->open() || !image.save(m_ocrFile.get(), "PNG")) {
+    m_ocrFile.reset();
+    m_status = "Could not prepare the display image. Click OCR to retry.";
     emit ocrChanged();
     return;
   }
   m_ocrFile->close();
   m_requestId = QString("%1-%2").arg(m_displayIndex).arg(++m_requestSequence);
   m_ocrPending = true;
-  m_status = "Recognizing text...";
+  m_status = "Recognizing display text...";
   emit ocrChanged();
   const QJsonObject request{{"id", m_requestId}, {"image", m_ocrFile->fileName()}};
   std::cout << "OCR_REQUEST:" << QJsonDocument(request).toJson(QJsonDocument::Compact).toStdString() << std::endl;
@@ -163,17 +185,87 @@ void CaptureEngine::acceptOcrResponse(const QByteArray &line) {
   m_ocrFile.reset();
   const QString error = response["error"].toString();
   if (!error.isEmpty()) {
-    m_status = error;
+    m_status = error + ". Click OCR to retry.";
   } else {
-    m_textBoxes = response["boxes"].toArray().toVariantList();
-    m_status = m_textBoxes.isEmpty() ? "No text found" : "Drag to select text. Ctrl+C copies the selection; Ctrl+Shift+C copies all text.";
+    m_regions.clear();
+    for (const auto &entry : response["boxes"].toArray()) {
+      const auto object = entry.toObject();
+      TextRegion region;
+      region.text = object["text"].toString();
+      const auto points = object["box"].toArray();
+      if (region.text.isEmpty() || points.size() != 4)
+        continue;
+      for (const auto &point : points) {
+        const auto coordinates = point.toArray();
+        region.box.append(QPointF(coordinates[0].toDouble(), coordinates[1].toDouble()));
+      }
+      QFont font = QGuiApplication::font();
+      font.setPixelSize(qMax(1, qRound(QLineF(region.box[0], region.box[3]).length() * 0.85)));
+      const QFontMetricsF metrics(font);
+      const qreal totalWidth = metrics.horizontalAdvance(region.text);
+      QTextBoundaryFinder finder(QTextBoundaryFinder::Grapheme, region.text);
+      int begin = 0;
+      qreal left = 0;
+      for (int end = finder.toNextBoundary(); end != -1; end = finder.toNextBoundary()) {
+        const qreal right = end == region.text.size() ? 1.0 :
+            qBound(left, totalWidth > 0 ? metrics.horizontalAdvance(region.text.left(end)) / totalWidth :
+                                      qreal(end) / region.text.size(), 1.0);
+        const qreal middle = (left + right) / 2;
+        const QPointF top = region.box[0] + (region.box[1] - region.box[0]) * middle;
+        const QPointF bottom = region.box[3] + (region.box[2] - region.box[3]) * middle;
+        region.characters.append({begin, end, left, right, (top + bottom) / (2 * m_devicePixelRatio)});
+        begin = end;
+        left = right;
+      }
+      m_regions.append(region);
+    }
+    m_ocrReady = true;
+    m_ocrVisible = true;
+    rebuildTextBoxes();
+    m_status = m_textBoxes.isEmpty() ? "No text found" :
+        "Drag to select blue text. Ctrl+C copies the selection; Ctrl+Shift+C copies text inside the crop.";
   }
   emit ocrChanged();
 }
 
+void CaptureEngine::rebuildTextBoxes() {
+  m_textBoxes.clear();
+  for (const auto &region : m_regions) {
+    int start = 0;
+    while (start < region.characters.size()) {
+      const bool inside = m_selection.contains(region.characters[start].center);
+      int end = start + 1;
+      while (end < region.characters.size() &&
+             m_selection.contains(region.characters[end].center) == inside)
+        ++end;
+      const auto &first = region.characters[start];
+      const auto &last = region.characters[end - 1];
+      const auto top = region.box[1] - region.box[0];
+      const auto bottom = region.box[2] - region.box[3];
+      const QPolygonF box{region.box[0] + top * first.left,
+                          region.box[0] + top * last.right,
+                          region.box[3] + bottom * last.right,
+                          region.box[3] + bottom * first.left};
+      QVariantList points;
+      for (const auto &point : box)
+        points.append(QVariant(QVariantList{point.x(), point.y()}));
+      m_textBoxes.append(QVariantMap{
+          {"text", region.text.mid(first.begin, last.end - first.begin)},
+          {"box", points}, {"inside", inside}});
+      start = end;
+    }
+  }
+}
+
 void CaptureEngine::copyText() {
+  if (!m_ocrVisible)
+    return;
   QStringList lines;
-  for (const auto &box : m_textBoxes) lines.append(box.toMap()["text"].toString());
+  for (const auto &box : m_textBoxes) {
+    const auto run = box.toMap();
+    if (run["inside"].toBool())
+      lines.append(run["text"].toString());
+  }
   QGuiApplication::clipboard()->setText(lines.join("\n"));
 }
 
@@ -200,7 +292,15 @@ QString CaptureEngine::saveImage(const QImage &rgb) const {
 
 void CaptureEngine::save() {
   if (!hasSelection()) return;
-  const QString savedPath = saveImage(m_selectedImage);
+  const int left = qFloor(m_selection.left() * m_devicePixelRatio);
+  const int top = qFloor(m_selection.top() * m_devicePixelRatio);
+  const int right = qCeil(m_selection.right() * m_devicePixelRatio);
+  const int bottom = qCeil(m_selection.bottom() * m_devicePixelRatio);
+  QImage image = m_backgroundImage.copy(QRect(left, top, right - left, bottom - top)
+                                           .intersected(m_backgroundImage.rect()))
+                     .convertToFormat(QImage::Format_RGB888);
+  image.setDevicePixelRatio(1.0);
+  const QString savedPath = saveImage(image);
   if (savedPath.isEmpty()) {
     std::cerr << "CAPTURE_NATIVE_ERROR: could not write the captured image"
               << std::endl;
