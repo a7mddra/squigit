@@ -1,4 +1,5 @@
 use crate::paths::RuntimePaths;
+use crate::qr;
 #[cfg(target_os = "linux")]
 use crate::sandbox::audio_guard::AudioGuard;
 use crate::sandbox::display_hotplug::DisplayWatcher;
@@ -29,29 +30,29 @@ pub fn cancel_active() {
     }
 }
 
-struct OcrJob {
+struct Job {
     cancelled: Arc<AtomicBool>,
     worker: JoinHandle<Result<(), String>>,
 }
 
 #[derive(Default)]
-struct OcrJobs {
-    workers: HashMap<String, OcrJob>,
+struct Jobs {
+    workers: HashMap<String, Job>,
 }
 
-impl OcrJobs {
+impl Jobs {
     fn cancel(&mut self, id: &str) -> Result<(), String> {
         if let Some(job) = self.workers.remove(id) {
             job.cancelled.store(true, Ordering::Release);
             job.worker
                 .join()
-                .map_err(|_| "OCR worker stopped unexpectedly".to_owned())??;
+                .map_err(|_| "Capture worker stopped unexpectedly".to_owned())??;
         }
         Ok(())
     }
 }
 
-impl Drop for OcrJobs {
+impl Drop for Jobs {
     fn drop(&mut self) {
         for job in self.workers.values() {
             job.cancelled.store(true, Ordering::Release);
@@ -122,12 +123,18 @@ impl Instance {
             let _ = child.kill();
         }
         watcher.stop();
-        let _ = child.wait();
+        let status = child.wait();
         ACTIVE_PID.store(0, Ordering::Release);
         #[cfg(target_os = "linux")]
         AudioGuard::unmute();
 
-        exit_code
+        let (outcome, qr_url) = exit_code?;
+        status.context("Could not wait for the Qt capture overlay to close")?;
+        if let Some(url) = qr_url {
+            opener::open_browser(url.as_str())
+                .context("Could not open the QR URL in the default browser")?;
+        }
+        Ok(outcome)
     }
 
     fn spawn_process(&self) -> Result<Child> {
@@ -156,19 +163,20 @@ impl Instance {
             .context("Failed to spawn the squigit Qt runtime")
     }
 
-    fn handle_ipc(&self, child: &mut Child) -> Result<CaptureOutcome> {
+    fn handle_ipc(&self, child: &mut Child) -> Result<(CaptureOutcome, Option<url::Url>)> {
         let stdout = child
             .stdout
             .take()
             .context("The squigit Qt runtime did not expose stdout")?;
         let stdin = Arc::new(Mutex::new(child.stdin.take().context("Missing Qt stdin")?));
-        let mut jobs = OcrJobs::default();
+        let mut jobs = Jobs::default();
         let mut reader = BufReader::new(stdout);
         let mut line = String::new();
         let mut terminal_exit_code = None;
         let mut capture_authorized = false;
         let mut capture_permission = None;
         let mut capture_saved: Option<String> = None;
+        let mut qr_url = None;
 
         loop {
             line.clear();
@@ -245,11 +253,58 @@ impl Instance {
                         });
                         jobs.workers.insert(
                             job_id,
-                            OcrJob {
+                            Job {
                                 cancelled: cancel_job,
                                 worker,
                             },
                         );
+                    }
+                    if let Some(payload) = trimmed.strip_prefix("QR_REQUEST:") {
+                        let request: serde_json::Value =
+                            serde_json::from_str(payload).context("Invalid Qt QR request")?;
+                        let id = request["id"]
+                            .as_str()
+                            .context("Missing QR request id")?
+                            .to_owned();
+                        let image = std::path::PathBuf::from(
+                            request["image"].as_str().context("Missing QR image")?,
+                        );
+                        let input = Arc::clone(&stdin);
+                        let cancelled = Arc::new(AtomicBool::new(false));
+                        let cancel_job = Arc::clone(&cancelled);
+                        let job_id = id.clone();
+                        jobs.workers.retain(|_, job| !job.worker.is_finished());
+                        let worker = std::thread::spawn(move || {
+                            let response = match qr::scan(&image, &cancelled) {
+                                Ok(Some(url)) => serde_json::json!({"id": id, "url": url}),
+                                Ok(None) => return Ok(()),
+                                Err(error) => {
+                                    serde_json::json!({"id": id, "error": format!("{error:#}")})
+                                }
+                            };
+                            if !cancelled.load(Ordering::Acquire) {
+                                if let Ok(mut input) = input.lock() {
+                                    let _ = writeln!(input, "{response}");
+                                }
+                            }
+                            Ok(())
+                        });
+                        jobs.workers.insert(
+                            job_id,
+                            Job {
+                                cancelled: cancel_job,
+                                worker,
+                            },
+                        );
+                    }
+                    if let Some(payload) = trimmed.strip_prefix("QR_OPEN:") {
+                        let request: serde_json::Value =
+                            serde_json::from_str(payload).context("Invalid Qt QR URL")?;
+                        qr_url = Some(qr::parse_url(
+                            request["url"].as_str().context("Missing QR URL")?,
+                        )?);
+                        terminal_exit_code = Some(ExitCode::SUCCESS);
+                        break;
                     }
                     if let Some(payload) = trimmed.strip_prefix("OCR_CANCEL:") {
                         let request: serde_json::Value =
@@ -275,7 +330,7 @@ impl Instance {
             }
         }
 
-        if let Some(granted) = capture_permission {
+        let outcome = if let Some(granted) = capture_permission {
             println!(
                 "{}",
                 if granted {
@@ -284,16 +339,16 @@ impl Instance {
                     "CAPTURE_PERMISSION_DENIED"
                 }
             );
-            Ok(CaptureOutcome::exit(ExitCode::SUCCESS))
+            CaptureOutcome::exit(ExitCode::SUCCESS)
         } else if capture_authorized {
             println!("CAPTURE_AUTHORIZED");
-            Ok(CaptureOutcome::exit(ExitCode::SUCCESS))
+            CaptureOutcome::exit(ExitCode::SUCCESS)
         } else if let Some(path) = capture_saved {
             println!("{path}");
-            Ok(CaptureOutcome {
+            CaptureOutcome {
                 exit_code: ExitCode::SUCCESS,
                 saved_path: Some(path.into()),
-            })
+            }
         } else {
             if terminal_exit_code.is_none() {
                 eprintln!(
@@ -301,10 +356,9 @@ impl Instance {
 This usually indicates a native crash during startup or capture."
                 );
             }
-            Ok(CaptureOutcome::exit(
-                terminal_exit_code.unwrap_or(ExitCode::FAILURE),
-            ))
-        }
+            CaptureOutcome::exit(terminal_exit_code.unwrap_or(ExitCode::FAILURE))
+        };
+        Ok((outcome, qr_url))
     }
 
     fn kill_process(pid: u32) {

@@ -1,5 +1,6 @@
 mod instance;
 mod paths;
+mod qr;
 mod sandbox;
 
 use anyhow::{Context, Result};
