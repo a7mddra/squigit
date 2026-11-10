@@ -274,7 +274,6 @@ int main(int argc, char *argv[]) {
   std::vector<CaptureEngine *> controllers;
   std::vector<QQuickWindow *> windows;
   QQuickWindow *chosenWindow = nullptr;
-  QQuickWindow *keyboardWindow = nullptr;
   bool selectionFinished = false;
   std::atomic<bool> firstFrameLogged{false};
 
@@ -315,16 +314,17 @@ int main(int argc, char *argv[]) {
       if (!controller->hasSelection() || selectionFinished) return;
       selectionFinished = true;
       QTimer::singleShot(0, &app, [&]() {
-        if (keyboardWindow)
-          keyboardWindow->setKeyboardGrabEnabled(false);
+        chosenWindow->raise();
+        chosenWindow->requestActivate();
+        if (!chosenWindow->setKeyboardGrabEnabled(true)) {
+          std::cerr << "CAPTURE_NATIVE_ERROR: could not transfer the keyboard grab to the selected display; keeping the other overlays visible"
+                    << std::endl;
+          return;
+        }
         for (auto *window : windows) {
           if (window != chosenWindow)
             window->hide();
         }
-        keyboardWindow = chosenWindow;
-        keyboardWindow->raise();
-        keyboardWindow->requestActivate();
-        keyboardWindow->setKeyboardGrabEnabled(true);
       });
     });
 
@@ -367,10 +367,13 @@ int main(int argc, char *argv[]) {
   QTimer::singleShot(0, &app, [&]() {
     if (chosenWindow)
       return;
-    keyboardWindow = windows.front();
+    auto *keyboardWindow = windows.front();
     keyboardWindow->raise();
     keyboardWindow->requestActivate();
-    keyboardWindow->setKeyboardGrabEnabled(true);
+    if (!keyboardWindow->setKeyboardGrabEnabled(true)) {
+      std::cerr << "CAPTURE_NATIVE_ERROR: could not grab the keyboard for the capture overlay"
+                << std::endl;
+    }
   });
 
   std::thread([&app, controllers]() {
