@@ -7,16 +7,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 pub fn recognize(image: &Path, cancelled: &AtomicBool) -> Result<Vec<TextBox>> {
-    let root = std::env::current_exe()?
-        .parent()
-        .context("Missing application directory")?
-        .to_path_buf();
-    let binary = root.join("_internal/ocr").join(if cfg!(windows) {
+    let binary = if cfg!(windows) {
         "squigit-ocr.exe"
     } else {
         "squigit-ocr"
-    });
-    let mut command = Command::new(&binary);
+    };
+    let mut command = Command::new(binary);
     command
         .arg(image)
         .stdin(Stdio::null())
@@ -27,9 +23,9 @@ pub fn recognize(image: &Path, cancelled: &AtomicBool) -> Result<Vec<TextBox>> {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000);
     }
-    let mut child = command
-        .spawn()
-        .with_context(|| format!("Could not start {}", binary.display()))?;
+    let mut child = command.spawn().with_context(|| {
+        format!("Could not start installed {binary}; ensure the OCR LTS is on PATH")
+    })?;
     let mut stdout = child.stdout.take().context("Missing OCR stdout")?;
     let reader = std::thread::spawn(move || {
         let mut bytes = Vec::new();

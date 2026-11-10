@@ -30,9 +30,6 @@ fn run_inner(repo_root: &Path, native_only: bool) -> Result<()> {
         macos::sign(&native_dir)?;
     }
 
-    println!("\nBuilding OCR runtime...");
-    crate::ocr::build(repo_root)?;
-
     println!("\nBuilding Rust binary...");
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     run_command(
@@ -139,10 +136,6 @@ fn package(repo_root: &Path, native_dir: &Path) -> Result<()> {
         )
     })?;
 
-    copy_runtime(
-        &repo_root.join("native/ocr/dist/squigit-ocr"),
-        &destination.join("_internal/ocr"),
-    )?;
     fs::copy(
         repo_root.join("squigit/icons/icon.png"),
         destination.join("squigit.png"),

@@ -112,7 +112,8 @@ whenever a marker changes. The wrapper forwards its verdict to the user.
 
 OCR uses `OCR_REQUEST:{"id":"...","image":"<path>"}` from Qt and one
 newline-delimited JSON response on Qt stdin, with the same `id` and either
-`boxes` or `error`. Rust starts one bundled OCR process per request. The OCR
+`boxes` or `error`. Rust temporarily starts the installed `squigit-ocr` LTS
+from PATH for each request; normal builds skip the local OCR fork. The OCR
 CLI prints exactly one JSON array of `{text, confidence, box}` on success,
 or an `{error}` object on failure. Coordinates are physical pixels relative
 to the selection. Keep this contract in sync across both Rust crates and Qt.

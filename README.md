@@ -4,12 +4,12 @@ Squigit is a screenshot-first desktop proof of concept built with Rust, Rune, Qt
 
 - **Take screenshot** starts the Qt overlay. Draw a squiggle or select a rectangle; the selection stays open with **Save** and **OCR** actions.
 - **Save** writes a PNG to `Pictures/squigit` and closes the overlay.
-- **OCR** asks Rust to run the bundled intelligence sidecar for that selection. Qt receives JSON and places transparent, selectable text over the frozen screen. Drag within a text line and press Ctrl+C to copy it; Ctrl+Shift+C copies all recognized text. Escape cancels the overlay.
+- **OCR** asks Rust to run the installed `squigit-ocr` LTS from PATH for that selection. Qt receives JSON and places transparent, selectable text over the frozen screen. Drag within a text line and press Ctrl+C to copy it; Ctrl+Shift+C copies all recognized text. Escape cancels the overlay.
 - **Open savepath** opens `Pictures/squigit` in the OS file manager.
 - **Configuration** opens a framed Rune window inspired by `rune-settings`. Its controls only edit a temporary demo config at `<temp>/squigit-settings-demo-<pid>/config.toml`; they do not configure capture or OCR.
 - **About** opens a separate Rune dialog. **Quit** stops the resident application and its active capture.
 
-Only Rust stays resident. Qt and OCR run on demand. The proof of concept bundles English PP-OCRv5 mobile detection and recognition models; it has no chat, history, model manager, or persistent OCR worker.
+Only Rust stays resident. Qt and OCR run on demand. OCR temporarily uses the published LTS while the local Python fork's frozen SciPy dependency is repaired. Install the LTS so `squigit-ocr` is on PATH; normal builds skip the local OCR fork. There is no chat, history, model manager, or persistent OCR worker.
 
 ## Layout
 
@@ -26,18 +26,18 @@ The executable identities are `squigit`, `squigit-qt`, and `squigit-ocr`. Only `
 
 ## Build and run
 
-Install Rust stable, a C++17 toolchain, CMake, Qt 6 with Quick/QML and Qt5Compat, Python 3.10–3.12 with venv/pip, and the platform's Qt deployment tool (`linuxdeployqt`, `macdeployqt`, or `windeployqt`). Linux also needs fontconfig, Wayland, and xkbcommon development libraries for Rune. Set `Qt6_DIR` or `CMAKE_PREFIX_PATH` when Qt is outside the system prefix. `SQUIGIT_PYTHON` selects the Python executable used to create the OCR build environment.
+Install Rust stable, a C++17 toolchain, CMake, Qt 6 with Quick/QML and Qt5Compat, the `squigit-ocr` LTS, and the platform's Qt deployment tool (`linuxdeployqt`, `macdeployqt`, or `windeployqt`). Linux also needs fontconfig, Wayland, and xkbcommon development libraries for Rune. Set `Qt6_DIR` or `CMAKE_PREFIX_PATH` when Qt is outside the system prefix. Building the local OCR fork separately requires Python 3.10–3.12 with venv/pip; `SQUIGIT_PYTHON` selects that build interpreter.
 
 ```sh
-cargo xtask build          # Build and bundle all three executables
+cargo xtask build          # Build the application and bundle Qt; use installed OCR LTS
 cargo xtask run            # Start the tray application
 cargo xtask build --qt     # Build only native/qt/build
-cargo xtask build --ocr    # Build only native/ocr/dist/squigit-ocr
+cargo xtask build --ocr    # Build the local OCR fork separately (currently unused)
 cargo xtask doctor         # Check the Rust workspace and configure Qt
 cargo xtask fmt            # Format changed files
 ```
 
-The first OCR build installs pinned Paddle/PaddleX/PaddleOCR and PyInstaller versions into `native/ocr/.venv`, prepares two models, and freezes the CLI. Subsequent builds reuse these files. Model downloads happen during the build, so packaged OCR works offline without Python installed.
+The explicit `--ocr` build installs pinned Paddle/PaddleX/PaddleOCR and PyInstaller versions into `native/ocr/.venv`, prepares two models, and freezes the local CLI. Its output is currently excluded from the application package and is not used for OCR requests.
 
 ```text
 binaries/<host-triple>/
@@ -45,11 +45,10 @@ binaries/<host-triple>/
 ├── squigit.desktop        Linux desktop entry
 ├── squigit.png
 └── _internal/
-    ├── qt/                Qt deployment output, including squigit-qt
-    └── ocr/               PyInstaller output, including squigit-ocr
+    └── qt/                Qt deployment output, including squigit-qt
 ```
 
-Keep the entire directory together. The sidecars are resolved relative to the application executable, independently of PATH or the current working directory.
+Keep the entire directory together. Qt is resolved relative to the application executable. OCR temporarily resolves the installed `squigit-ocr` command through PATH, including its launcher and library environment.
 
 For direct capture and window development:
 
