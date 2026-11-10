@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 
 Item {
@@ -22,7 +24,7 @@ Item {
         interacting = true;
     }
 
-    function update(item, mouse) {
+    function dragTo(item, mouse) {
         if (!interacting)
             return;
         const point = item.mapToItem(root, mouse.x, mouse.y);
@@ -82,6 +84,7 @@ Item {
     }
 
     MouseArea {
+        id: moveMouse
         x: root.area.x
         y: root.area.y
         width: root.area.width
@@ -89,14 +92,14 @@ Item {
         preventStealing: true
         cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
         onPressed: function (mouse) {
-            root.begin(this, mouse, 0, 0, true);
+            root.begin(moveMouse, mouse, 0, 0, true);
         }
         onPositionChanged: function (mouse) {
             if (pressed)
-                root.update(this, mouse);
+                root.dragTo(moveMouse, mouse);
         }
         onReleased: function (mouse) {
-            root.update(this, mouse);
+            root.dragTo(moveMouse, mouse);
             root.interacting = false;
         }
         onCanceled: root.interacting = false
@@ -153,6 +156,7 @@ Item {
             }]
 
         delegate: Item {
+            id: handle
             required property var modelData
             x: root.area.x + root.area.width * (modelData.horizontal + 1) / 2 - width / 2
             y: root.area.y + root.area.height * (modelData.vertical + 1) / 2 - height / 2
@@ -169,18 +173,19 @@ Item {
             }
 
             MouseArea {
+                id: resizeMouse
                 anchors.fill: parent
                 preventStealing: true
-                cursorShape: modelData.cursor
+                cursorShape: handle.modelData.cursor
                 onPressed: function (mouse) {
-                    root.begin(this, mouse, modelData.horizontal, modelData.vertical, false);
+                    root.begin(resizeMouse, mouse, handle.modelData.horizontal, handle.modelData.vertical, false);
                 }
                 onPositionChanged: function (mouse) {
                     if (pressed)
-                        root.update(this, mouse);
+                        root.dragTo(resizeMouse, mouse);
                 }
                 onReleased: function (mouse) {
-                    root.update(this, mouse);
+                    root.dragTo(resizeMouse, mouse);
                     root.interacting = false;
                 }
                 onCanceled: root.interacting = false

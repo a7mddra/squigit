@@ -26,7 +26,7 @@ The executable identities are `squigit`, `squigit-qt`, and `squigit-ocr`. Only `
 
 ## Build and run
 
-Install Rust stable, a C++17 toolchain, CMake, Qt 6 with Quick/QML and Qt5Compat, the `squigit-ocr` LTS, and the platform's Qt deployment tool (`linuxdeployqt`, `macdeployqt`, or `windeployqt`). Linux also needs fontconfig, Wayland, and xkbcommon development libraries for Rune. Set `Qt6_DIR` or `CMAKE_PREFIX_PATH` when Qt is outside the system prefix. Building the local OCR fork separately requires Python 3.10–3.12 with venv/pip; `SQUIGIT_PYTHON` selects that build interpreter.
+Install Rust stable, a C++17 toolchain, CMake, Qt 6.4 or newer with Quick/QML and Qt5Compat, the `squigit-ocr` LTS, and the platform's Qt deployment tool (`linuxdeployqt`, `macdeployqt`, or `windeployqt`). The QML components use [bound component contexts](https://doc.qt.io/qt-6/qtqml-documents-structure.html#componentbehavior), available since Qt 6.4. Linux also needs fontconfig, Wayland, and xkbcommon development libraries for Rune. Set `Qt6_DIR` or `CMAKE_PREFIX_PATH` when Qt is outside the system prefix. Building the local OCR fork separately requires Python 3.10–3.12 with venv/pip; `SQUIGIT_PYTHON` selects that build interpreter.
 
 ```sh
 cargo xtask build          # Build the application and bundle Qt; use installed OCR LTS

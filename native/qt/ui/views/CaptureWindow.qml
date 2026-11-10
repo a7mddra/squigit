@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Window
 import "../components"
@@ -39,7 +41,6 @@ Window {
     Rectangle {
         id: dimOverlay
         anchors.fill: parent
-        opacity: 0
         visible: !root.controller.hasSelection && root.controller.captureMode !== "traditional"
 
         gradient: Gradient {
@@ -102,6 +103,7 @@ Window {
                 Repeater {
                     model: ["Save", "OCR"]
                     delegate: Rectangle {
+                        id: actionButton
                         required property string modelData
                         readonly property bool checked: modelData === "OCR" && root.controller.ocrVisible
                         width: 76
@@ -120,8 +122,8 @@ Window {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            enabled: modelData !== "OCR" || !root.controller.ocrPending
-                            onClicked: modelData === "Save" ? root.controller.save() : root.controller.toggleOcr()
+                            enabled: actionButton.modelData !== "OCR" || !root.controller.ocrPending
+                            onClicked: actionButton.modelData === "Save" ? root.controller.save() : root.controller.toggleOcr()
                         }
                     }
                 }

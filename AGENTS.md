@@ -139,7 +139,7 @@ Other capture contracts:
 
 ## 5. Qt Native Layer (`native/`)
 
-- C++17, CMake ≥ 3.16, Qt 6 modules: `Core`, `Gui`, `Quick`, `Qml`, and
+- C++17, CMake ≥ 3.16, Qt ≥ 6.4 modules: `Core`, `Gui`, `Quick`, `Qml`, and
   `DBus` on Linux. The QML canvases require `Qt5Compat.GraphicalEffects`.
 - `native/qt/backends/` holds the per-OS grabbers behind the `Grabber`
   interface; each platform module exposes `createUnixEngine` /
