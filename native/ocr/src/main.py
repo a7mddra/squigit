@@ -33,6 +33,7 @@ def recognize(image, models):
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="squigit-ocr")
     parser.add_argument("--version", action="version", version="squigit-ocr 0.1.0")
     parser.add_argument("image", type=Path)

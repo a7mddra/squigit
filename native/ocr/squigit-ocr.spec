@@ -1,3 +1,7 @@
+import os
+
+os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
+
 from PyInstaller.utils.hooks import collect_all, copy_metadata
 
 packages = ("paddle", "paddlex", "paddleocr")
