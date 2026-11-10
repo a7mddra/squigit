@@ -27,8 +27,9 @@ fn main() -> ExitCode {
 }
 
 fn config_path() -> Result<PathBuf> {
-    let directory =
-        std::env::temp_dir().join(format!("squigit-settings-demo-{}", std::process::id()));
+    let directory = dirs::config_dir()
+        .context("Could not find the configuration directory")?
+        .join("squigit");
     std::fs::create_dir_all(&directory)?;
     Ok(directory.join("config.toml"))
 }
@@ -43,7 +44,7 @@ fn run() -> Result<ExitCode> {
             return Ok(ExitCode::SUCCESS);
         }
         Some("--help" | "-h") => {
-            println!("Squigit\n\nUsage: squigit [OPTION]\n\nNo options: start in the system tray.\n  --squiggle          Open a freeform screenshot overlay\n  --traditional       Open a rectangular screenshot overlay\n  --output-dir <DIR>  Choose where captures are saved\n  --configuration     Open the dummy Rune settings window\n  --about             Open About Squigit\n  --authorize         Request screen capture permission\n  --preflight         Check screen capture permission\n  --version           Print the application version");
+            println!("Squigit\n\nUsage: squigit [OPTION]\n\nNo options: start in the system tray.\n  --squiggle          Open a freeform screenshot overlay\n  --traditional       Open a rectangular screenshot overlay\n  --output-dir <DIR>  Choose where captures are saved\n  --configuration     Open the Rune settings window\n  --about             Open About Squigit\n  --authorize         Request screen capture permission\n  --preflight         Check screen capture permission\n  --version           Print the application version");
             return Ok(ExitCode::SUCCESS);
         }
         Some("--configuration") => {
@@ -77,7 +78,8 @@ fn run() -> Result<ExitCode> {
     lock.try_lock_exclusive()
         .context("Squigit is already running")?;
 
-    let mut app = settings::app(config_path()?)
+    let config_path = config_path()?;
+    let mut app = settings::app(config_path.clone())
         .args(Vec::new())
         .windowless()
         .release_gpu_when_closed()
@@ -116,9 +118,14 @@ fn run() -> Result<ExitCode> {
                     return;
                 }
                 let active = Arc::clone(&capturing);
+                let path = config_path.clone();
                 let task = std::thread::spawn(move || {
                     std::thread::sleep(CAPTURE_DELAY);
-                    let outcome = squigit_qt::run(vec!["--squiggle".into()]);
+                    let mode = settings::capture_argument(&path).unwrap_or_else(|error| {
+                        eprintln!("[squigit] Could not read capture type: {error}");
+                        "--squiggle"
+                    });
+                    let outcome = squigit_qt::run(vec![mode.into()]);
                     active.store(false, Ordering::Release);
                     if let Some(path) = outcome.saved_path {
                         notifications::saved(path);

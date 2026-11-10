@@ -2,13 +2,21 @@ mod config;
 mod pages;
 pub(crate) mod ui;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rune::{AppSpec, Cx, El, Key, KeyEvent, Latest, TextEdit, Tx, Waker};
 
 static CONFIG_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+pub fn capture_argument(path: &Path) -> Result<&'static str, String> {
+    let toml = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
+    Ok(config::Config::from_toml_string(&toml)?
+        .general
+        .capture_mode
+        .argument())
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Page {

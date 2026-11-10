@@ -2,11 +2,11 @@
 
 Squigit is a screenshot-first desktop proof of concept built with Rust, Rune, Qt 6, and PaddleX. It starts in the system tray with no home page.
 
-- **Take screenshot** starts the Qt overlay. Draw a squiggle or select a rectangle; the selection stays open with **Save** and **OCR** actions.
+- **Take screenshot** waits 300 ms for the tray menu to close, then starts the Qt overlay using the configured default capture type. Draw a squiggle or select a rectangle; the selection stays open with **Save** and **OCR** actions.
 - **Save** writes a PNG to `Pictures/squigit` and closes the overlay. Tray captures then show a native **Image saved** notification with the filename, an image preview, and an **Open in folder** action. Clicking the notification also reveals the image.
 - **OCR** asks Rust to run the installed `squigit-ocr` LTS from PATH for that selection. Qt receives JSON and places transparent, selectable text over the frozen screen. Drag within a text line and press Ctrl+C to copy it; Ctrl+Shift+C copies all recognized text. Escape cancels the overlay.
 - **Open savepath** opens `Pictures/squigit` in the OS file manager.
-- **Configuration** opens a framed Rune window inspired by `rune-settings`. Its controls only edit a temporary demo config at `<temp>/squigit-settings-demo-<pid>/config.toml`; they do not configure capture or OCR.
+- **Configuration** opens a framed Rune window inspired by `rune-settings`. **General → Default capture type** chooses Squiggle or Traditional for the next tray capture and persists across restarts. The other controls remain demonstration options. Settings are saved to the OS config directory at `squigit/config.toml` (`~/.config/squigit/config.toml` on Linux by default). Explicit CLI capture flags override the tray default.
 - **About** opens a separate Rune dialog. **Quit** stops the resident application and its active capture.
 
 Only Rust stays resident. Qt and OCR run on demand. OCR temporarily uses the published LTS while the local Python fork's frozen SciPy dependency is repaired. Install the LTS so `squigit-ocr` is on PATH; normal builds skip the local OCR fork. There is no chat, history, model manager, or persistent OCR worker.

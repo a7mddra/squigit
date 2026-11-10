@@ -6,6 +6,7 @@ use rune_kit::{
     Select, Switch, TextArea, TextInput,
 };
 
+use super::config::CaptureMode;
 use super::ui;
 use crate::settings::{App, Page};
 
@@ -13,7 +14,7 @@ pub fn page(s: &App, k: &Kit, layer: &mut Vec<El>, hair: f32) -> El {
     let (title, desc, sections) = match s.page {
         Page::General => (
             "General",
-            "Who the app is for and how it starts.",
+            "Screenshot defaults and demonstration controls.",
             general(s, k, layer, hair),
         ),
         Page::Appearance => (
@@ -71,6 +72,28 @@ pub fn page(s: &App, k: &Kit, layer: &mut Vec<El>, hair: f32) -> El {
 
 fn general(s: &App, k: &Kit, layer: &mut Vec<El>, hair: f32) -> Vec<El> {
     vec![
+        ui::section(
+            k,
+            hair,
+            "capture",
+            "Screenshot",
+            vec![select_row(
+                s,
+                k,
+                layer,
+                "capture-mode",
+                "Default capture type",
+                Some("Used when taking a screenshot from the tray."),
+                &["Squiggle", "Traditional"],
+                s.cfg.general.capture_mode.label(),
+                |s: &mut App, value: &str| {
+                    s.cfg.general.capture_mode = match value {
+                        "Traditional" => CaptureMode::Traditional,
+                        _ => CaptureMode::Squiggle,
+                    };
+                },
+            )],
+        ),
         ui::section(
             k,
             hair,

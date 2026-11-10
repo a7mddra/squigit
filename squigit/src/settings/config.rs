@@ -1,5 +1,29 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptureMode {
+    #[default]
+    Squiggle,
+    Traditional,
+}
+
+impl CaptureMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Squiggle => "Squiggle",
+            Self::Traditional => "Traditional",
+        }
+    }
+
+    pub fn argument(self) -> &'static str {
+        match self {
+            Self::Squiggle => "--squiggle",
+            Self::Traditional => "--traditional",
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct Config {
@@ -23,6 +47,7 @@ impl Default for Config {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct General {
+    pub capture_mode: CaptureMode,
     pub nickname: String,
     pub launch_at_login: bool,
     pub check_updates: bool,
@@ -32,6 +57,7 @@ pub struct General {
 impl Default for General {
     fn default() -> Self {
         General {
+            capture_mode: CaptureMode::default(),
             nickname: "there".into(),
             launch_at_login: true,
             check_updates: true,
