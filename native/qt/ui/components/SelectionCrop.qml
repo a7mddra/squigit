@@ -15,6 +15,10 @@ Item {
     property int verticalEdge: 0
     property bool moving: false
 
+    function clearTextSelection() {
+        return ocrTextLayer.clearSelection();
+    }
+
     function begin(item, mouse, horizontal, vertical, move) {
         startArea = area;
         pressPoint = item.mapToItem(root, mouse.x, mouse.y);
@@ -106,6 +110,7 @@ Item {
     }
 
     OcrTextLayer {
+        id: ocrTextLayer
         controller: root.controller
         interacting: root.interacting
     }

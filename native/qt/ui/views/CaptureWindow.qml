@@ -93,6 +93,7 @@ Window {
         }
 
         SelectionCrop {
+            id: selectionCrop
             controller: root.controller
             visible: root.controller.hasSelection
         }
@@ -168,9 +169,13 @@ Window {
 
     Shortcut {
         sequence: "Escape"
+        autoRepeat: false
         context: Qt.ApplicationShortcut
         enabled: root.ownsInput && root.visible
-        onActivated: root.controller.cancel()
+        onActivated: {
+            if (!selectionCrop.clearTextSelection())
+                root.controller.cancel();
+        }
     }
 
     Shortcut {
