@@ -142,9 +142,11 @@ Keep this contract in sync across both Rust crates and Qt.
 The first selection press chooses the sole owner of application shortcuts and
 starts Auto OCR silently. OCR controls and status stay hidden until selection
 finishes. Do not change native activation, keyboard grabs, or window visibility
-inside the drawing press. After release, hide the other overlays and transfer
-activation and the keyboard grab to the chosen display once. Crop changes do
-not repeat that transfer. Drawing canvases must stop on a cancelled press and
+inside the drawing press. After release, activate the chosen display and acquire
+its keyboard grab before hiding any other overlay. Do not release the previous
+grab first; replacing it must keep keyboard input inside Qt. Check the native
+grab result, and keep the other overlays mapped if transfer fails. Crop changes
+do not repeat that transfer. Drawing canvases must stop on a cancelled press and
 must not draw on hover. Escape and copy-all use application shortcuts enabled
 only for the chosen overlay; text fields own normal copy handling.
 
