@@ -48,6 +48,7 @@ impl Default for Config {
 #[serde(default)]
 pub struct General {
     pub capture_mode: CaptureMode,
+    pub auto_ocr: bool,
     pub nickname: String,
     pub launch_at_login: bool,
     pub check_updates: bool,
@@ -58,6 +59,7 @@ impl Default for General {
     fn default() -> Self {
         General {
             capture_mode: CaptureMode::default(),
+            auto_ocr: false,
             nickname: "there".into(),
             launch_at_login: true,
             check_updates: true,

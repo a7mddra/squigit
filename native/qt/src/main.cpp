@@ -120,6 +120,7 @@ int main(int argc, char *argv[]) {
 
   bool squiggleRequested = false;
   bool traditionalRequested = false;
+  bool autoOcrRequested = false;
   bool authorizeRequested = false;
   bool preflightRequested = false;
 
@@ -131,6 +132,8 @@ int main(int argc, char *argv[]) {
     }
     if (argument == "--squiggle") {
       squiggleRequested = true;
+    } else if (argument == "--auto-ocr") {
+      autoOcrRequested = true;
     } else if (argument == "--traditional") {
       traditionalRequested = true;
     } else if (argument == "--authorize") {
@@ -294,6 +297,7 @@ int main(int argc, char *argv[]) {
     auto *controller = new CaptureEngine(&app);
     controller->setDisplayIndex(frame.index);
     controller->setCaptureMode(captureMode);
+    controller->setAutoOcr(autoOcrRequested);
     controller->setBackgroundImage(frame.image, frame.devicePixelRatio);
     controllers.push_back(controller);
     QObject::connect(controller, &CaptureEngine::selectionChanged, &app, [&, controller]() {

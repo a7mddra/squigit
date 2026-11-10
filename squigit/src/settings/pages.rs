@@ -77,22 +77,32 @@ fn general(s: &App, k: &Kit, layer: &mut Vec<El>, hair: f32) -> Vec<El> {
             hair,
             "capture",
             "Screenshot",
-            vec![select_row(
-                s,
-                k,
-                layer,
-                "capture-mode",
-                "Default capture type",
-                Some("Used when taking a screenshot from the tray."),
-                &["Squiggle", "Traditional"],
-                s.cfg.general.capture_mode.label(),
-                |s: &mut App, value: &str| {
-                    s.cfg.general.capture_mode = match value {
-                        "Traditional" => CaptureMode::Traditional,
-                        _ => CaptureMode::Squiggle,
-                    };
-                },
-            )],
+            vec![
+                select_row(
+                    s,
+                    k,
+                    layer,
+                    "capture-mode",
+                    "Default capture type",
+                    Some("Used when taking a screenshot from the tray."),
+                    &["Squiggle", "Traditional"],
+                    s.cfg.general.capture_mode.label(),
+                    |s: &mut App, value: &str| {
+                        s.cfg.general.capture_mode = match value {
+                            "Traditional" => CaptureMode::Traditional,
+                            _ => CaptureMode::Squiggle,
+                        };
+                    },
+                ),
+                switch_row(
+                    k,
+                    "auto-ocr",
+                    "Auto OCR",
+                    Some("Recognize text automatically after selecting an area."),
+                    s.cfg.general.auto_ocr,
+                    |s: &mut App| s.cfg.general.auto_ocr = !s.cfg.general.auto_ocr,
+                ),
+            ],
         ),
         ui::section(
             k,

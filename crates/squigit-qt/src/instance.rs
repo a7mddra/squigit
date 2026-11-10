@@ -63,9 +63,13 @@ impl Instance {
         }
     }
 
-    pub fn capture(mode: String) -> Self {
+    pub fn capture(mode: String, auto_ocr: bool) -> Self {
+        let mut args = vec![mode];
+        if auto_ocr {
+            args.push("--auto-ocr".into());
+        }
         Self {
-            args: vec![mode],
+            args,
             output_dir: None,
         }
     }

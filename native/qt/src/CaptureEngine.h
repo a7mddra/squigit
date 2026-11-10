@@ -29,6 +29,7 @@ public:
   QUrl backgroundSource() const { return m_backgroundSource; }
   QString captureMode() const { return m_captureMode; }
   void setCaptureMode(const QString &mode);
+  void setAutoOcr(bool enabled) { m_autoOcr = enabled; }
   int displayIndex() const { return m_displayIndex; }
   void setDisplayIndex(int index);
   QRectF selection() const { return m_selection; }
@@ -68,6 +69,7 @@ private:
   QString m_captureMode = "squiggle";
   int m_displayIndex = 0;
   bool m_ocrPending = false;
+  bool m_autoOcr = false;
   QVariantList m_textBoxes;
   QString m_status;
   QString m_requestId;

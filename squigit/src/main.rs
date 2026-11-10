@@ -44,7 +44,7 @@ fn run() -> Result<ExitCode> {
             return Ok(ExitCode::SUCCESS);
         }
         Some("--help" | "-h") => {
-            println!("Squigit\n\nUsage: squigit [OPTION]\n\nNo options: start in the system tray.\n  --squiggle          Open a freeform screenshot overlay\n  --traditional       Open a rectangular screenshot overlay\n  --output-dir <DIR>  Choose where captures are saved\n  --configuration     Open the Rune settings window\n  --about             Open About Squigit\n  --authorize         Request screen capture permission\n  --preflight         Check screen capture permission\n  --version           Print the application version");
+            println!("Squigit\n\nUsage: squigit [OPTION]\n\nNo options: start in the system tray.\n  --squiggle          Open a freeform screenshot overlay\n  --traditional       Open a rectangular screenshot overlay\n  --auto-ocr          Recognize the frozen display after selecting an area\n  --output-dir <DIR>  Choose where captures are saved\n  --configuration     Open the Rune settings window\n  --about             Open About Squigit\n  --authorize         Request screen capture permission\n  --preflight         Check screen capture permission\n  --version           Print the application version");
             return Ok(ExitCode::SUCCESS);
         }
         Some("--configuration") => {
@@ -121,11 +121,11 @@ fn run() -> Result<ExitCode> {
                 let path = config_path.clone();
                 let task = std::thread::spawn(move || {
                     std::thread::sleep(CAPTURE_DELAY);
-                    let mode = settings::capture_argument(&path).unwrap_or_else(|error| {
-                        eprintln!("[squigit] Could not read capture type: {error}");
-                        "--squiggle"
+                    let arguments = settings::capture_arguments(&path).unwrap_or_else(|error| {
+                        eprintln!("[squigit] Could not read capture settings: {error}");
+                        vec!["--squiggle".into()]
                     });
-                    let outcome = squigit_qt::run(vec![mode.into()]);
+                    let outcome = squigit_qt::run(arguments);
                     active.store(false, Ordering::Release);
                     if let Some(path) = outcome.saved_path {
                         notifications::saved(path);

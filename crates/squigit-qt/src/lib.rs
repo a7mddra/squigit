@@ -28,7 +28,7 @@ impl CaptureOutcome {
 const HELP: &str = "Squigit
 
 Usage:
-  squigit [MODE] [--output-dir <DIR>]
+  squigit [MODE] [--auto-ocr] [--output-dir <DIR>]
   squigit --authorize
   squigit --preflight
   squigit --help
@@ -39,6 +39,7 @@ Capture modes:
   --traditional  Capture a rectangular selection
 
 Options:
+  --auto-ocr          Recognize the frozen display after selecting an area
   --output-dir <DIR>  Save the captured image into DIR (default: Pictures/squigit)
   --authorize         Request screenshot access without opening the selection overlay
   --preflight         Check screenshot access without requesting permission
@@ -50,6 +51,7 @@ enum CaptureCommand {
     Authorize,
     Capture {
         mode: String,
+        auto_ocr: bool,
         output_dir: Option<String>,
     },
 }
@@ -87,9 +89,11 @@ fn dispatch(arguments: Vec<String>) -> Result<CaptureOutcome> {
     let mut instance = match command {
         CaptureCommand::Preflight => Instance::preflight(),
         CaptureCommand::Authorize => Instance::authorize(),
-        CaptureCommand::Capture { mode, output_dir } => {
-            Instance::capture(mode).with_output_dir(output_dir)
-        }
+        CaptureCommand::Capture {
+            mode,
+            auto_ocr,
+            output_dir,
+        } => Instance::capture(mode, auto_ocr).with_output_dir(output_dir),
     };
     instance.run()
 }
@@ -97,12 +101,19 @@ fn dispatch(arguments: Vec<String>) -> Result<CaptureOutcome> {
 fn parse_arguments(arguments: Vec<String>) -> Result<CaptureCommand> {
     let mut mode = None;
     let mut output_dir = None;
+    let mut auto_ocr = false;
     let mut authorize = false;
     let mut preflight = false;
     let mut index = 0;
 
     while index < arguments.len() {
         match arguments[index].as_str() {
+            "--auto-ocr" => {
+                if auto_ocr {
+                    anyhow::bail!("--auto-ocr may only be provided once");
+                }
+                auto_ocr = true;
+            }
             "--squiggle" | "--traditional" => {
                 if mode.is_some() {
                     anyhow::bail!("Capture modes are mutually exclusive");
@@ -137,7 +148,7 @@ fn parse_arguments(arguments: Vec<String>) -> Result<CaptureCommand> {
     }
 
     if authorize || preflight {
-        if mode.is_some() || output_dir.is_some() {
+        if mode.is_some() || output_dir.is_some() || auto_ocr {
             anyhow::bail!("Permission commands cannot be combined with capture options");
         }
         if authorize && preflight {
@@ -152,6 +163,7 @@ fn parse_arguments(arguments: Vec<String>) -> Result<CaptureCommand> {
 
     Ok(CaptureCommand::Capture {
         mode: mode.unwrap_or_else(|| "--squiggle".to_string()),
+        auto_ocr,
         output_dir,
     })
 }

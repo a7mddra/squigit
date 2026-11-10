@@ -10,12 +10,14 @@ use rune::{AppSpec, Cx, El, Key, KeyEvent, Latest, TextEdit, Tx, Waker};
 
 static CONFIG_PATH: OnceLock<PathBuf> = OnceLock::new();
 
-pub fn capture_argument(path: &Path) -> Result<&'static str, String> {
+pub fn capture_arguments(path: &Path) -> Result<Vec<String>, String> {
     let toml = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
-    Ok(config::Config::from_toml_string(&toml)?
-        .general
-        .capture_mode
-        .argument())
+    let general = config::Config::from_toml_string(&toml)?.general;
+    let mut arguments = vec![general.capture_mode.argument().into()];
+    if general.auto_ocr {
+        arguments.push("--auto-ocr".into());
+    }
+    Ok(arguments)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
