@@ -12,16 +12,24 @@ FocusScope {
     enabled: visible && !interacting
     focus: visible
 
-    function clearSelection() {
+    function clearSelection(exceptLine) {
         let selected = false;
         for (let i = 0; i < textLines.count; ++i) {
             const line = textLines.itemAt(i);
-            if (line)
+            if (line && line !== exceptLine)
                 selected = line.clearSelection() || selected;
         }
         if (visible && enabled)
             forceActiveFocus();
         return selected;
+    }
+
+    function copySelection() {
+        for (let i = 0; i < textLines.count; ++i) {
+            const line = textLines.itemAt(i);
+            if (line && line.copySelection())
+                return;
+        }
     }
 
     onInteractingChanged: {
@@ -57,8 +65,14 @@ FocusScope {
             function clearSelection() {
                 const selected = selectableLine.selectedText.length > 0;
                 selectableLine.deselect();
-                selectableLine.focus = false;
                 return selected;
+            }
+
+            function copySelection() {
+                if (selectableLine.selectedText.length === 0)
+                    return false;
+                selectableLine.copy();
+                return true;
             }
 
             x: box[0][0] / ratio
@@ -85,12 +99,8 @@ FocusScope {
                 visible: line.modelData.inside
                 enabled: line.modelData.inside && !root.interacting
                 selectByMouse: true
-                activeFocusOnPress: true
-                onSelectedTextChanged: releaseTextFocus.restart()
-                onActiveFocusChanged: {
-                    if (activeFocus)
-                        releaseTextFocus.restart();
-                }
+                activeFocusOnPress: false
+                persistentSelection: true
                 color: "transparent"
                 selectedTextColor: "transparent"
                 selectionColor: "#805daaff"
@@ -99,22 +109,10 @@ FocusScope {
                 }
 
                 PointHandler {
-                    id: selectionPointer
                     acceptedButtons: Qt.LeftButton
                     onActiveChanged: {
-                        if (!active)
-                            releaseTextFocus.restart();
-                    }
-                }
-
-                Timer {
-                    id: releaseTextFocus
-                    interval: 0
-                    onTriggered: {
-                        if (selectableLine.activeFocus && !selectionPointer.active && selectableLine.selectedText.length === 0) {
-                            selectableLine.focus = false;
-                            root.forceActiveFocus();
-                        }
+                        if (active)
+                            root.clearSelection(line);
                     }
                 }
             }

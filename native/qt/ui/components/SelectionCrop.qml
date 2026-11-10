@@ -19,6 +19,10 @@ Item {
         return ocrTextLayer.clearSelection();
     }
 
+    function copyTextSelection() {
+        ocrTextLayer.copySelection();
+    }
+
     function begin(item, mouse, horizontal, vertical, move) {
         startArea = area;
         pressPoint = item.mapToItem(root, mouse.x, mouse.y);

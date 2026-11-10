@@ -186,6 +186,13 @@ Window {
     }
 
     Shortcut {
+        sequences: ["Ctrl+C", "Ctrl+Insert"]
+        context: Qt.ApplicationShortcut
+        enabled: root.ownsInput && root.visible && root.controller.ocrVisible
+        onActivated: selectionCrop.copyTextSelection()
+    }
+
+    Shortcut {
         sequences: ["Ctrl+Shift+C", "Meta+Shift+C"]
         context: Qt.ApplicationShortcut
         enabled: root.ownsInput && root.visible && root.controller.hasSelection
