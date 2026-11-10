@@ -11,8 +11,10 @@ use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 const ICON: &[u8] = include_bytes!("../icons/128x128.png");
+const CAPTURE_DELAY: Duration = Duration::from_millis(300);
 
 fn main() -> ExitCode {
     match run() {
@@ -115,6 +117,7 @@ fn run() -> Result<ExitCode> {
                 }
                 let active = Arc::clone(&capturing);
                 let task = std::thread::spawn(move || {
+                    std::thread::sleep(CAPTURE_DELAY);
                     let outcome = squigit_qt::run(vec!["--squiggle".into()]);
                     active.store(false, Ordering::Release);
                     if let Some(path) = outcome.saved_path {
