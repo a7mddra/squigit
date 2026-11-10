@@ -4,4 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1"
+dirs = "5"
+fs2 = "0.4"
+image = { version = "0.25", default-features = false, features = ["png"] }
+rune = { git = "https://github.com/anomalyco/rune", rev = "2259d0c82af372dbb4d43dfd5989f72c44d152be" }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "2259d0c82af372dbb4d43dfd5989f72c44d152be" }
+serde = { version = "1", features = ["derive"] }
+toml = "0.9"
 squigit-qt = { path = "../crates/squigit-qt" }
