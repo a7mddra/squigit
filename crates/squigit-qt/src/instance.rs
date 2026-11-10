@@ -3,6 +3,7 @@ use crate::paths::RuntimePaths;
 use crate::sandbox::audio_guard::AudioGuard;
 use crate::sandbox::display_hotplug::DisplayWatcher;
 use crate::sandbox::single_instance::InstanceLock;
+use crate::CaptureOutcome;
 use anyhow::{Context, Result};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, ExitCode, Stdio};
@@ -74,9 +75,9 @@ impl Instance {
         self
     }
 
-    pub fn run(&mut self) -> Result<ExitCode> {
+    pub fn run(&mut self) -> Result<CaptureOutcome> {
         if SHUTTING_DOWN.load(Ordering::Acquire) {
-            return Ok(ExitCode::from(2));
+            return Ok(CaptureOutcome::exit(ExitCode::from(2)));
         }
         let _lock = InstanceLock::try_acquire()
             .context("Failed to acquire instance lock - is another squigit running?")?;
@@ -132,7 +133,7 @@ impl Instance {
             .context("Failed to spawn the squigit Qt runtime")
     }
 
-    fn handle_ipc(&self, child: &mut Child) -> Result<ExitCode> {
+    fn handle_ipc(&self, child: &mut Child) -> Result<CaptureOutcome> {
         let stdout = child
             .stdout
             .take()
@@ -227,13 +228,16 @@ impl Instance {
                     "CAPTURE_PERMISSION_DENIED"
                 }
             );
-            Ok(ExitCode::from(0))
+            Ok(CaptureOutcome::exit(ExitCode::SUCCESS))
         } else if capture_authorized {
             println!("CAPTURE_AUTHORIZED");
-            Ok(ExitCode::from(0))
+            Ok(CaptureOutcome::exit(ExitCode::SUCCESS))
         } else if let Some(path) = capture_saved {
             println!("{path}");
-            Ok(ExitCode::from(0))
+            Ok(CaptureOutcome {
+                exit_code: ExitCode::SUCCESS,
+                saved_path: Some(path.into()),
+            })
         } else {
             if terminal_exit_code.is_none() {
                 eprintln!(
@@ -241,7 +245,9 @@ impl Instance {
 This usually indicates a native crash during startup or capture."
                 );
             }
-            Ok(terminal_exit_code.unwrap_or(ExitCode::from(1)))
+            Ok(CaptureOutcome::exit(
+                terminal_exit_code.unwrap_or(ExitCode::FAILURE),
+            ))
         }
     }
 

@@ -1,6 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod about;
+mod notifications;
 mod settings;
 
 use anyhow::{Context, Result};
@@ -53,8 +54,12 @@ fn run() -> Result<ExitCode> {
             about::app().args(args.into_iter().skip(1)).run();
             return Ok(ExitCode::SUCCESS);
         }
-        Some(_) => return Ok(squigit_qt::run(args)),
+        Some(_) => return Ok(squigit_qt::run(args).exit_code),
         None => {}
+    }
+
+    if let Err(error) = notifications::initialize() {
+        eprintln!("[squigit] Could not initialize notifications: {error:#}");
     }
 
     let lock_dir = dirs::runtime_dir()
@@ -110,8 +115,11 @@ fn run() -> Result<ExitCode> {
                 }
                 let active = Arc::clone(&capturing);
                 let task = std::thread::spawn(move || {
-                    squigit_qt::run(vec!["--squiggle".into()]);
+                    let outcome = squigit_qt::run(vec!["--squiggle".into()]);
                     active.store(false, Ordering::Release);
+                    if let Some(path) = outcome.saved_path {
+                        notifications::saved(path);
+                    }
                 });
                 if let Ok(mut capture) = capture_task.lock() {
                     *capture = Some(task);

@@ -3,7 +3,7 @@
 Squigit is a screenshot-first desktop proof of concept built with Rust, Rune, Qt 6, and PaddleX. It starts in the system tray with no home page.
 
 - **Take screenshot** starts the Qt overlay. Draw a squiggle or select a rectangle; the selection stays open with **Save** and **OCR** actions.
-- **Save** writes a PNG to `Pictures/squigit` and closes the overlay.
+- **Save** writes a PNG to `Pictures/squigit` and closes the overlay. Tray captures then show a native **Image saved** notification with the filename, an image preview, and an **Open in folder** action. Clicking the notification also reveals the image.
 - **OCR** asks Rust to run the installed `squigit-ocr` LTS from PATH for that selection. Qt receives JSON and places transparent, selectable text over the frozen screen. Drag within a text line and press Ctrl+C to copy it; Ctrl+Shift+C copies all recognized text. Escape cancels the overlay.
 - **Open savepath** opens `Pictures/squigit` in the OS file manager.
 - **Configuration** opens a framed Rune window inspired by `rune-settings`. Its controls only edit a temporary demo config at `<temp>/squigit-settings-demo-<pid>/config.toml`; they do not configure capture or OCR.
@@ -60,6 +60,16 @@ cargo xtask run -- --about
 ```
 
 The pinned Rune tray backend supports Linux and Windows. Linux needs a StatusNotifier host (GNOME AppIndicator extension, KDE, or a compatible panel). Rune's pinned revision does not yet provide a macOS tray backend; the native capture backend remains available there.
+
+## Save notifications
+
+The Rust application owns notifications through `notify-rust` 4.19. The action uses `opener::reveal` to show the selected image in Nautilus, Finder, Explorer, or the system file manager. Notification errors are reported to stderr without changing the successful save result. Action listeners run off the capture and UI threads, so another capture can start immediately. They remain available while the tray application is running. Direct one-shot CLI captures continue to print the saved path and exit without a notification.
+
+Platform limits:
+
+- Linux uses the desktop's notification service over D-Bus. Action buttons, image previews, and banner duration depend on that service. If file selection is unavailable, `opener` opens the containing folder.
+- Windows uses native toasts with the Squigit AppUserModelID, registered under the current user with the product name and icon. Notification permissions and Focus settings can suppress banners. Actions require the application to remain running; activation after quitting is not registered.
+- macOS uses the crate's default `NSUserNotificationCenter` backend, which Apple has deprecated. It requires the main run loop for action callbacks, supplied by Rune. The modern `UNUserNotificationCenter` backend needs a macOS app bundle and is not enabled in this proof of concept. The pinned Rune tray limitation above still applies.
 
 ## Process protocol
 

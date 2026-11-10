@@ -11,6 +11,20 @@ use sandbox::audio_guard::AudioGuard;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 
+pub struct CaptureOutcome {
+    pub exit_code: ExitCode,
+    pub saved_path: Option<PathBuf>,
+}
+
+impl CaptureOutcome {
+    fn exit(exit_code: ExitCode) -> Self {
+        Self {
+            exit_code,
+            saved_path: None,
+        }
+    }
+}
+
 const HELP: &str = "Squigit
 
 Usage:
@@ -40,25 +54,25 @@ enum CaptureCommand {
     },
 }
 
-pub fn run(arguments: Vec<String>) -> ExitCode {
+pub fn run(arguments: Vec<String>) -> CaptureOutcome {
     match dispatch(arguments) {
         Ok(code) => code,
         Err(e) => {
             eprintln!("[squigit] Error: {:#}", e);
             #[cfg(target_os = "linux")]
             AudioGuard::unmute();
-            ExitCode::from(1)
+            CaptureOutcome::exit(ExitCode::FAILURE)
         }
     }
 }
 
-fn dispatch(arguments: Vec<String>) -> Result<ExitCode> {
+fn dispatch(arguments: Vec<String>) -> Result<CaptureOutcome> {
     if arguments
         .iter()
         .any(|argument| argument == "--help" || argument == "-h")
     {
         println!("{HELP}");
-        return Ok(ExitCode::SUCCESS);
+        return Ok(CaptureOutcome::exit(ExitCode::SUCCESS));
     }
     if arguments
         .iter()
@@ -66,7 +80,7 @@ fn dispatch(arguments: Vec<String>) -> Result<ExitCode> {
     {
         verify_runtime()?;
         println!("squigit {}", env!("CARGO_PKG_VERSION"));
-        return Ok(ExitCode::SUCCESS);
+        return Ok(CaptureOutcome::exit(ExitCode::SUCCESS));
     }
 
     let command = parse_arguments(arguments)?;
