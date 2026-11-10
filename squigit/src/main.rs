@@ -9,7 +9,7 @@ use rune::{Tray, TrayEvent, TrayIcon, TrayItem, TraySpec, WindowSpec};
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 const ICON: &[u8] = include_bytes!("../icons/128x128.png");
 
@@ -95,6 +95,8 @@ fn run() -> Result<ExitCode> {
         TrayItem::action("quit", "Quit"),
     ]);
     let capturing = Arc::new(AtomicBool::new(false));
+    let capture = Arc::new(Mutex::new(None));
+    let capture_task = Arc::clone(&capture);
     let tray = Tray::new(spec, move |event| {
         let action = match event {
             TrayEvent::Activate { .. } => "capture".to_owned(),
@@ -107,10 +109,13 @@ fn run() -> Result<ExitCode> {
                     return;
                 }
                 let active = Arc::clone(&capturing);
-                std::thread::spawn(move || {
+                let task = std::thread::spawn(move || {
                     squigit_qt::run(vec!["--squiggle".into()]);
                     active.store(false, Ordering::Release);
                 });
+                if let Ok(mut capture) = capture_task.lock() {
+                    *capture = Some(task);
+                }
             }
             "savepath" => {
                 std::thread::spawn(|| {
@@ -127,6 +132,12 @@ fn run() -> Result<ExitCode> {
     })?;
     app.run();
     drop(tray);
+    squigit_qt::cancel_active();
+    if let Ok(mut capture) = capture.lock() {
+        if let Some(task) = capture.take() {
+            let _ = task.join();
+        }
+    }
     Ok(ExitCode::SUCCESS)
 }
 

@@ -17,8 +17,10 @@ use std::os::windows::process::CommandExt;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 static ACTIVE_PID: AtomicU32 = AtomicU32::new(0);
+static SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
 
 pub fn cancel_active() {
+    SHUTTING_DOWN.store(true, Ordering::Release);
     let pid = ACTIVE_PID.load(Ordering::Acquire);
     if pid != 0 {
         Instance::kill_process(pid);
@@ -73,12 +75,18 @@ impl Instance {
     }
 
     pub fn run(&mut self) -> Result<ExitCode> {
+        if SHUTTING_DOWN.load(Ordering::Acquire) {
+            return Ok(ExitCode::from(2));
+        }
         let _lock = InstanceLock::try_acquire()
             .context("Failed to acquire instance lock - is another squigit running?")?;
 
         let mut child = self.spawn_process()?;
         let child_pid = child.id();
         ACTIVE_PID.store(child_pid, Ordering::Release);
+        if SHUTTING_DOWN.load(Ordering::Acquire) {
+            let _ = child.kill();
+        }
 
         let watcher = DisplayWatcher::start(move || {
             Self::kill_process(child_pid);
