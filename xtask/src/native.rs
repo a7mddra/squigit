@@ -8,7 +8,7 @@ pub fn run(repo_root: &Path, native_only: bool) -> Result<(), String> {
 }
 
 fn run_inner(repo_root: &Path, native_only: bool) -> Result<()> {
-    let native_dir = repo_root.join("native");
+    let native_dir = repo_root.join("native/qt");
 
     if native_only {
         println!("\nBuilding Squigit Qt runtime (CMake only)...");

@@ -1,5 +1,8 @@
 target
 binaries
-native/build
-native/_internal
+native/**/build
+native/**/dist
+native/**/_internal
+native/ocr/.venv
+native/ocr/models
 Cargo.lock

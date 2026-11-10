@@ -39,8 +39,8 @@ enum CaptureCommand {
     },
 }
 
-fn main() -> ExitCode {
-    match run() {
+pub fn run(arguments: Vec<String>) -> ExitCode {
+    match dispatch(arguments) {
         Ok(code) => code,
         Err(e) => {
             eprintln!("[squigit] Error: {:#}", e);
@@ -51,8 +51,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn run() -> Result<ExitCode> {
-    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+fn dispatch(arguments: Vec<String>) -> Result<ExitCode> {
     if arguments
         .iter()
         .any(|argument| argument == "--help" || argument == "-h")

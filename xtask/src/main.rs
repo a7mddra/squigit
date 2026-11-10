@@ -143,7 +143,7 @@ fn doctor(root: &Path) -> Result<(), String> {
         ),
     )?;
 
-    let native_dir = root.join("native");
+    let native_dir = root.join("native/qt");
     let build_dir = native_dir.join("build");
     let mut cmake = Command::new("cmake");
     cmake
@@ -172,8 +172,8 @@ fn clean(root: &Path) -> Result<(), String> {
         &format!("cargo clean --manifest-path {}", manifest.display()),
     )?;
 
-    remove_directory(&root.join("native/build"))?;
-    remove_directory(&root.join("native/_internal"))?;
+    remove_directory(&root.join("native/qt/build"))?;
+    remove_directory(&root.join("native/qt/_internal"))?;
     remove_directory(&root.join("binaries"))
 }
 
@@ -331,7 +331,7 @@ fn format_all_files(root: &Path) -> Result<(), String> {
     run_command(&mut prettier, "npx prettier --write .")?;
 
     if which::which("clang-format").is_ok() {
-        format_cpp_files(&root.join("native/src"))?;
+        format_cpp_files(&root.join("native/qt/src"))?;
     }
 
     Ok(())
@@ -349,7 +349,7 @@ fn format_cpp_files(dir: &Path) -> Result<(), String> {
         for file in &files {
             clang.arg(file);
         }
-        run_command(&mut clang, "clang-format -i native/src/**/*")?;
+        run_command(&mut clang, "clang-format -i native/qt/src/**/*")?;
     }
     Ok(())
 }

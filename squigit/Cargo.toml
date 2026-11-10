@@ -1,0 +1,7 @@
+[package]
+name = "squigit"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+squigit-qt = { path = "../crates/squigit-qt" }

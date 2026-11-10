@@ -160,6 +160,13 @@ dependencies = [
 name = "squigit"
 version = "0.1.0"
 dependencies = [
+ "squigit-qt",
+]
+
+[[package]]
+name = "squigit-qt"
+version = "0.1.0"
+dependencies = [
  "anyhow",
  "dirs",
  "fs2",
