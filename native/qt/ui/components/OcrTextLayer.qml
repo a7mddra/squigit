@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 
-Item {
+FocusScope {
     id: root
     anchors.fill: parent
 
@@ -10,6 +10,7 @@ Item {
     property bool interacting: false
     visible: controller.ocrVisible
     enabled: visible && !interacting
+    focus: visible
 
     Repeater {
         model: root.controller.ocrVisible ? root.controller.textBoxes : []
@@ -44,6 +45,8 @@ Item {
                 visible: line.modelData.inside
                 enabled: line.modelData.inside && !root.interacting
                 selectByMouse: true
+                activeFocusOnPress: true
+                onSelectedTextChanged: root.controller.setSelectedText(selectedText)
                 color: "transparent"
                 selectedTextColor: "transparent"
                 selectionColor: "#805daaff"

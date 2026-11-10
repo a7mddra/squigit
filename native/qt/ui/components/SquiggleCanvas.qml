@@ -77,6 +77,7 @@ Item {
             root.lastPoint = Qt.point(mouse.x, mouse.y)
             root.strokes.push({x: mouse.x, y: mouse.y})
             canvas.requestPaint()
+            root.controller.beginSelection()
         }
 
         onPositionChanged: function(mouse) {

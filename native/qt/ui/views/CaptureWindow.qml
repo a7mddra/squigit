@@ -81,17 +81,18 @@ Window {
 
     Item {
         anchors.fill: parent
-        visible: root.controller.hasSelection
+        visible: root.controller.hasSelection || root.controller.ocrPending
         property rect area: root.controller.selection
 
         SelectionCrop {
             controller: root.controller
+            visible: root.controller.hasSelection
         }
 
         Rectangle {
             id: toolbar
-            x: Math.max(8, Math.min(parent.area.x, root.width - width - 8))
-            y: Math.max(8, Math.min(parent.area.y + parent.area.height + 10, root.height - height - 8))
+            x: root.controller.hasSelection ? Math.max(8, Math.min(parent.area.x, root.width - width - 8)) : (root.width - width) / 2
+            y: root.controller.hasSelection ? Math.max(8, Math.min(parent.area.y + parent.area.height + 10, root.height - height - 8)) : 16
             width: actions.width + 12
             height: 44
             radius: 6
@@ -101,16 +102,16 @@ Window {
                 anchors.centerIn: parent
                 spacing: 6
                 Repeater {
-                    model: ["Save", "OCR"]
+                    model: root.controller.ocrPending ? (root.controller.hasSelection ? ["Save", "Cancel OCR"] : ["Cancel OCR"]) : ["Save", "OCR"]
                     delegate: Rectangle {
                         id: actionButton
                         required property string modelData
                         readonly property bool checked: modelData === "OCR" && root.controller.ocrVisible
-                        width: 76
+                        width: modelData === "Cancel OCR" ? 110 : 76
                         height: 32
                         radius: 4
                         color: checked ? "#356ab0" : actionMouse.containsMouse ? "#505154" : "#353639"
-                        opacity: modelData === "OCR" && root.controller.ocrPending ? 0.5 : 1
+                        opacity: modelData === "Cancel OCR" && root.controller.ocrCancelling ? 0.5 : 1
                         Text {
                             anchors.centerIn: parent
                             text: parent.modelData
@@ -122,8 +123,15 @@ Window {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            enabled: actionButton.modelData !== "OCR" || !root.controller.ocrPending
-                            onClicked: actionButton.modelData === "Save" ? root.controller.save() : root.controller.toggleOcr()
+                            enabled: actionButton.modelData !== "Cancel OCR" || !root.controller.ocrCancelling
+                            onClicked: {
+                                if (actionButton.modelData === "Save")
+                                    root.controller.save();
+                                else if (actionButton.modelData === "Cancel OCR")
+                                    root.controller.cancelOcr();
+                                else
+                                    root.controller.toggleOcr();
+                            }
                         }
                     }
                 }
@@ -150,18 +158,4 @@ Window {
         }
     }
 
-    Shortcut {
-        sequence: "Ctrl+Shift+C"
-        onActivated: root.controller.copyText()
-    }
-
-    Shortcut {
-        sequence: "Escape"
-        onActivated: root.controller.cancel()
-    }
-
-    Shortcut {
-        sequence: "Q"
-        onActivated: root.controller.cancel()
-    }
 }
