@@ -3032,6 +3032,8 @@ dependencies = [
  "anyhow",
  "dirs",
  "fs2",
+ "serde_json",
+ "squigit-ocr",
  "windows-sys 0.61.2",
 ]
 

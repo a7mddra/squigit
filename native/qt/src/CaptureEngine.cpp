@@ -1,5 +1,11 @@
 #include "CaptureEngine.h"
 #include <QDateTime>
+#include <QClipboard>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <limits>
+#include <QtMath>
 #include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
@@ -70,11 +76,14 @@ QString CaptureEngine::ensureBackgroundFileFallback() {
   return m_backgroundSource.toString();
 }
 
-void CaptureEngine::cancel() { emitFailure(); }
+void CaptureEngine::cancel() {
+  std::cout << "CAPTURE_CANCELLED" << std::endl;
+  QGuiApplication::exit(2);
+}
 
 void CaptureEngine::finishSquiggleCapture(const QVariantList &points) {
   if (points.isEmpty()) {
-    emitFailure();
+    fail();
     return;
   }
 
@@ -100,48 +109,72 @@ void CaptureEngine::finishSquiggleCapture(const QVariantList &points) {
 
   QRectF boundingRect(minX, minY, maxX - minX, maxY - minY);
 
-  cropAndSave(boundingRect);
+  select(boundingRect);
 }
 
 void CaptureEngine::finishTraditionalCapture(QPointF start, QPointF end) {
   QRectF selectionRect = QRectF(start, end).normalized();
 
   if (selectionRect.width() < 1 || selectionRect.height() < 1) {
-    emitFailure();
+    fail();
     return;
   }
 
-  cropAndSave(selectionRect);
+  select(selectionRect);
 }
 
-void CaptureEngine::cropAndSave(const QRectF &logicalRect) {
-  int physX = qRound(logicalRect.x() * m_devicePixelRatio);
-  int physY = qRound(logicalRect.y() * m_devicePixelRatio);
-  int physW = qRound(logicalRect.width() * m_devicePixelRatio);
-  int physH = qRound(logicalRect.height() * m_devicePixelRatio);
+void CaptureEngine::select(const QRectF &logicalRect) {
+  const QRect pixels(qFloor(logicalRect.x() * m_devicePixelRatio),
+                     qFloor(logicalRect.y() * m_devicePixelRatio),
+                     qCeil(logicalRect.width() * m_devicePixelRatio),
+                     qCeil(logicalRect.height() * m_devicePixelRatio));
+  const QRect clipped = pixels.intersected(m_backgroundImage.rect());
+  if (clipped.isEmpty()) return;
+  m_selectedImage = m_backgroundImage.copy(clipped).convertToFormat(QImage::Format_RGB888);
+  m_selectedImage.setDevicePixelRatio(1.0);
+  m_selection = QRectF(clipped.x() / m_devicePixelRatio,
+                       clipped.y() / m_devicePixelRatio,
+                       clipped.width() / m_devicePixelRatio,
+                       clipped.height() / m_devicePixelRatio);
+  emit selectionChanged();
+}
 
-  physX = qMax(0, physX);
-  physY = qMax(0, physY);
-
-  if (physX + physW > m_backgroundImage.width())
-    physW = m_backgroundImage.width() - physX;
-  if (physY + physH > m_backgroundImage.height())
-    physH = m_backgroundImage.height() - physY;
-
-  if (physW <= 0 || physH <= 0) {
-    emitFailure();
+void CaptureEngine::recognize() {
+  if (!hasSelection() || m_ocrPending) return;
+  m_ocrFile = std::make_unique<QTemporaryFile>(QDir::temp().filePath("squigit-ocr-XXXXXX.png"));
+  if (!m_ocrFile->open() || !m_selectedImage.save(m_ocrFile.get(), "PNG")) {
+    m_status = "Could not prepare the selected image";
+    emit ocrChanged();
     return;
   }
+  m_ocrFile->close();
+  m_requestId = QString("%1-%2").arg(m_displayIndex).arg(++m_requestSequence);
+  m_ocrPending = true;
+  m_status = "Recognizing text...";
+  emit ocrChanged();
+  const QJsonObject request{{"id", m_requestId}, {"image", m_ocrFile->fileName()}};
+  std::cout << "OCR_REQUEST:" << QJsonDocument(request).toJson(QJsonDocument::Compact).toStdString() << std::endl;
+}
 
-  QImage cropped = m_backgroundImage.copy(physX, physY, physW, physH);
-  cropped.setDevicePixelRatio(1.0);
-
-  const QImage rgb = cropped.convertToFormat(QImage::Format_RGB888);
-  if (rgb.isNull()) {
-    emitFailure();
-    return;
+void CaptureEngine::acceptOcrResponse(const QByteArray &line) {
+  const QJsonObject response = QJsonDocument::fromJson(line).object();
+  if (!m_ocrPending || response["id"].toString() != m_requestId) return;
+  m_ocrPending = false;
+  m_ocrFile.reset();
+  const QString error = response["error"].toString();
+  if (!error.isEmpty()) {
+    m_status = error;
+  } else {
+    m_textBoxes = response["boxes"].toArray().toVariantList();
+    m_status = m_textBoxes.isEmpty() ? "No text found" : "Drag to select text. Ctrl+C copies the selection; Ctrl+Shift+C copies all text.";
   }
-  emitSuccess(rgb);
+  emit ocrChanged();
+}
+
+void CaptureEngine::copyText() {
+  QStringList lines;
+  for (const auto &box : m_textBoxes) lines.append(box.toMap()["text"].toString());
+  QGuiApplication::clipboard()->setText(lines.join("\n"));
 }
 
 QString CaptureEngine::saveImage(const QImage &rgb) const {
@@ -165,26 +198,25 @@ QString CaptureEngine::saveImage(const QImage &rgb) const {
   return path;
 }
 
-void CaptureEngine::emitSuccess(const QImage &rgb) {
-  const QString savedPath = saveImage(rgb);
+void CaptureEngine::save() {
+  if (!hasSelection()) return;
+  const QString savedPath = saveImage(m_selectedImage);
   if (savedPath.isEmpty()) {
     std::cerr << "CAPTURE_NATIVE_ERROR: could not write the captured image"
               << std::endl;
-    emitFailure();
+    fail();
     return;
   }
 
   std::cout << "SQUIGIT_SAVED:" << savedPath.toStdString() << std::endl;
   std::cout.flush();
 
-  emit captureCompleted();
   QGuiApplication::exit(0);
 }
 
-void CaptureEngine::emitFailure() {
+void CaptureEngine::fail() {
   std::cout << "CAPTURE_FAIL" << std::endl;
   std::cout.flush();
 
-  emit captureFailed();
   QGuiApplication::exit(1);
 }

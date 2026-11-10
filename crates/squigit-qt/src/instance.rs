@@ -4,14 +4,41 @@ use crate::sandbox::audio_guard::AudioGuard;
 use crate::sandbox::display_hotplug::DisplayWatcher;
 use crate::sandbox::single_instance::InstanceLock;
 use anyhow::{Context, Result};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, ExitCode, Stdio};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+static ACTIVE_PID: AtomicU32 = AtomicU32::new(0);
+
+pub fn cancel_active() {
+    let pid = ACTIVE_PID.load(Ordering::Acquire);
+    if pid != 0 {
+        Instance::kill_process(pid);
+    }
+}
+
+#[derive(Default)]
+struct OcrJobs {
+    cancelled: Arc<AtomicBool>,
+    workers: Vec<JoinHandle<()>>,
+}
+
+impl Drop for OcrJobs {
+    fn drop(&mut self) {
+        self.cancelled.store(true, Ordering::Release);
+        for worker in self.workers.drain(..) {
+            let _ = worker.join();
+        }
+    }
+}
 
 pub struct Instance {
     args: Vec<String>,
@@ -51,6 +78,7 @@ impl Instance {
 
         let mut child = self.spawn_process()?;
         let child_pid = child.id();
+        ACTIVE_PID.store(child_pid, Ordering::Release);
 
         let watcher = DisplayWatcher::start(move || {
             Self::kill_process(child_pid);
@@ -58,8 +86,12 @@ impl Instance {
 
         let exit_code = self.handle_ipc(&mut child);
 
+        if exit_code.is_err() {
+            let _ = child.kill();
+        }
         watcher.stop();
         let _ = child.wait();
+        ACTIVE_PID.store(0, Ordering::Release);
         #[cfg(target_os = "linux")]
         AudioGuard::unmute();
 
@@ -73,6 +105,7 @@ impl Instance {
         cmd.args(&self.args)
             .env("GIO_LAUNCHED_DESKTOP_APP_ID", "squigit")
             .env("G_APPLICATION_ID", "squigit")
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
 
@@ -96,6 +129,8 @@ impl Instance {
             .stdout
             .take()
             .context("The squigit Qt runtime did not expose stdout")?;
+        let stdin = Arc::new(Mutex::new(child.stdin.take().context("Missing Qt stdin")?));
+        let mut jobs = OcrJobs::default();
         let mut reader = BufReader::new(stdout);
         let mut line = String::new();
         let mut terminal_exit_code = None;
@@ -143,6 +178,30 @@ impl Instance {
                     break;
                 }
                 _ => {
+                    if let Some(payload) = trimmed.strip_prefix("OCR_REQUEST:") {
+                        let request: serde_json::Value =
+                            serde_json::from_str(payload).context("Invalid Qt OCR request")?;
+                        let id = request["id"]
+                            .as_str()
+                            .context("Missing OCR request id")?
+                            .to_owned();
+                        let image = std::path::PathBuf::from(
+                            request["image"].as_str().context("Missing OCR image")?,
+                        );
+                        let input = Arc::clone(&stdin);
+                        let cancelled = Arc::clone(&jobs.cancelled);
+                        jobs.workers.push(std::thread::spawn(move || {
+                            let response = match squigit_ocr::recognize(&image, &cancelled) {
+                                Ok(boxes) => serde_json::json!({"id": id, "boxes": boxes}),
+                                Err(error) => {
+                                    serde_json::json!({"id": id, "error": format!("{error:#}")})
+                                }
+                            };
+                            if let Ok(mut input) = input.lock() {
+                                let _ = writeln!(input, "{response}");
+                            }
+                        }));
+                    }
                     if let Some(path) = trimmed.strip_prefix("SQUIGIT_SAVED:") {
                         capture_saved = Some(path.to_string());
                         break;

@@ -13,6 +13,8 @@
 #include <chrono>
 #include <iostream>
 #include <string>
+#include <thread>
+#include <QJsonDocument>
 #include <vector>
 
 #include "CaptureEngine.h"
@@ -294,6 +296,12 @@ int main(int argc, char *argv[]) {
     controller->setCaptureMode(captureMode);
     controller->setBackgroundImage(frame.image, frame.devicePixelRatio);
     controllers.push_back(controller);
+    QObject::connect(controller, &CaptureEngine::selectionChanged, &app, [&, controller]() {
+      if (!controller->hasSelection()) return;
+      for (size_t i = 0; i < controllers.size(); ++i) {
+        if (controllers[i] != controller) windows[i]->hide();
+      }
+    });
 
     QVariantMap properties;
     properties["controller"] = QVariant::fromValue(controller);
@@ -335,5 +343,15 @@ int main(int argc, char *argv[]) {
 
   logTimingStage("windows_shown", timingStart);
 
+  std::thread([&app, controllers]() {
+    std::string line;
+    while (std::getline(std::cin, line)) {
+      const QByteArray response = QByteArray::fromStdString(line);
+      QMetaObject::invokeMethod(&app, [controllers, response]() {
+        for (auto *controller : controllers) controller->acceptOcrResponse(response);
+      }, Qt::QueuedConnection);
+    }
+    QMetaObject::invokeMethod(&app, &QCoreApplication::quit, Qt::QueuedConnection);
+  }).detach();
   return app.exec();
 }

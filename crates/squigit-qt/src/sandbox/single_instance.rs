@@ -3,7 +3,7 @@ use fs2::FileExt;
 use std::fs::{self, File};
 use std::path::PathBuf;
 
-const LOCK_NAME: &str = "squigit";
+const LOCK_NAME: &str = "squigit-qt";
 
 pub struct InstanceLock {
     file: File,

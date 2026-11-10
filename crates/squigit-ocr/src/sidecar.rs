@@ -1,9 +1,12 @@
 use crate::TextBox;
 use anyhow::{Context, Result};
+use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
-pub fn recognize(image: &Path) -> Result<Vec<TextBox>> {
+pub fn recognize(image: &Path, cancelled: &AtomicBool) -> Result<Vec<TextBox>> {
     let root = std::env::current_exe()?
         .parent()
         .context("Missing application directory")?
@@ -24,11 +27,38 @@ pub fn recognize(image: &Path) -> Result<Vec<TextBox>> {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000);
     }
-    let output = command
-        .output()
+    let mut child = command
+        .spawn()
         .with_context(|| format!("Could not start {}", binary.display()))?;
-    if !output.status.success() {
-        let payload: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap_or_default();
+    let mut stdout = child.stdout.take().context("Missing OCR stdout")?;
+    let reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        stdout.read_to_end(&mut bytes).map(|_| bytes)
+    });
+    let started = Instant::now();
+    let status = loop {
+        if cancelled.load(Ordering::Acquire) || started.elapsed() > Duration::from_secs(120) {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = reader.join();
+            anyhow::bail!("OCR cancelled or exceeded two minutes");
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = reader.join();
+                return Err(error.into());
+            }
+        }
+    };
+    let output = reader
+        .join()
+        .map_err(|_| anyhow::anyhow!("OCR reader stopped"))??;
+    if !status.success() {
+        let payload: serde_json::Value = serde_json::from_slice(&output).unwrap_or_default();
         anyhow::bail!(
             "{}",
             payload["error"]
@@ -37,7 +67,7 @@ pub fn recognize(image: &Path) -> Result<Vec<TextBox>> {
         );
     }
     let boxes: Vec<TextBox> =
-        serde_json::from_slice(&output.stdout).context("OCR returned invalid JSON")?;
+        serde_json::from_slice(&output).context("OCR returned invalid JSON")?;
     for item in &boxes {
         anyhow::ensure!(
             item.confidence.is_finite() && item.r#box.iter().flatten().all(|v| v.is_finite()),

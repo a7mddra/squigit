@@ -3,6 +3,7 @@ mod paths;
 mod sandbox;
 
 use anyhow::{Context, Result};
+pub use instance::cancel_active;
 use instance::Instance;
 use paths::RuntimePaths;
 #[cfg(target_os = "linux")]
