@@ -2,9 +2,10 @@
 
 Squigit is a screenshot-first desktop proof of concept built with Rust, Rune, Qt 6, and PaddleX. It starts in the system tray with no home page.
 
-- **Take screenshot** waits 300 ms for the tray menu to close, then starts the Qt overlay using the configured default capture type. Draw a squiggle or select a rectangle; it becomes a crop with resize handles and **Save** and **OCR** actions. Drag blank space inside the crop to move it.
+- **Take screenshot** waits 300 ms for the tray menu to close, then starts the Qt overlay using the configured default capture type. Draw a squiggle or select a rectangle; it becomes a crop with resize handles and **Save**, **OCR**, and **QR** actions. Drag blank space inside the crop to move it.
 - **Save** writes the current crop as a PNG to `Pictures/squigit` and closes the overlay. Tray captures then show a native **Image saved** notification with the filename, an image preview, and an **Open in folder** action. Clicking the notification also reveals the image.
 - **OCR** asks Rust to run the installed `squigit-ocr` LTS from PATH on the whole chosen display's frozen image. Text inside the crop is highlighted blue and selectable; text outside is highlighted grey. Moving or resizing the crop updates which characters are selectable without rescanning. The first OCR click scans, or retries a failed or cancelled scan. During recognition, **Cancel OCR** stops the entire OCR process tree while keeping the overlay open. After a successful scan, the button toggles all OCR highlights and text selection. Drag within a blue text line and press Ctrl+C to copy it; Ctrl+Shift+C copies text inside the crop while OCR is visible. Escape first clears selected OCR text; another press closes the overlay. Clicking blank space or moving/resizing the crop also clears text selection. OCR text selection keeps keyboard focus in the overlay so its shortcuts stay available. Keyboard input follows the display where selection begins; the other displays return to their live contents.
+- **QR** scans only the selected crop locally in Rust using [rqrr](https://github.com/WanzenBug/rqrr). The first decoded HTTP or HTTPS URL closes the overlay and opens in the default browser. A missing QR code or a code containing something other than a web URL shows an error in the overlay; resize the crop or click QR to retry. QR scanning does not start OCR or use a network service.
 - **Open savepath** opens `Pictures/squigit` in the OS file manager.
 - **Configuration** opens a framed Rune window inspired by `rune-settings`. **General → Default capture type** chooses Squiggle or Traditional. **Auto OCR**, off by default, starts recognition silently on the first press that begins drawing a selection. OCR controls and status appear only after the selection is finished. Cancelling that scan leaves Auto OCR enabled for future captures. Both settings apply to the next tray capture and persist across restarts. The other controls remain demonstration options. Settings are saved to the OS config directory at `squigit/config.toml` (`~/.config/squigit/config.toml` on Linux by default). Direct CLI captures use their explicit flags, including `--auto-ocr` for automatic recognition.
 - **About** opens a separate Rune dialog. **Quit** stops the resident application and its active capture.
@@ -15,7 +16,7 @@ Only Rust stays resident. Qt and OCR run on demand. OCR temporarily uses the pub
 
 ```text
 squigit/                 Rust application, tray, Rune windows, product icons
-crates/squigit-qt/        Rust Qt process orchestration and capture sandbox
+crates/squigit-qt/        Rust Qt orchestration, local QR scanner, capture sandbox
 crates/squigit-ocr/       Rust OCR process runner and JSON result types
 native/qt/               C++/QML screenshot overlay and OS grabbers
 native/ocr/              Python OCR CLI, PyInstaller spec, model preparation
@@ -74,7 +75,7 @@ Platform limits:
 
 ## Process protocol
 
-Qt writes capture markers and newline-delimited OCR requests to stdout; diagnostics go to stderr. Rust owns both sidecar processes. Automatic recognition or the first OCR click creates one OCR process. Failed scans can be retried; successful results are cached for the lifetime of the frozen overlay, so visibility toggles and crop changes create no further processes. Rust replies to Qt on stdin:
+Qt writes capture markers and newline-delimited OCR and QR requests to stdout; diagnostics go to stderr. Rust owns both sidecar processes. Automatic recognition or the first OCR click creates one OCR process. Failed scans can be retried; successful results are cached for the lifetime of the frozen overlay, so visibility toggles and crop changes create no further processes. Rust replies to Qt on stdin:
 
 ```text
 Qt → Rust: OCR_REQUEST:{"id":"0-1","image":"/tmp/squigit-ocr-xxxxxx.png"}
@@ -82,7 +83,13 @@ Rust → Qt: {"id":"0-1","boxes":[{"text":"Hello","confidence":0.99,"box":[[1,2]
 Rust → Qt: {"id":"0-1","error":"An actionable OCR failure"}
 Qt → Rust: OCR_CANCEL:{"id":"0-1"}
 Rust → Qt: {"id":"0-1","cancelled":true}
+Qt → Rust: QR_REQUEST:{"id":"qr-0-1","image":"/tmp/squigit-qr-xxxxxx.png"}
+Rust → Qt: {"id":"qr-0-1","url":"https://example.com/"}
+Rust → Qt: {"id":"qr-0-1","error":"No QR code found in the selected region"}
+Qt → Rust: QR_OPEN:{"url":"https://example.com/"}
 ```
+
+QR uses the original frozen crop in physical pixels, without OCR or selection decorations. Its temporary PNG belongs to Qt and is removed after the response or when the overlay exits. Rust scans on a background thread using the local decoder, validates HTTP/HTTPS URLs, and returns the first valid URL. Qt emits `QR_OPEN` and exits; Rust stops capture workers and waits for Qt to close before opening the browser through `opener::open_browser`. Closing the overlay during a scan discards its result without opening a browser.
 
 Cancellation replies arrive only after the OCR worker and its process tree have stopped. Qt ignores a racing scan result while waiting for that acknowledgement. A termination failure returns `{"id":"0-1","cancelled":false,"error":"..."}`. The runner uses [process-wrap](https://github.com/watchexec/process-wrap) with Unix process groups and Windows Job Objects to terminate descendants, including frozen Python subprocesses.
 

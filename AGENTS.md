@@ -139,6 +139,17 @@ open and does not change the Auto OCR preference. Unix process groups and
 Windows Job Objects contain each OCR job. Closing the overlay stops its jobs.
 Keep this contract in sync across both Rust crates and Qt.
 
+QR uses `QR_REQUEST:{"id":"qr-...","image":"<path>"}` from Qt and one
+JSON response on stdin with the same `id` and either `url` or `error`. Qt
+provides a temporary PNG of only the selected crop in physical pixels, without
+overlay decorations. Rust decodes it locally using `rqrr` on a background
+thread and accepts only HTTP/HTTPS URLs. Missing codes and non-URL payloads
+remain errors in the overlay. On success Qt emits `QR_OPEN:{"url":"..."}`
+and exits 0. Rust stops capture workers and waits for the Qt process to close
+before opening the URL in the default browser. Closing the overlay while a
+scan is pending discards the result without opening a browser. QR creates no
+additional sidecar and does not depend on OCR.
+
 The first selection press chooses the sole owner of application shortcuts and
 starts Auto OCR silently. OCR controls and status stay hidden until selection
 finishes. Do not change native activation, keyboard grabs, or window visibility
