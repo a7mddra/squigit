@@ -74,7 +74,7 @@ private:
   };
   void select(const QRectF &logicalRect);
   void recognize();
-  void rebuildTextBoxes();
+  bool rebuildTextBoxes();
   QString saveImage(const QImage &rgb) const;
   void fail();
   QImage m_backgroundImage;

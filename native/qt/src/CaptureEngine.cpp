@@ -135,9 +135,10 @@ void CaptureEngine::select(const QRectF &logicalRect) {
     return;
   const bool firstSelection = !hasSelection();
   m_selection = clipped;
-  rebuildTextBoxes();
+  const bool textChanged = rebuildTextBoxes();
   emit selectionChanged();
-  emit ocrChanged();
+  if (textChanged)
+    emit ocrChanged();
   if (firstSelection && m_autoOcr)
     recognize();
 }
@@ -228,8 +229,8 @@ void CaptureEngine::acceptOcrResponse(const QByteArray &line) {
   emit ocrChanged();
 }
 
-void CaptureEngine::rebuildTextBoxes() {
-  m_textBoxes.clear();
+bool CaptureEngine::rebuildTextBoxes() {
+  QVariantList textBoxes;
   for (const auto &region : m_regions) {
     int start = 0;
     while (start < region.characters.size()) {
@@ -249,12 +250,16 @@ void CaptureEngine::rebuildTextBoxes() {
       QVariantList points;
       for (const auto &point : box)
         points.append(QVariant(QVariantList{point.x(), point.y()}));
-      m_textBoxes.append(QVariantMap{
+      textBoxes.append(QVariantMap{
           {"text", region.text.mid(first.begin, last.end - first.begin)},
           {"box", points}, {"inside", inside}});
       start = end;
     }
   }
+  if (textBoxes == m_textBoxes)
+    return false;
+  m_textBoxes = std::move(textBoxes);
+  return true;
 }
 
 void CaptureEngine::copyText() {
