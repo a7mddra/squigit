@@ -49,7 +49,6 @@ public:
   Q_INVOKABLE void cancel();
   Q_INVOKABLE void beginSelection();
   Q_INVOKABLE void cancelOcr();
-  Q_INVOKABLE void setSelectedText(const QString &text) { m_selectedText = text; }
   Q_INVOKABLE void finishSquiggleCapture(const QVariantList &points);
   Q_INVOKABLE void finishTraditionalCapture(QPointF start, QPointF end);
   Q_INVOKABLE void save();
@@ -64,9 +63,6 @@ signals:
   void displayIndexChanged();
   void selectionChanged();
   void ocrChanged();
-
-protected:
-  bool eventFilter(QObject *object, QEvent *event) override;
 
 private:
   struct Character {
@@ -104,6 +100,5 @@ private:
   QVariantList m_textBoxes;
   QString m_status;
   QString m_requestId;
-  QString m_selectedText;
   int m_requestSequence = 0;
 };

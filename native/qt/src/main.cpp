@@ -273,7 +273,9 @@ int main(int argc, char *argv[]) {
 
   std::vector<CaptureEngine *> controllers;
   std::vector<QQuickWindow *> windows;
-  CaptureEngine *activeController = nullptr;
+  QQuickWindow *chosenWindow = nullptr;
+  QQuickWindow *keyboardWindow = nullptr;
+  bool selectionFinished = false;
   std::atomic<bool> firstFrameLogged{false};
 
   for (const auto &frame : frames) {
@@ -302,34 +304,33 @@ int main(int argc, char *argv[]) {
     controller->setBackgroundImage(frame.image, frame.devicePixelRatio);
     controllers.push_back(controller);
     QObject::connect(controller, &CaptureEngine::selectionStarted, &app, [&, controller]() {
-      if (activeController)
-        app.removeEventFilter(activeController);
-      activeController = controller;
-      app.installEventFilter(controller);
-      QQuickWindow *selectedWindow = nullptr;
       for (size_t i = 0; i < controllers.size(); ++i) {
-        if (controllers[i] == controller) {
-          selectedWindow = windows[i];
-        } else {
-          windows[i]->setKeyboardGrabEnabled(false);
-          windows[i]->hide();
-        }
-      }
-      if (selectedWindow) {
-        selectedWindow->raise();
-        selectedWindow->requestActivate();
-        selectedWindow->setKeyboardGrabEnabled(true);
+        const bool selected = controllers[i] == controller;
+        windows[i]->setProperty("ownsInput", selected);
+        if (selected)
+          chosenWindow = windows[i];
       }
     });
     QObject::connect(controller, &CaptureEngine::selectionChanged, &app, [&, controller]() {
-      if (!controller->hasSelection()) return;
-      for (size_t i = 0; i < controllers.size(); ++i) {
-        if (controllers[i] != controller) windows[i]->hide();
-      }
+      if (!controller->hasSelection() || selectionFinished) return;
+      selectionFinished = true;
+      QTimer::singleShot(0, &app, [&]() {
+        if (keyboardWindow)
+          keyboardWindow->setKeyboardGrabEnabled(false);
+        for (auto *window : windows) {
+          if (window != chosenWindow)
+            window->hide();
+        }
+        keyboardWindow = chosenWindow;
+        keyboardWindow->raise();
+        keyboardWindow->requestActivate();
+        keyboardWindow->setKeyboardGrabEnabled(true);
+      });
     });
 
     QVariantMap properties;
     properties["controller"] = QVariant::fromValue(controller);
+    properties["ownsInput"] = controllers.size() == 1;
 
     QObject *obj = component.createWithInitialProperties(properties);
     QQuickWindow *window = qobject_cast<QQuickWindow *>(obj);
@@ -359,19 +360,18 @@ int main(int argc, char *argv[]) {
           }
         });
     window->showFullScreen();
-    QTimer::singleShot(0, window, [window]() {
-      if (!window->isVisible())
-        return;
-      window->raise();
-      window->requestActivate();
-      window->setKeyboardGrabEnabled(true);
-    });
   }
 
   logTimingStage("windows_shown", timingStart);
 
-  activeController = controllers.front();
-  app.installEventFilter(activeController);
+  QTimer::singleShot(0, &app, [&]() {
+    if (chosenWindow)
+      return;
+    keyboardWindow = windows.front();
+    keyboardWindow->raise();
+    keyboardWindow->requestActivate();
+    keyboardWindow->setKeyboardGrabEnabled(true);
+  });
 
   std::thread([&app, controllers]() {
     std::string line;

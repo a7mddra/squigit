@@ -69,6 +69,7 @@ Item {
         id: mouseArea
         anchors.fill: parent
         hoverEnabled: true
+        preventStealing: true
         cursorShape: Qt.CrossCursor
 
         onPressed: function(mouse) {
@@ -81,7 +82,7 @@ Item {
         }
 
         onPositionChanged: function(mouse) {
-            if (!root.isDrawing) return
+            if (!root.isDrawing || !(mouse.buttons & Qt.LeftButton)) return
 
             var smoothedX = root.lastPoint.x + (mouse.x - root.lastPoint.x) * root.smoothingFactor
             var smoothedY = root.lastPoint.y + (mouse.y - root.lastPoint.y) * root.smoothingFactor
@@ -103,12 +104,12 @@ Item {
 
             root.controller.finishSquiggleCapture(pointsList)
         }
-    }
 
-    Keys.onPressed: function(event) {
-        if (event.key === Qt.Key_Escape || event.key === Qt.Key_Q) {
-            root.controller.cancel()
-            event.accepted = true
+        onCanceled: {
+            root.isDrawing = false
+            root.strokes = []
+            canvas.requestPaint()
         }
     }
+
 }

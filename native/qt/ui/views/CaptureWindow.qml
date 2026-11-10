@@ -17,6 +17,7 @@ Window {
     color: "transparent"
 
     required property var controller
+    property bool ownsInput: false
 
     Image {
         id: background
@@ -79,10 +80,17 @@ Window {
         }
     }
 
-    Item {
+    FocusScope {
+        id: selectionStage
         anchors.fill: parent
-        visible: root.controller.hasSelection || root.controller.ocrPending
+        visible: root.controller.hasSelection
+        focus: visible
         property rect area: root.controller.selection
+
+        onVisibleChanged: {
+            if (visible)
+                forceActiveFocus();
+        }
 
         SelectionCrop {
             controller: root.controller
@@ -91,8 +99,8 @@ Window {
 
         Rectangle {
             id: toolbar
-            x: root.controller.hasSelection ? Math.max(8, Math.min(parent.area.x, root.width - width - 8)) : (root.width - width) / 2
-            y: root.controller.hasSelection ? Math.max(8, Math.min(parent.area.y + parent.area.height + 10, root.height - height - 8)) : 16
+            x: Math.max(8, Math.min(parent.area.x, root.width - width - 8))
+            y: Math.max(8, Math.min(parent.area.y + parent.area.height + 10, root.height - height - 8))
             width: actions.width + 12
             height: 44
             radius: 6
@@ -102,7 +110,7 @@ Window {
                 anchors.centerIn: parent
                 spacing: 6
                 Repeater {
-                    model: root.controller.ocrPending ? (root.controller.hasSelection ? ["Save", "Cancel OCR"] : ["Cancel OCR"]) : ["Save", "OCR"]
+                    model: root.controller.ocrPending ? ["Save", "Cancel OCR"] : ["Save", "OCR"]
                     delegate: Rectangle {
                         id: actionButton
                         required property string modelData
@@ -158,4 +166,24 @@ Window {
         }
     }
 
+    Shortcut {
+        sequence: "Escape"
+        context: Qt.ApplicationShortcut
+        enabled: root.ownsInput && root.visible
+        onActivated: root.controller.cancel()
+    }
+
+    Shortcut {
+        sequence: "Q"
+        context: Qt.ApplicationShortcut
+        enabled: root.ownsInput && root.visible
+        onActivated: root.controller.cancel()
+    }
+
+    Shortcut {
+        sequences: ["Ctrl+Shift+C", "Meta+Shift+C"]
+        context: Qt.ApplicationShortcut
+        enabled: root.ownsInput && root.visible && root.controller.hasSelection
+        onActivated: root.controller.copyText()
+    }
 }

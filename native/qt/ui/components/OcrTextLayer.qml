@@ -46,14 +46,6 @@ FocusScope {
                 enabled: line.modelData.inside && !root.interacting
                 selectByMouse: true
                 activeFocusOnPress: true
-                onSelectedTextChanged: {
-                    if (activeFocus)
-                        root.controller.setSelectedText(selectedText);
-                }
-                onActiveFocusChanged: {
-                    if (activeFocus)
-                        root.controller.setSelectedText(selectedText);
-                }
                 color: "transparent"
                 selectedTextColor: "transparent"
                 selectionColor: "#805daaff"

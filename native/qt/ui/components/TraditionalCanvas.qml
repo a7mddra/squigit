@@ -209,6 +209,7 @@ Item {
         id: mouseArea
         anchors.fill: parent
         hoverEnabled: true
+        preventStealing: true
         cursorShape: Qt.CrossCursor
 
         onPressed: function(mouse) {
@@ -224,7 +225,7 @@ Item {
         }
 
         onPositionChanged: function(mouse) {
-            if (root.isDrawing) {
+            if (root.isDrawing && (mouse.buttons & Qt.LeftButton)) {
                 root.setPendingEndPoint(mouse.x, mouse.y, false)
             }
         }
@@ -239,16 +240,17 @@ Item {
                 root.controller.finishTraditionalCapture(root.startPoint, finalPoint)
             }
         }
+
+        onCanceled: {
+            root.isDrawing = false
+            root.hasSelection = false
+            root.hasPendingEndPoint = false
+            root.queueRepaint()
+        }
     }
 
     Component.onCompleted: {
         root.queueRepaint()
     }
 
-    Keys.onPressed: function(event) {
-        if (event.key === Qt.Key_Escape || event.key === Qt.Key_Q) {
-            root.controller.cancel()
-            event.accepted = true
-        }
-    }
 }

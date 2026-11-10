@@ -13,8 +13,6 @@
 #include <QLineF>
 #include <QStandardPaths>
 #include <QTextBoundaryFinder>
-#include <QKeyEvent>
-#include <QKeySequence>
 #include <QTimer>
 #include <cmath>
 #include <iostream>
@@ -87,31 +85,6 @@ void CaptureEngine::cancel() {
   QGuiApplication::exit(2);
 }
 
-bool CaptureEngine::eventFilter(QObject *object, QEvent *event) {
-  if (event->type() != QEvent::ShortcutOverride && event->type() != QEvent::KeyPress)
-    return QObject::eventFilter(object, event);
-  auto *key = static_cast<QKeyEvent *>(event);
-  const auto modifiers = key->modifiers() & ~Qt::KeypadModifier;
-  const bool dismiss = key->key() == Qt::Key_Escape ||
-      (key->key() == Qt::Key_Q && modifiers == Qt::NoModifier);
-  const bool copy = key->matches(QKeySequence::Copy);
-  const bool copyCrop = key->key() == Qt::Key_C &&
-      (modifiers == (Qt::ControlModifier | Qt::ShiftModifier) ||
-       modifiers == (Qt::MetaModifier | Qt::ShiftModifier));
-  if (!dismiss && !copy && !copyCrop)
-    return QObject::eventFilter(object, event);
-  event->accept();
-  if (event->type() == QEvent::ShortcutOverride)
-    return true;
-  if (dismiss)
-    cancel();
-  else if (copyCrop)
-    copyText();
-  else if (m_ocrVisible && hasSelection() && !m_selectedText.isEmpty())
-    QGuiApplication::clipboard()->setText(m_selectedText);
-  return true;
-}
-
 void CaptureEngine::beginSelection() {
   if (m_captureStarted)
     return;
@@ -182,8 +155,6 @@ void CaptureEngine::select(const QRectF &logicalRect) {
     return;
   m_selection = clipped;
   const bool textChanged = rebuildTextBoxes();
-  if (textChanged)
-    m_selectedText.clear();
   emit selectionChanged();
   if (textChanged)
     emit ocrChanged();
@@ -202,7 +173,6 @@ void CaptureEngine::toggleOcr() {
     return;
   }
   m_ocrVisible = !m_ocrVisible;
-  m_selectedText.clear();
   emit ocrChanged();
 }
 
