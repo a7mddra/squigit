@@ -148,7 +148,12 @@ grab first; replacing it must keep keyboard input inside Qt. Check the native
 grab result, and keep the other overlays mapped if transfer fails. Crop changes
 do not repeat that transfer. Drawing canvases must stop on a cancelled press and
 must not draw on hover. Escape and copy-all use application shortcuts enabled
-only for the chosen overlay; text fields own normal copy handling.
+only for the chosen overlay; text fields own normal copy handling. Escape clears
+an OCR text selection and restores neutral overlay focus before it can dismiss
+the capture on a subsequent press. Empty text selections must release editor
+focus after the pointer gesture ends. Clicking blank space or starting a crop
+move/resize clears text selection; no text field may retain empty selection
+focus and swallow overlay shortcuts.
 
 Other capture contracts:
 
