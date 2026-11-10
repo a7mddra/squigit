@@ -26,8 +26,9 @@ squigit/
 The only public application is `squigit`. It owns the tray, settings, about,
 and distribution. `squigit-qt` and `squigit-ocr` are private sidecars.
 
-Do not add tests unless asked. Never use sub-agents. Refactors replace old
-formats; do not introduce legacy compatibility paths.
+Do not add or run tests unless asked. Do not automate runtime or UI
+validation; ask the user to validate interactive flows. Never use sub-agents.
+Refactors replace old formats; do not introduce legacy compatibility paths.
 
 ---
 
