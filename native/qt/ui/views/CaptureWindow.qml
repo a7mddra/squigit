@@ -96,6 +96,7 @@ Window {
             id: selectionCrop
             controller: root.controller
             visible: root.controller.hasSelection
+            enabled: !root.controller.qrPending
         }
 
         Rectangle {
@@ -111,16 +112,17 @@ Window {
                 anchors.centerIn: parent
                 spacing: 6
                 Repeater {
-                    model: root.controller.ocrPending ? ["Save", "Cancel OCR"] : ["Save", "OCR"]
+                    model: root.controller.ocrPending ? ["Save", "Cancel OCR", "QR"] : ["Save", "OCR", "QR"]
                     delegate: Rectangle {
                         id: actionButton
                         required property string modelData
                         readonly property bool checked: modelData === "OCR" && root.controller.ocrVisible
+                        readonly property bool available: (modelData !== "Cancel OCR" || !root.controller.ocrCancelling) && (modelData !== "QR" || !root.controller.qrPending)
                         width: modelData === "Cancel OCR" ? 110 : 76
                         height: 32
                         radius: 4
                         color: checked ? "#356ab0" : actionMouse.containsMouse ? "#505154" : "#353639"
-                        opacity: modelData === "Cancel OCR" && root.controller.ocrCancelling ? 0.5 : 1
+                        opacity: available ? 1 : 0.5
                         Text {
                             anchors.centerIn: parent
                             text: parent.modelData
@@ -132,12 +134,14 @@ Window {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            enabled: actionButton.modelData !== "Cancel OCR" || !root.controller.ocrCancelling
+                            enabled: actionButton.available
                             onClicked: {
                                 if (actionButton.modelData === "Save")
                                     root.controller.save();
                                 else if (actionButton.modelData === "Cancel OCR")
                                     root.controller.cancelOcr();
+                                else if (actionButton.modelData === "QR")
+                                    root.controller.scanQr();
                                 else
                                     root.controller.toggleOcr();
                             }
@@ -148,7 +152,7 @@ Window {
         }
 
         Rectangle {
-            visible: root.controller.status.length > 0
+            visible: statusText.text.length > 0
             x: Math.max(8, Math.min(toolbar.x, root.width - width - 8))
             y: toolbar.y >= height + 18 ? toolbar.y - height - 8 : toolbar.y + toolbar.height + 8
             width: Math.min(760, root.width - 16)
@@ -159,7 +163,7 @@ Window {
                 id: statusText
                 anchors.fill: parent
                 anchors.margins: 8
-                text: root.controller.status
+                text: root.controller.qrStatus.length > 0 ? root.controller.qrStatus : root.controller.status
                 wrapMode: Text.Wrap
                 font.pixelSize: 13
                 color: "white"

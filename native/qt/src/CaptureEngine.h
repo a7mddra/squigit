@@ -24,6 +24,8 @@ class CaptureEngine : public QObject {
   Q_PROPERTY(bool ocrVisible READ ocrVisible NOTIFY ocrChanged)
   Q_PROPERTY(QVariantList textBoxes READ textBoxes NOTIFY ocrChanged)
   Q_PROPERTY(QString status READ status NOTIFY ocrChanged)
+  Q_PROPERTY(bool qrPending READ qrPending NOTIFY qrChanged)
+  Q_PROPERTY(QString qrStatus READ qrStatus NOTIFY qrChanged)
   Q_PROPERTY(qreal pixelRatio READ pixelRatio CONSTANT)
 
 public:
@@ -42,8 +44,10 @@ public:
   bool ocrVisible() const { return m_ocrVisible; }
   QVariantList textBoxes() const { return m_textBoxes; }
   QString status() const { return m_ocrReady && !m_ocrVisible ? QString() : m_status; }
+  bool qrPending() const { return m_qrPending; }
+  QString qrStatus() const { return m_qrStatus; }
   qreal pixelRatio() const { return m_devicePixelRatio; }
-  void acceptOcrResponse(const QByteArray &line);
+  void acceptResponse(const QByteArray &line);
 
   Q_INVOKABLE QString ensureBackgroundFileFallback();
   Q_INVOKABLE void cancel();
@@ -53,6 +57,7 @@ public:
   Q_INVOKABLE void finishTraditionalCapture(QPointF start, QPointF end);
   Q_INVOKABLE void save();
   Q_INVOKABLE void toggleOcr();
+  Q_INVOKABLE void scanQr();
   Q_INVOKABLE void setSelection(const QRectF &logicalRect);
   Q_INVOKABLE void copyText();
 
@@ -63,6 +68,7 @@ signals:
   void displayIndexChanged();
   void selectionChanged();
   void ocrChanged();
+  void qrChanged();
 
 private:
   struct Character {
@@ -80,11 +86,13 @@ private:
   void select(const QRectF &logicalRect);
   void recognize();
   bool rebuildTextBoxes();
+  QImage selectedImage() const;
   QString saveImage(const QImage &rgb) const;
   void fail();
   QImage m_backgroundImage;
   std::unique_ptr<QTemporaryFile> m_backgroundFile;
   std::unique_ptr<QTemporaryFile> m_ocrFile;
+  std::unique_ptr<QTemporaryFile> m_qrFile;
   QUrl m_backgroundSource;
   QRectF m_selection;
   qreal m_devicePixelRatio = 1.0;
@@ -101,4 +109,8 @@ private:
   QString m_status;
   QString m_requestId;
   int m_requestSequence = 0;
+  bool m_qrPending = false;
+  QString m_qrStatus;
+  QString m_qrRequestId;
+  int m_qrRequestSequence = 0;
 };

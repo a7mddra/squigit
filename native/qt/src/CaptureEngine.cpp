@@ -154,6 +154,10 @@ void CaptureEngine::select(const QRectF &logicalRect) {
       clipped.height() * m_devicePixelRatio < 1 || clipped == m_selection)
     return;
   m_selection = clipped;
+  if (!m_qrStatus.isEmpty() && !m_qrPending) {
+    m_qrStatus.clear();
+    emit qrChanged();
+  }
   const bool textChanged = rebuildTextBoxes();
   emit selectionChanged();
   if (textChanged)
@@ -168,6 +172,10 @@ void CaptureEngine::setSelection(const QRectF &logicalRect) {
 void CaptureEngine::toggleOcr() {
   if (!hasSelection() || m_ocrPending)
     return;
+  if (!m_qrPending) {
+    m_qrStatus.clear();
+    emit qrChanged();
+  }
   if (!m_ocrReady) {
     recognize();
     return;
@@ -196,8 +204,43 @@ void CaptureEngine::recognize() {
   std::cout << "OCR_REQUEST:" << QJsonDocument(request).toJson(QJsonDocument::Compact).toStdString() << std::endl;
 }
 
-void CaptureEngine::acceptOcrResponse(const QByteArray &line) {
+void CaptureEngine::scanQr() {
+  if (!hasSelection() || m_qrPending)
+    return;
+  m_qrFile = std::make_unique<QTemporaryFile>(QDir::temp().filePath("squigit-qr-XXXXXX.png"));
+  const QImage image = selectedImage();
+  if (image.isNull() || !m_qrFile->open() || !image.save(m_qrFile.get(), "PNG")) {
+    m_qrFile.reset();
+    m_qrStatus = "Could not prepare the selected image. Click QR to retry.";
+    emit qrChanged();
+    return;
+  }
+  m_qrFile->close();
+  m_qrRequestId = QString("qr-%1-%2").arg(m_displayIndex).arg(++m_qrRequestSequence);
+  m_qrPending = true;
+  m_qrStatus = "Scanning selected region for a QR code...";
+  emit qrChanged();
+  const QJsonObject request{{"id", m_qrRequestId}, {"image", m_qrFile->fileName()}};
+  std::cout << "QR_REQUEST:" << QJsonDocument(request).toJson(QJsonDocument::Compact).toStdString() << std::endl;
+}
+
+void CaptureEngine::acceptResponse(const QByteArray &line) {
   const QJsonObject response = QJsonDocument::fromJson(line).object();
+  if (m_qrPending && response["id"].toString() == m_qrRequestId) {
+    m_qrPending = false;
+    m_qrFile.reset();
+    const QString error = response["error"].toString();
+    const QString url = response["url"].toString();
+    if (!error.isEmpty() || url.isEmpty()) {
+      m_qrStatus = error.isEmpty() ? "No QR code found in the selected region" : error;
+      emit qrChanged();
+      return;
+    }
+    const QJsonObject request{{"url", url}};
+    std::cout << "QR_OPEN:" << QJsonDocument(request).toJson(QJsonDocument::Compact).toStdString() << std::endl;
+    QGuiApplication::exit(0);
+    return;
+  }
   if (!m_ocrPending || response["id"].toString() != m_requestId) return;
   if (m_ocrCancelling && !response.contains("cancelled"))
     return;
@@ -321,8 +364,9 @@ QString CaptureEngine::saveImage(const QImage &rgb) const {
   return path;
 }
 
-void CaptureEngine::save() {
-  if (!hasSelection()) return;
+QImage CaptureEngine::selectedImage() const {
+  if (!hasSelection())
+    return QImage();
   const int left = qFloor(m_selection.left() * m_devicePixelRatio);
   const int top = qFloor(m_selection.top() * m_devicePixelRatio);
   const int right = qCeil(m_selection.right() * m_devicePixelRatio);
@@ -331,7 +375,12 @@ void CaptureEngine::save() {
                                            .intersected(m_backgroundImage.rect()))
                      .convertToFormat(QImage::Format_RGB888);
   image.setDevicePixelRatio(1.0);
-  const QString savedPath = saveImage(image);
+  return image;
+}
+
+void CaptureEngine::save() {
+  if (!hasSelection()) return;
+  const QString savedPath = saveImage(selectedImage());
   if (savedPath.isEmpty()) {
     std::cerr << "CAPTURE_NATIVE_ERROR: could not write the captured image"
               << std::endl;

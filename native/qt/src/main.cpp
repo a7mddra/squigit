@@ -411,7 +411,7 @@ int main(int argc, char *argv[]) {
     while (std::getline(std::cin, line)) {
       const QByteArray response = QByteArray::fromStdString(line);
       QMetaObject::invokeMethod(&app, [controllers, response]() {
-        for (auto *controller : controllers) controller->acceptOcrResponse(response);
+        for (auto *controller : controllers) controller->acceptResponse(response);
       }, Qt::QueuedConnection);
     }
     QMetaObject::invokeMethod(&app, &QCoreApplication::quit, Qt::QueuedConnection);
