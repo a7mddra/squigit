@@ -98,7 +98,7 @@ fn general(s: &App, k: &Kit, layer: &mut Vec<El>, hair: f32) -> Vec<El> {
                     k,
                     "auto-ocr",
                     "Auto OCR",
-                    Some("Recognize text automatically after selecting an area."),
+                    Some("Start recognition when you begin drawing a selection."),
                     s.cfg.general.auto_ocr,
                     |s: &mut App| s.cfg.general.auto_ocr = !s.cfg.general.auto_ocr,
                 ),

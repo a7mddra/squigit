@@ -118,9 +118,21 @@ CLI prints exactly one JSON array of `{text, confidence, box}` on success,
 or an `{error}` object on failure. Coordinates are physical pixels relative
 to the entire frozen image of the chosen display. Qt caches successful results
 and partitions characters by the current crop. `--auto-ocr` starts recognition
-after the initial selection; subsequent OCR button clicks toggle visibility.
-Failed scans remain retryable. Keep this contract in sync across both Rust
-crates and Qt.
+on the first press that begins drawing a selection; subsequent OCR button clicks
+toggle visibility. Failed and cancelled scans remain retryable.
+
+Qt cancels a pending scan with `OCR_CANCEL:{"id":"..."}`. Rust terminates and
+reaps the OCR process tree before replying `{"id":"...","cancelled":true}`.
+Termination failures return `cancelled:false` and `error`. Qt ignores racing
+scan results while cancellation is pending. Cancelling OCR keeps the overlay
+open and does not change the Auto OCR preference. Unix process groups and
+Windows Job Objects contain each OCR job. Closing the overlay stops its jobs.
+Keep this contract in sync across both Rust crates and Qt.
+
+The first selection press transfers activation and the keyboard grab to the
+chosen display and hides the other overlays. Only that display's controller
+handles application-level Escape and copy shortcuts, including when an OCR
+text field has focus.
 
 Other capture contracts:
 

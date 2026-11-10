@@ -44,7 +44,7 @@ fn run() -> Result<ExitCode> {
             return Ok(ExitCode::SUCCESS);
         }
         Some("--help" | "-h") => {
-            println!("Squigit\n\nUsage: squigit [OPTION]\n\nNo options: start in the system tray.\n  --squiggle          Open a freeform screenshot overlay\n  --traditional       Open a rectangular screenshot overlay\n  --auto-ocr          Recognize the frozen display after selecting an area\n  --output-dir <DIR>  Choose where captures are saved\n  --configuration     Open the Rune settings window\n  --about             Open About Squigit\n  --authorize         Request screen capture permission\n  --preflight         Check screen capture permission\n  --version           Print the application version");
+            println!("Squigit\n\nUsage: squigit [OPTION]\n\nNo options: start in the system tray.\n  --squiggle          Open a freeform screenshot overlay\n  --traditional       Open a rectangular screenshot overlay\n  --auto-ocr          Recognize the frozen display while drawing a selection\n  --output-dir <DIR>  Choose where captures are saved\n  --configuration     Open the Rune settings window\n  --about             Open About Squigit\n  --authorize         Request screen capture permission\n  --preflight         Check screen capture permission\n  --version           Print the application version");
             return Ok(ExitCode::SUCCESS);
         }
         Some("--configuration") => {

@@ -39,7 +39,7 @@ Capture modes:
   --traditional  Capture a rectangular selection
 
 Options:
-  --auto-ocr          Recognize the frozen display after selecting an area
+  --auto-ocr          Recognize the frozen display while drawing a selection
   --output-dir <DIR>  Save the captured image into DIR (default: Pictures/squigit)
   --authorize         Request screenshot access without opening the selection overlay
   --preflight         Check screenshot access without requesting permission
