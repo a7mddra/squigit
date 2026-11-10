@@ -32,6 +32,7 @@ fn config_path() -> Result<PathBuf> {
 
 fn run() -> Result<ExitCode> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    rune::set_app_id("squigit");
     let _ = rune::set_app_icon(ICON.to_vec());
     match args.first().map(String::as_str) {
         Some("--version" | "-V") => {

@@ -176,6 +176,8 @@ fn clean(root: &Path) -> Result<(), String> {
 
     remove_directory(&root.join("native/qt/build"))?;
     remove_directory(&root.join("native/qt/_internal"))?;
+    remove_directory(&root.join("native/ocr/build"))?;
+    remove_directory(&root.join("native/ocr/dist"))?;
     remove_directory(&root.join("binaries"))
 }
 

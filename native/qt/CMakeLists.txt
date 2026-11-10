@@ -105,10 +105,10 @@ endif()
 
 if(APPLE)
     set_target_properties(squigit-qt PROPERTIES
-        OUTPUT_NAME "Squigit"
+        OUTPUT_NAME "squigit-qt"
         MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.a7mddra.squigit"
-        MACOSX_BUNDLE_BUNDLE_NAME "Squigit"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.a7mddra.squigit.qt"
+        MACOSX_BUNDLE_BUNDLE_NAME "squigit-qt"
         MACOSX_BUNDLE_INFO_STRING "Squigit Screen Capture"
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/config/Info.plist.in"
     )

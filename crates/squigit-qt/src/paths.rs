@@ -13,7 +13,7 @@ impl RuntimePaths {
         let parent = exe_path
             .parent()
             .context("The squigit executable has no parent directory")?;
-        let runtime = parent.join("_internal");
+        let runtime = parent.join("_internal/qt");
 
         #[cfg(target_os = "linux")]
         {
@@ -52,10 +52,10 @@ impl RuntimePaths {
         #[cfg(target_os = "macos")]
         {
             let bin = runtime
-                .join("Squigit.app")
+                .join("squigit-qt.app")
                 .join("Contents")
                 .join("MacOS")
-                .join("Squigit");
+                .join("squigit-qt");
             if !bin.exists() {
                 anyhow::bail!("squigit Qt runtime not found at {}", bin.display());
             }

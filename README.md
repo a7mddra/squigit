@@ -1,87 +1,77 @@
 # Squigit
 
-Native screenshot tool. Qt 6 provides the on-screen selection overlays and
-screen grabbing; Rust is the entrypoint, session guardian, and packager. The
-built binary saves the cutout into a folder and prints the absolute path of
-the saved image.
+Squigit is a screenshot-first desktop proof of concept built with Rust, Rune, Qt 6, and PaddleX. It starts in the system tray with no home page.
 
-## Features
+- **Take screenshot** starts the Qt overlay. Draw a squiggle or select a rectangle; the selection stays open with **Save** and **OCR** actions.
+- **Save** writes a PNG to `Pictures/squigit` and closes the overlay.
+- **OCR** asks Rust to run the bundled intelligence sidecar for that selection. Qt receives JSON and places transparent, selectable text over the frozen screen. Drag within a text line and press Ctrl+C to copy it; Ctrl+Shift+C copies all recognized text. Escape cancels the overlay.
+- **Open savepath** opens `Pictures/squigit` in the OS file manager.
+- **Configuration** opens a framed Rune window inspired by `rune-settings`. Its controls only edit a temporary demo config at `<temp>/squigit-settings-demo-<pid>/config.toml`; they do not configure capture or OCR.
+- **About** opens a separate Rune dialog. **Quit** stops the resident application and its active capture.
 
-- `--squiggle` (default): freehand circle-style selection with smooth strokes
-  and a soft glow, à la "Circle to Search".
-- `--traditional`: rectangular selection with rounded corners and a gradient
-  stroke outline.
-- Multi-monitor aware: one fullscreen frozen frame per display.
-- Wayland capture via the desktop portal (with permission preflight), native
-  grabs on X11, macOS (CoreGraphics), and Windows (GDI+).
-- Single-instance lock, display hotplug watchdog, and shutter-sound
-  suppression on the Linux Wayland capture path.
-- Output: `<output-dir>/squigit-<timestamp>.png`, the path is printed on
-  stdout (the only stdout line on success). Exit codes: `0` success, `2`
-  cancelled, `1` failure.
+Only Rust stays resident. Qt and OCR run on demand. The proof of concept bundles English PP-OCRv5 mobile detection and recognition models; it has no chat, history, model manager, or persistent OCR worker.
 
-## Building and running
+## Layout
 
-```bash
-cargo xtask build         # cmake build + runtime deploy + rust release + package
-cargo xtask build --qt    # only the Qt runtime steps
-cargo xtask run           # execute the packaged binary
+```text
+squigit/                 Rust application, tray, Rune windows, product icons
+crates/squigit-qt/        Rust Qt process orchestration and capture sandbox
+crates/squigit-ocr/       Rust OCR process runner and JSON result types
+native/qt/               C++/QML screenshot overlay and OS grabbers
+native/ocr/              Python OCR CLI, PyInstaller spec, model preparation
+xtask/                   Build, deploy, package, run, format, doctor
+```
+
+The executable identities are `squigit`, `squigit-qt`, and `squigit-ocr`. Only `squigit` has a desktop entry.
+
+## Build and run
+
+Install Rust stable, a C++17 toolchain, CMake, Qt 6 with Quick/QML and Qt5Compat, Python 3.10–3.12 with venv/pip, and the platform's Qt deployment tool (`linuxdeployqt`, `macdeployqt`, or `windeployqt`). Linux also needs fontconfig, Wayland, and xkbcommon development libraries for Rune. Set `Qt6_DIR` or `CMAKE_PREFIX_PATH` when Qt is outside the system prefix. `SQUIGIT_PYTHON` selects the Python executable used to create the OCR build environment.
+
+```sh
+cargo xtask build          # Build and bundle all three executables
+cargo xtask run            # Start the tray application
+cargo xtask build --qt     # Build only native/qt/build
+cargo xtask build --ocr    # Build only native/ocr/dist/squigit-ocr
+cargo xtask doctor         # Check the Rust workspace and configure Qt
+cargo xtask fmt            # Format changed files
+```
+
+The first OCR build installs pinned Paddle/PaddleX/PaddleOCR and PyInstaller versions into `native/ocr/.venv`, prepares two models, and freezes the CLI. Subsequent builds reuse these files. Model downloads happen during the build, so packaged OCR works offline without Python installed.
+
+```text
+binaries/<host-triple>/
+├── squigit
+├── squigit.desktop        Linux desktop entry
+├── squigit.png
+└── _internal/
+    ├── qt/                Qt deployment output, including squigit-qt
+    └── ocr/               PyInstaller output, including squigit-ocr
+```
+
+Keep the entire directory together. The sidecars are resolved relative to the application executable, independently of PATH or the current working directory.
+
+For direct capture and window development:
+
+```sh
 cargo xtask run -- --traditional --output-dir /tmp/shots
+cargo xtask run -- --squiggle
+cargo xtask run -- --configuration
+cargo xtask run -- --about
 ```
 
-The packaged tree lives at `binaries/<host-triple>/`:
+The pinned Rune tray backend supports Linux and Windows. Linux needs a StatusNotifier host (GNOME AppIndicator extension, KDE, or a compatible panel). Rune's pinned revision does not yet provide a macOS tray backend; the native capture backend remains available there.
+
+## Process protocol
+
+Qt writes capture markers and newline-delimited OCR requests to stdout; diagnostics go to stderr. Rust owns both sidecar processes. Each OCR click creates one OCR process and Rust replies to Qt on stdin:
 
 ```text
-binaries/x86_64-unknown-linux-gnu/
-├── squigit                     # the Rust entrypoint binary
-└── _internal/                  # deployed Qt runtime (bundler output)
+Qt → Rust: OCR_REQUEST:{"id":"0-1","image":"/tmp/squigit-ocr-xxxxxx.png"}
+Rust → Qt: {"id":"0-1","boxes":[{"text":"Hello","confidence":0.99,"box":[[1,2],[50,2],[50,20],[1,20]]}]}
+Rust → Qt: {"id":"0-1","error":"An actionable OCR failure"}
 ```
 
-On macOS the runtime is `Squigit.app`, on Windows it is a windeployqt-spread
-tree next to `squigit-qt.exe`.
+Boxes use physical pixels relative to the selected image. Qt applies the selection offset, display pixel ratio, text width, and rotation. Temporary selection files belong to Qt and are removed after a response or when the overlay exits. OCR is cancelled when the overlay closes and has a two-minute limit.
 
-## Usage
-
-```text
-Usage:
-  squigit [MODE] [--output-dir <DIR>]
-  squigit --authorize
-  squigit --preflight
-  squigit --help
-  squigit --version
-
-Capture modes:
-  --squiggle     Capture a freeform squiggle selection (default)
-  --traditional  Capture a rectangular selection
-
-Options:
-  --output-dir <DIR>  Save the captured image into DIR (default: Pictures/squigit)
-  --authorize         Request screenshot access without opening the selection overlay
-  --preflight         Check screenshot access without requesting permission
-  -h, --help          Print this help
-  -V, --version       Print the squigit version
-```
-
-## Repository layout
-
-```text
-squigit/
-├── .cargo/config.toml      # cargo xtask alias
-├── .github/                # build workflow + composite action
-├── docker/                 # linux builder images (ubuntu, fedora)
-├── native/                 # Qt 6 selection engine (CMake, QML, grabber backends)
-├── src/                    # Rust sources of the squigit binary
-└── xtask/                  # build / run / fmt / doctor / clean automation
-```
-
-## Development
-
-- `cargo xtask fmt [--all]` — rustfmt + prettier + clang-format over changed
-  files (or the whole tree).
-- `cargo xtask doctor` — `cargo check --workspace` plus a cmake reconfigure.
-- `cargo xtask clean` — drop the cargo target, native build tree, and
-
-  packaged binaries.
-
-See [`AGENTS.md`](AGENTS.md) for architecture boundaries and the marker
-protocol between the Rust process and the Qt runtime.
+`SQUIGIT_SAVED:<absolute path>` reports a successful save; direct capture prints just that path and exits 0. Cancellation exits 2; failure exits 1. The existing permission and audio suppression markers remain part of the capture protocol. `SQUIGIT_OUTPUT_DIR` is passed by Rust from `--output-dir` when provided.

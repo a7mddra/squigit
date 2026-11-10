@@ -11,43 +11,33 @@ adhere to.
 
 ```text
 squigit/
-├── .cargo/
-│   └── config.toml          # cargo aliases (cargo xtask) only
-├── .github/
-│   ├── actions/build/       # composite build action used by the workflow
-│   └── workflows/build.yml  # multi-platform build matrix
-├── docker/                  # linux builder images (Dockerfile.ubuntu/.fedora)
-├── native/                  # Qt 6 screenshot engine
-│   ├── backends/            # per-OS grabbers: include/, linux/, macos/, windows/
-│   ├── config/              # config.h.in and macOS Info.plist.in templates
-│   ├── src/                 # main.cpp, CaptureEngine (crop + save + report)
-│   └── ui/                  # qml.qrc, views/CaptureWindow.qml, components/*.qml
-├── src/                     # Rust sources of the squigit binary
-│   ├── main.rs              # CLI parsing, output-dir resolution, version check
-│   ├── instance.rs          # Qt runtime spawn + stdout protocol handling
-│   ├── paths.rs             # deployed runtime discovery (bin + env)
-│   └── sandbox/             # audio_guard, display_hotplug, single_instance
-├── xtask/                   # build/run/doctor/fmt/clean automation
-│   └── src/
-│       ├── main.rs          # CLI dispatch + fmt + doctor + clean
-│       └── native.rs        # cmake build, deploy, packaging pipeline
-├── Cargo.toml               # workspace root and the squigit package (bin: squigit)
+├── squigit/              # Rust application, tray, Rune windows, icons
+├── crates/
+│   ├── squigit-qt/       # Rust Qt process wrapper and capture sandbox
+│   └── squigit-ocr/      # Rust OCR runner and JSON result types
+├── native/
+│   ├── qt/              # C++/QML overlay and platform grabbers
+│   └── ocr/             # Python OCR CLI and PyInstaller inputs
+├── xtask/               # Build, deployment, packaging, and development tasks
+├── Cargo.toml           # Workspace manifest
 └── README.md
 ```
 
-The Rust package lives at the repository root; the only user-facing,
-distributed binary is `squigit`.
+The only public application is `squigit`. It owns the tray, settings, about,
+and distribution. `squigit-qt` and `squigit-ocr` are private sidecars.
+
+Do not add tests unless asked. Never use sub-agents. Refactors replace old
+formats; do not introduce legacy compatibility paths.
 
 ---
 
 ## 2. Naming Rules
 
 1. **Binary naming.** The delivered binary is `squigit` (Rust entrypoint). The
-   Qt helper inside the deployed runtime is `squigit-qt` (`Squigit.app` bundle
+   Qt helper inside the deployed runtime is `squigit-qt` (`squigit-qt.app` bundle
    on macOS), so every user-visible name stays anchored on `squigit`.
 2. **Rust naming.** Functions, modules, and variables are `snake_case`; types
-   are `CamelCase`. The current binary is a single crate; keep modules
-   shallow.
+   are `CamelCase`. Keep crate modules shallow.
 3. **C++/CMake naming.** The CMake project is `SQUIGIT`, the target is
    `squigit-qt`, and the QML module URI is `SquigitCapture`.
 4. **App identity.** Linux desktop file name: `squigit`; macOS bundle
@@ -80,7 +70,7 @@ cargo xtask fmt
 # Format everything
 cargo xtask fmt --all
 
-# Remove target/, native/build, native/_internal, binaries/
+# Remove target/, native/qt/build, native/qt/_internal, native/ocr/build, native/ocr/dist, binaries/
 cargo xtask clean
 ```
 
@@ -94,7 +84,7 @@ Packaging output layout:
 ```text
 binaries/<host-triple>/
 ├── squigit            # the Rust binary (or squigit.exe on Windows)
-└── _internal/         # deployed Qt runtime tree (bundler output)
+└── _internal/         # private Qt and OCR deployment trees
 ```
 
 `cargo xtask run` executes `binaries/<host-triple>/squigit` and forwards the
@@ -104,8 +94,8 @@ remaining arguments (a single leading `--` is stripped).
 
 ## 4. Rust ↔ Qt Runtime Protocol
 
-The Rust wrapper and the Qt runtime (`squigit-qt`) exchange single-line
-markers on stdout. Keep both sides (`src/instance.rs`, `native/src/`) in sync
+The Rust capture wrapper and the Qt runtime (`squigit-qt`) exchange single-line
+markers on stdout. Keep both sides (`crates/squigit-qt/src/instance.rs`, `native/qt/src/`) in sync
 whenever a marker changes. The wrapper forwards its verdict to the user.
 
 | Marker                       | Direction | Meaning                                                                  |
@@ -119,9 +109,16 @@ whenever a marker changes. The wrapper forwards its verdict to the user.
 | `CAPTURE_FAIL`               | Qt → Rust | grab/crop/save failed (exit code 1)                                      |
 | `SQUIGIT_SAVED:<abs path>`   | Qt → Rust | the PNG was written; the wrapper prints `path`                           |
 
-Other contracts:
+OCR uses `OCR_REQUEST:{"id":"...","image":"<path>"}` from Qt and one
+newline-delimited JSON response on Qt stdin, with the same `id` and either
+`boxes` or `error`. Rust starts one bundled OCR process per request. The OCR
+CLI prints exactly one JSON array of `{text, confidence, box}` on success,
+or an `{error}` object on failure. Coordinates are physical pixels relative
+to the selection. Keep this contract in sync across both Rust crates and Qt.
 
-- Exit codes of `squigit`: `0` success, `2` cancelled, `1` failure or
+Other capture contracts:
+
+- Exit codes of direct capture: `0` success, `2` cancelled, `1` failure or
   unexpected runtime exit.
 - On a successful capture the wrapper prints exactly one stdout line: the
   absolute path of the saved PNG. Diagnostics go to stderr (`[squigit]` and
@@ -138,7 +135,7 @@ Other contracts:
 
 - C++17, CMake ≥ 3.16, Qt 6 modules: `Core`, `Gui`, `Quick`, `Qml`, and
   `DBus` on Linux. The QML canvases require `Qt5Compat.GraphicalEffects`.
-- `native/backends/` holds the per-OS grabbers behind the `Grabber`
+- `native/qt/backends/` holds the per-OS grabbers behind the `Grabber`
   interface; each platform module exposes `createUnixEngine` /
   `createWindowsEngine`.
 - The Linux overlay forces `QT_QPA_PLATFORM=xcb`; Wayland frames come from
@@ -174,6 +171,5 @@ Other contracts:
   on native runners.
 - `rustfmt.toml` enforces edition 2021 and Unix newlines.
 - `.cargo/config.toml` only defines the `xtask` alias.
-- `.prettierignore` excludes generated trees (`target`, `binaries`,
-  `native/build`, `native/_internal`, `Cargo.lock`) from Prettier runs.
+- `.prettierignore` excludes generated trees (`target`, `binaries`, native generated trees, the OCR build environment, and `Cargo.lock`) from Prettier runs.
 - `.gitattributes` forces LF and marks QML/scripts as vendored for linguist.

@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>Squigit</string>
-    <key>CFBundleIconFile</key>
-    <string>squigit.icns</string>
+    <string>squigit-qt</string>
     <key>CFBundleIdentifier</key>
-    <string>io.github.a7mddra.squigit</string>
+    <string>io.github.a7mddra.squigit.qt</string>
     <key>CFBundleName</key>
-    <string>Squigit</string>
+    <string>squigit-qt</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>
     <string>????</string>
+    <key>LSUIElement</key>
+    <true/>
     <key>LSMinimumSystemVersion</key>
     <string>11.0</string>
     <key>NSHighResolutionCapable</key>

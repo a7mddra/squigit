@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Squigit
+Comment=Intelligence for the things you squiggle on screen
+Exec=squigit
+Icon=squigit
+Terminal=false
+Categories=Utility;Graphics;
+StartupNotify=false
+StartupWMClass=squigit

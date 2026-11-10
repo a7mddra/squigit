@@ -20,7 +20,7 @@ fn view(state: &About, cx: &mut Cx<About>) -> El {
         .fill(k.c.page)
         .padding(24.0)
         .gap(10.0)
-        .center_y()
+        .items_center()
         .child(el().size(64.0, 64.0).pixels(&state.icon))
         .child(text("Squigit").font(k.ty.body_medium).color(k.c.text_base))
         .child(

@@ -13,6 +13,7 @@ RUN dnf install -y \
     tar \
     python3 \
     python3-pip \
+    python3.12 \
     pkgconf-pkg-config \
     openssl-devel \
     glibc-devel \
@@ -26,6 +27,7 @@ RUN dnf install -y \
     xcb-util-renderutil-devel \
     xcb-util-wm-devel \
     fontconfig-devel \
+    wayland-devel \
     patchelf \
     file \
     which \
@@ -47,6 +49,8 @@ RUN wget https://github.com/probonopd/linuxdeployqt/releases/download/continuous
     mv squashfs-root /opt/linuxdeployqt && \
     ln -s /opt/linuxdeployqt/AppRun /usr/bin/linuxdeployqt && \
     rm /tmp/linuxdeployqt.AppImage
+
+ENV SQUIGIT_PYTHON=python3.12
 
 WORKDIR /build
 CMD ["/bin/bash"]

@@ -30,6 +30,9 @@ fn run_inner(repo_root: &Path, native_only: bool) -> Result<()> {
         macos::sign(&native_dir)?;
     }
 
+    println!("\nBuilding OCR runtime...");
+    crate::ocr::build(repo_root)?;
+
     println!("\nBuilding Rust binary...");
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     run_command(
@@ -101,7 +104,8 @@ fn package(repo_root: &Path, native_dir: &Path) -> Result<()> {
         anyhow::bail!("Qt runtime not found at {}", runtime_source.display());
     }
 
-    let runtime_destination = destination.join("_internal");
+    let runtime_destination = destination.join("_internal/qt");
+    fs::create_dir_all(destination.join("_internal"))?;
     println!("  Moving Qt runtime to {}", runtime_destination.display());
     if fs::rename(&runtime_source, &runtime_destination).is_err() {
         copy_runtime(&runtime_source, &runtime_destination)?;
@@ -135,6 +139,19 @@ fn package(repo_root: &Path, native_dir: &Path) -> Result<()> {
         )
     })?;
 
+    copy_runtime(
+        &repo_root.join("native/ocr/dist/squigit-ocr"),
+        &destination.join("_internal/ocr"),
+    )?;
+    fs::copy(
+        repo_root.join("squigit/icons/icon.png"),
+        destination.join("squigit.png"),
+    )?;
+    #[cfg(target_os = "linux")]
+    fs::copy(
+        repo_root.join("squigit/squigit.desktop"),
+        destination.join("squigit.desktop"),
+    )?;
     Ok(())
 }
 
@@ -443,7 +460,7 @@ mod macos {
 
     pub fn sign(native_dir: &Path) -> Result<()> {
         println!("  Signing bundle...");
-        let app_bundle = native_dir.join("_internal/Squigit.app");
+        let app_bundle = native_dir.join("_internal/squigit-qt.app");
         if !app_bundle.exists() {
             anyhow::bail!("App bundle not found at {}", app_bundle.display());
         }
@@ -516,8 +533,8 @@ mod macos {
         }
         fs::create_dir_all(distribution_dir)?;
 
-        let app_source = build_dir.join("Squigit.app");
-        let app_destination = distribution_dir.join("Squigit.app");
+        let app_source = build_dir.join("squigit-qt.app");
+        let app_destination = distribution_dir.join("squigit-qt.app");
         if !app_source.exists() {
             anyhow::bail!("Built app not found: {}", app_source.display());
         }
@@ -530,13 +547,10 @@ mod macos {
                 .status()
                 .context("Failed to run macdeployqt")?;
             if !status.success() {
-                println!("  Warning: macdeployqt failed, continuing anyway");
+                anyhow::bail!("macdeployqt failed");
             }
         } else {
-            println!(
-                "  Warning: macdeployqt not found at {}",
-                macdeployqt.display()
-            );
+            anyhow::bail!("macdeployqt not found at {}", macdeployqt.display());
         }
         Ok(())
     }
