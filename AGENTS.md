@@ -15,16 +15,15 @@ squigit/
 ├── crates/
 │   ├── squigit-qt/       # Rust Qt process wrapper and capture sandbox
 │   └── squigit-ocr/      # Rust OCR runner and JSON result types
-├── native/
-│   ├── qt/              # C++/QML overlay and platform grabbers
-│   └── ocr/             # Python OCR CLI and PyInstaller inputs
+├── native/qt/           # C++/QML overlay and platform grabbers
 ├── xtask/               # Build, deployment, packaging, and development tasks
 ├── Cargo.toml           # Workspace manifest
 └── README.md
 ```
 
 The only public application is `squigit`. It owns the tray, settings, about,
-and distribution. `squigit-qt` and `squigit-ocr` are private sidecars.
+and distribution. `squigit-qt` is a private sidecar. OCR uses the separately
+installed `squigit-ocr` package; this repository does not build or bundle it.
 
 Do not add or run tests unless asked. Do not automate runtime or UI
 validation; ask the user to validate interactive flows. Never use sub-agents.
@@ -81,7 +80,7 @@ cargo xtask fmt
 # Format everything
 cargo xtask fmt --all
 
-# Remove target/, native/qt/build, native/qt/_internal, native/ocr/build, native/ocr/dist, binaries/
+# Remove target/, native/qt/build, native/qt/_internal, binaries/
 cargo xtask clean
 ```
 
@@ -95,7 +94,7 @@ Packaging output layout:
 ```text
 binaries/<host-triple>/
 ├── squigit            # the Rust binary (or squigit.exe on Windows)
-└── _internal/         # private Qt and OCR deployment trees
+└── _internal/         # private Qt deployment tree
 ```
 
 `cargo xtask run` executes `binaries/<host-triple>/squigit` and forwards the
@@ -122,8 +121,8 @@ whenever a marker changes. The wrapper forwards its verdict to the user.
 
 OCR uses `OCR_REQUEST:{"id":"...","image":"<path>"}` from Qt and one
 newline-delimited JSON response on Qt stdin, with the same `id` and either
-`boxes` or `error`. Rust temporarily starts the installed `squigit-ocr` LTS
-from PATH for each request; normal builds skip the local OCR fork. The OCR
+`boxes` or `error`. Rust starts the separately installed `squigit-ocr` command
+from PATH for each request. Do not build or bundle an OCR engine or models. The OCR
 CLI prints exactly one JSON array of `{text, confidence, box}` on success,
 or an `{error}` object on failure. Coordinates are physical pixels relative
 to the entire frozen image of the chosen display. Qt caches successful results
@@ -230,5 +229,5 @@ Other capture contracts:
   on native runners.
 - `rustfmt.toml` enforces edition 2021 and Unix newlines.
 - `.cargo/config.toml` only defines the `xtask` alias.
-- `.prettierignore` excludes generated trees (`target`, `binaries`, native generated trees, the OCR build environment, and `Cargo.lock`) from Prettier runs.
+- `.prettierignore` excludes generated trees (`target`, `binaries`, native generated trees, and `Cargo.lock`) from Prettier runs.
 - `.gitattributes` forces LF and marks QML/scripts as vendored for linguist.

@@ -11,9 +11,6 @@ RUN dnf install -y \
     wget \
     curl \
     tar \
-    python3 \
-    python3-pip \
-    python3.12 \
     pkgconf-pkg-config \
     openssl-devel \
     glibc-devel \
@@ -49,8 +46,6 @@ RUN wget https://github.com/probonopd/linuxdeployqt/releases/download/continuous
     mv squashfs-root /opt/linuxdeployqt && \
     ln -s /opt/linuxdeployqt/AppRun /usr/bin/linuxdeployqt && \
     rm /tmp/linuxdeployqt.AppImage
-
-ENV SQUIGIT_PYTHON=python3.12
 
 WORKDIR /build
 CMD ["/bin/bash"]

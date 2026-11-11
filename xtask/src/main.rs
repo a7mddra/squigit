@@ -1,5 +1,4 @@
 mod native;
-mod ocr;
 
 use std::env;
 use std::ffi::OsStr;
@@ -8,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 
 const USAGE: &str = "Usage:
-  cargo xtask build [--qt | --ocr]
+  cargo xtask build [--qt]
   cargo xtask run [-- <ARGS>]
   cargo xtask doctor
   cargo xtask fmt [--all]
@@ -38,7 +37,6 @@ fn dispatch() -> Result<(), String> {
         "build" => match arguments.as_slice() {
             [] => native::run(&root, false),
             [flag] if flag == "--qt" => native::run(&root, true),
-            [flag] if flag == "--ocr" => ocr::build(&root).map_err(|error| format!("{error:#}")),
             _ => Err(format!(
                 "unknown argument for build: {}\n\n{USAGE}",
                 arguments.join(" ")
@@ -176,8 +174,6 @@ fn clean(root: &Path) -> Result<(), String> {
 
     remove_directory(&root.join("native/qt/build"))?;
     remove_directory(&root.join("native/qt/_internal"))?;
-    remove_directory(&root.join("native/ocr/build"))?;
-    remove_directory(&root.join("native/ocr/dist"))?;
     remove_directory(&root.join("binaries"))
 }
 

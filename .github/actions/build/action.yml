@@ -33,7 +33,7 @@ runs:
           -e CARGO_HTTP_MULTIPLEXING=false \
           "$IMAGE" \
           bash -lc 'cargo xtask build && binaries/${{ inputs.target }}/squigit --version'
-        for path in target binaries native/qt/build native/ocr; do
+        for path in target binaries native/qt/build; do
           if [ -e "$path" ]; then
             sudo chown -R "$(id -u):$(id -g)" "$path"
           fi
@@ -57,12 +57,6 @@ runs:
         target: "desktop"
         arch: "win64_msvc2019_64"
         modules: "qt5compat qtshadertools qtimageformats"
-
-    - name: Install Python
-      if: runner.os != 'Linux'
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
 
     - name: Build Squigit (macOS)
       if: runner.os == 'macOS'

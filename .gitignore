@@ -21,7 +21,6 @@
 # -----------------------------------------------------------------------------
 .vscode/
 .idea/
-.venv/
 *.swp
 *.swo
 
@@ -49,11 +48,6 @@ pub.pem
 *.log
 *.rej
 *.orig
-
-/native/ocr/build/
-/native/ocr/dist/
-/native/ocr/models/
-__pycache__/
 
 /native/build/
 /native/_internal/

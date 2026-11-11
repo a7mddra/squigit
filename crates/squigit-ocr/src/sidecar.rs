@@ -32,7 +32,7 @@ pub fn recognize(image: &Path, cancelled: &AtomicBool) -> Result<Recognition> {
         ))
         .wrap(process_wrap::std::JobObject);
     let mut child = command.spawn().with_context(|| {
-        format!("Could not start installed {binary}; ensure the OCR LTS is on PATH")
+        format!("Could not start installed {binary}; install the squigit-ocr package and ensure it is on PATH")
     })?;
     let Some(mut stdout) = child.stdout().take() else {
         stop(child.as_mut())?;

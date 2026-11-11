@@ -1,16 +1,16 @@
 # Squigit
 
-Squigit is a screenshot-first desktop proof of concept built with Rust, Rune, Qt 6, and PaddleX. It starts in the system tray with no home page.
+Squigit is a screenshot-first desktop proof of concept built with Rust, Rune, and Qt 6. It starts in the system tray with no home page.
 
 - **Take screenshot** waits 300 ms for the tray menu to close, then starts the Qt overlay using the configured default capture type. Draw a squiggle or select a rectangle; it becomes a crop with resize handles and **Save**, **OCR**, and **QR** actions. Drag blank space inside the crop to move it.
 - **Save** writes the current crop as a PNG to `Pictures/squigit` and closes the overlay. Tray captures then show a native **Image saved** notification with the filename, an image preview, and an **Open in folder** action. Clicking the notification also reveals the image.
-- **OCR** asks Rust to run the installed `squigit-ocr` LTS from PATH on the whole chosen display's frozen image. Text inside the crop is highlighted blue and selectable; text outside is highlighted grey. Moving or resizing the crop updates which characters are selectable without rescanning. The first OCR click scans, or retries a failed or cancelled scan. During recognition, **Cancel OCR** stops the entire OCR process tree while keeping the overlay open. After a successful scan, the button toggles all OCR highlights and text selection. Drag within a blue text line and press Ctrl+C to copy it; Ctrl+Shift+C copies text inside the crop while OCR is visible. Escape first clears selected OCR text; another press closes the overlay. Clicking blank space or moving/resizing the crop also clears text selection. OCR text selection keeps keyboard focus in the overlay so its shortcuts stay available. Keyboard input follows the display where selection begins; the other displays return to their live contents.
+- **OCR** asks Rust to run the installed `squigit-ocr` package's command from PATH on the whole chosen display's frozen image. Text inside the crop is highlighted blue and selectable; text outside is highlighted grey. Moving or resizing the crop updates which characters are selectable without rescanning. The first OCR click scans, or retries a failed or cancelled scan. During recognition, **Cancel OCR** stops the entire OCR process tree while keeping the overlay open. After a successful scan, the button toggles all OCR highlights and text selection. Drag within a blue text line and press Ctrl+C to copy it; Ctrl+Shift+C copies text inside the crop while OCR is visible. Escape first clears selected OCR text; another press closes the overlay. Clicking blank space or moving/resizing the crop also clears text selection. OCR text selection keeps keyboard focus in the overlay so its shortcuts stay available. Keyboard input follows the display where selection begins; the other displays return to their live contents.
 - **QR** scans only the selected crop locally in Rust using [rqrr](https://github.com/WanzenBug/rqrr). The first decoded HTTP or HTTPS URL closes the overlay and opens in the default browser. A missing QR code or a code containing something other than a web URL shows an error in the overlay; resize the crop or click QR to retry. QR scanning does not start OCR or use a network service.
 - **Open savepath** opens `Pictures/squigit` in the OS file manager.
 - **Configuration** opens a framed Rune window inspired by `rune-settings`. **General → Default capture type** chooses Squiggle or Traditional. **Auto OCR**, off by default, starts recognition silently on the first press that begins drawing a selection. OCR controls and status appear only after the selection is finished. Cancelling that scan leaves Auto OCR enabled for future captures. Both settings apply to the next tray capture and persist across restarts. The other controls remain demonstration options. Settings are saved to the OS config directory at `squigit/config.toml` (`~/.config/squigit/config.toml` on Linux by default). Direct CLI captures use their explicit flags, including `--auto-ocr` for automatic recognition.
 - **About** opens a separate Rune dialog. **Quit** stops the resident application and its active capture.
 
-Only Rust stays resident. Qt and OCR run on demand. OCR temporarily uses the published LTS while the local Python fork's frozen SciPy dependency is repaired. Install the LTS so `squigit-ocr` is on PATH; normal builds skip the local OCR fork. There is no chat, history, model manager, or persistent OCR worker.
+Only Rust stays resident. Qt and OCR run on demand. OCR uses only the separately installed `squigit-ocr` package through PATH. The application does not build or bundle an OCR engine or models. There is no chat, history, model manager, or persistent OCR worker.
 
 ## Layout
 
@@ -19,26 +19,22 @@ squigit/                 Rust application, tray, Rune windows, product icons
 crates/squigit-qt/        Rust Qt orchestration, local QR scanner, capture sandbox
 crates/squigit-ocr/       Rust OCR process runner and JSON result types
 native/qt/               C++/QML screenshot overlay and OS grabbers
-native/ocr/              Python OCR CLI, PyInstaller spec, model preparation
 xtask/                   Build, deploy, package, run, format, doctor
 ```
 
-The executable identities are `squigit`, `squigit-qt`, and `squigit-ocr`. Only `squigit` has a desktop entry.
+The application builds `squigit` and its private `squigit-qt` helper. The `squigit-ocr` command comes from a separately installed package. Only `squigit` has a desktop entry.
 
 ## Build and run
 
-Install Rust stable, a C++17 toolchain, CMake, Qt 6.4 or newer with Quick/QML and Qt5Compat, the `squigit-ocr` LTS, and the platform's Qt deployment tool (`linuxdeployqt`, `macdeployqt`, or `windeployqt`). The QML components use [bound component contexts](https://doc.qt.io/qt-6/qtqml-documents-structure.html#componentbehavior), available since Qt 6.4. Linux also needs fontconfig, Wayland, and xkbcommon development libraries for Rune. Set `Qt6_DIR` or `CMAKE_PREFIX_PATH` when Qt is outside the system prefix. Building the local OCR fork separately requires Python 3.10–3.12 with venv/pip; `SQUIGIT_PYTHON` selects that build interpreter.
+Install Rust stable, a C++17 toolchain, CMake, Qt 6.4 or newer with Quick/QML and Qt5Compat, and the platform's Qt deployment tool (`linuxdeployqt`, `macdeployqt`, or `windeployqt`). Install the `squigit-ocr` package separately and ensure its command is on PATH to use OCR. The QML components use [bound component contexts](https://doc.qt.io/qt-6/qtqml-documents-structure.html#componentbehavior), available since Qt 6.4. Linux also needs fontconfig, Wayland, and xkbcommon development libraries for Rune. Set `Qt6_DIR` or `CMAKE_PREFIX_PATH` when Qt is outside the system prefix.
 
 ```sh
-cargo xtask build          # Build the application and bundle Qt; use installed OCR LTS
+cargo xtask build          # Build the application and bundle Qt
 cargo xtask run            # Start the tray application
 cargo xtask build --qt     # Build only native/qt/build
-cargo xtask build --ocr    # Build the local OCR fork separately (currently unused)
 cargo xtask doctor         # Check the Rust workspace and configure Qt
 cargo xtask fmt            # Format changed files
 ```
-
-The explicit `--ocr` build installs pinned Paddle/PaddleX/PaddleOCR and PyInstaller versions into `native/ocr/.venv`, prepares two models, and freezes the local CLI. Its output is currently excluded from the application package and is not used for OCR requests.
 
 ```text
 binaries/<host-triple>/
@@ -49,7 +45,7 @@ binaries/<host-triple>/
     └── qt/                Qt deployment output, including squigit-qt
 ```
 
-Keep the entire directory together. Qt is resolved relative to the application executable. OCR temporarily resolves the installed `squigit-ocr` command through PATH, including its launcher and library environment.
+Keep the entire directory together. Qt is resolved relative to the application executable. OCR resolves the installed `squigit-ocr` command through PATH, including its launcher and library environment. If the package is missing, the overlay reports an OCR error.
 
 For direct capture and window development:
 
