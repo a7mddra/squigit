@@ -22,6 +22,7 @@ endif()
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui)
 find_package(Qt6 6.4 REQUIRED COMPONENTS Quick)
 find_package(Qt6 6.4 REQUIRED COMPONENTS Qml)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Multimedia)
 if(UNIX AND NOT APPLE)
     find_package(Qt6 6.4 REQUIRED COMPONENTS DBus)
 endif()
@@ -41,6 +42,13 @@ set(SOURCES
     src/main.cpp
     src/CaptureEngine.cpp
     src/CaptureEngine.h
+    src/CaptureRuntime.cpp
+    src/CaptureRuntime.h
+    src/Protocol.h
+    src/DisplayGuard.cpp
+    src/DisplayGuard.h
+    src/WindowEffects.cpp
+    src/WindowEffects.h
     src/menu/RadialMenu.cpp
     src/menu/RadialMenu.h
     src/menu/RadialPetal.cpp
@@ -103,16 +111,30 @@ target_include_directories(squigit-qt PRIVATE
 
 target_link_libraries(squigit-qt PRIVATE
     Qt6::Core Qt6::Gui
-    Qt6::Quick Qt6::Qml
+    Qt6::Quick Qt6::Qml Qt6::Multimedia
     ${PLATFORM_LIBS}
+)
+
+if(WIN32)
+    set(SQUIGIT_QT_LIBRARY_DIR "$<TARGET_FILE_DIR:Qt6::Core>")
+else()
+    set(SQUIGIT_QT_LIBRARY_DIR "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_LIBS}")
+endif()
+file(GENERATE
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/runtime-$<CONFIG>.txt"
+    CONTENT "$<TARGET_FILE:squigit-qt>\n${SQUIGIT_QT_LIBRARY_DIR}\n${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}\n${QT6_INSTALL_PREFIX}/${QT6_INSTALL_QML}\n"
 )
 
 if(UNIX AND NOT APPLE)
     set_target_properties(squigit-qt PROPERTIES
         OUTPUT_NAME "squigit-qt"
         INSTALL_RPATH "$ORIGIN/../lib"
-        BUILD_WITH_INSTALL_RPATH TRUE
     )
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set_target_properties(squigit-qt PROPERTIES BUILD_WITH_INSTALL_RPATH FALSE)
+    else()
+        set_target_properties(squigit-qt PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
+    endif()
 endif()
 
 if(APPLE)

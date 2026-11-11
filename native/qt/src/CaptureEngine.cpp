@@ -1,4 +1,5 @@
 #include "CaptureEngine.h"
+#include "Protocol.h"
 #include <QDateTime>
 #include <QClipboard>
 #include <QJsonArray>
@@ -11,31 +12,29 @@
 #include <QGuiApplication>
 #include <QFontMetricsF>
 #include <QLineF>
-#include <QStandardPaths>
 #include <QTextBoundaryFinder>
 #include <QTimer>
+#include <QUuid>
 #include <cmath>
 #include <iostream>
 
-namespace {
-
-QString outputDirectory() {
-  const QString configured =
-      qEnvironmentVariable("SQUIGIT_OUTPUT_DIR").trimmed();
-  if (!configured.isEmpty()) {
-    return configured;
-  }
-  const QStringList pictures =
-      QStandardPaths::standardLocations(QStandardPaths::PicturesLocation);
-  if (pictures.isEmpty()) {
-    return QDir::temp().filePath("squigit");
-  }
-  return pictures.first() + "/squigit";
+CaptureEngine::CaptureEngine(QObject *parent) : QObject(parent),
+    m_instanceId(QUuid::createUuid().toString(QUuid::WithoutBraces)) {
+  m_qrTimer.setSingleShot(true);
+  m_qrTimer.setInterval(250);
+  connect(&m_qrTimer, &QTimer::timeout, this, &CaptureEngine::scanQr);
 }
 
-} // namespace
+void CaptureEngine::setAction(const CaptureAction &action) {
+  m_action = action;
+  setCaptureMode(action.mode);
+  setAutoOcr(action.autoOcr);
+}
 
-CaptureEngine::CaptureEngine(QObject *parent) : QObject(parent) {}
+void CaptureEngine::retire() {
+  m_retired = true;
+  m_qrTimer.stop();
+}
 
 void CaptureEngine::setBackgroundImage(const QImage &image,
                                        qreal devicePixelRatio) {
@@ -81,12 +80,12 @@ QString CaptureEngine::ensureBackgroundFileFallback() {
 }
 
 void CaptureEngine::cancel() {
-  std::cout << "CAPTURE_CANCELLED" << std::endl;
-  QGuiApplication::exit(2);
+  if (!m_retired)
+    emit completed("cancelled", {});
 }
 
 void CaptureEngine::beginSelection() {
-  if (m_captureStarted)
+  if (m_captureStarted || m_retired)
     return;
   m_captureStarted = true;
   emit selectionStarted();
@@ -100,8 +99,7 @@ void CaptureEngine::cancelOcr() {
   m_ocrCancelling = true;
   m_status = "Stopping OCR...";
   emit ocrChanged();
-  const QJsonObject request{{"id", m_requestId}};
-  std::cout << "OCR_CANCEL:" << QJsonDocument(request).toJson(QJsonDocument::Compact).toStdString() << std::endl;
+  sendEvent({{"type", "ocr_cancel"}, {"id", m_requestId}});
 }
 
 void CaptureEngine::finishSquiggleCapture(const QVariantList &points) {
@@ -133,6 +131,7 @@ void CaptureEngine::finishSquiggleCapture(const QVariantList &points) {
   QRectF boundingRect(minX, minY, maxX - minX, maxY - minY);
 
   select(boundingRect);
+  completeSelection();
 }
 
 void CaptureEngine::finishTraditionalCapture(QPointF start, QPointF end) {
@@ -144,6 +143,12 @@ void CaptureEngine::finishTraditionalCapture(QPointF start, QPointF end) {
   }
 
   select(selectionRect);
+  completeSelection();
+}
+
+void CaptureEngine::completeSelection() {
+  if (!m_retired && hasSelection() && m_action.selectionFinished)
+    m_action.selectionFinished(this);
 }
 
 void CaptureEngine::select(const QRectF &logicalRect) {
@@ -165,8 +170,11 @@ void CaptureEngine::select(const QRectF &logicalRect) {
 }
 
 void CaptureEngine::setSelection(const QRectF &logicalRect) {
-  if (hasSelection())
+  if (!m_retired && hasSelection()) {
     select(logicalRect);
+    if (m_action.id == "scan-qr")
+      m_qrTimer.start();
+  }
 }
 
 void CaptureEngine::toggleOcr() {
@@ -185,43 +193,43 @@ void CaptureEngine::toggleOcr() {
 }
 
 void CaptureEngine::recognize() {
-  if (!m_captureStarted || m_ocrPending || m_ocrReady) return;
+  if (m_retired || !m_captureStarted || m_ocrPending || m_ocrReady) return;
+  m_ocrFailed = false;
   m_ocrFile = std::make_unique<QTemporaryFile>(QDir::temp().filePath("squigit-ocr-XXXXXX.png"));
   QImage image = m_backgroundImage.convertToFormat(QImage::Format_RGB888);
   image.setDevicePixelRatio(1.0);
   if (!m_ocrFile->open() || !image.save(m_ocrFile.get(), "PNG")) {
     m_ocrFile.reset();
-    m_status = "Could not prepare the display image. Click OCR to retry.";
+    m_ocrFailed = true;
+    m_status = "Could not prepare the display image. Retry OCR to scan again.";
     emit ocrChanged();
     return;
   }
   m_ocrFile->close();
-  m_requestId = QString("%1-%2").arg(m_displayIndex).arg(++m_requestSequence);
+  m_requestId = QString("ocr-%1-%2").arg(m_instanceId).arg(++m_requestSequence);
   m_ocrPending = true;
   m_status = "Recognizing display text...";
   emit ocrChanged();
-  const QJsonObject request{{"id", m_requestId}, {"image", m_ocrFile->fileName()}};
-  std::cout << "OCR_REQUEST:" << QJsonDocument(request).toJson(QJsonDocument::Compact).toStdString() << std::endl;
+  sendEvent({{"type", "ocr_request"}, {"id", m_requestId}, {"image", m_ocrFile->fileName()}});
 }
 
 void CaptureEngine::scanQr() {
-  if (!hasSelection() || m_qrPending)
+  if (m_retired || !hasSelection() || m_qrPending)
     return;
   m_qrFile = std::make_unique<QTemporaryFile>(QDir::temp().filePath("squigit-qr-XXXXXX.png"));
   const QImage image = selectedImage();
   if (image.isNull() || !m_qrFile->open() || !image.save(m_qrFile.get(), "PNG")) {
     m_qrFile.reset();
-    m_qrStatus = "Could not prepare the selected image. Click QR to retry.";
+    m_qrStatus = "Could not prepare the selected image. Resize the region to retry.";
     emit qrChanged();
     return;
   }
   m_qrFile->close();
-  m_qrRequestId = QString("qr-%1-%2").arg(m_displayIndex).arg(++m_qrRequestSequence);
+  m_qrRequestId = QString("qr-%1-%2").arg(m_instanceId).arg(++m_qrRequestSequence);
   m_qrPending = true;
   m_qrStatus = "Scanning selected region for a QR code...";
   emit qrChanged();
-  const QJsonObject request{{"id", m_qrRequestId}, {"image", m_qrFile->fileName()}};
-  std::cout << "QR_REQUEST:" << QJsonDocument(request).toJson(QJsonDocument::Compact).toStdString() << std::endl;
+  sendEvent({{"type", "qr_request"}, {"id", m_qrRequestId}, {"image", m_qrFile->fileName()}});
 }
 
 void CaptureEngine::acceptResponse(const QByteArray &line) {
@@ -236,9 +244,7 @@ void CaptureEngine::acceptResponse(const QByteArray &line) {
       emit qrChanged();
       return;
     }
-    const QJsonObject request{{"url", url}};
-    std::cout << "QR_OPEN:" << QJsonDocument(request).toJson(QJsonDocument::Compact).toStdString() << std::endl;
-    QGuiApplication::exit(0);
+    emit completed("qr_open", url);
     return;
   }
   if (!m_ocrPending || response["id"].toString() != m_requestId) return;
@@ -248,15 +254,18 @@ void CaptureEngine::acceptResponse(const QByteArray &line) {
   m_ocrCancelling = false;
   m_ocrFile.reset();
   if (response["cancelled"].toBool()) {
+    m_ocrFailed = false;
     m_requestId.clear();
-    m_status = "OCR cancelled. Click OCR to scan.";
+    m_status = "OCR cancelled. Scan OCR to start again.";
     emit ocrChanged();
     return;
   }
   const QString error = response["error"].toString();
   if (!error.isEmpty()) {
-    m_status = error + ". Click OCR to retry.";
+    m_ocrFailed = true;
+    m_status = error + ". Retry OCR to scan again.";
   } else {
+    m_ocrFailed = false;
     m_regions.clear();
     for (const auto &entry : response["boxes"].toArray()) {
       const auto object = entry.toObject();
@@ -344,7 +353,9 @@ void CaptureEngine::copyText() {
 }
 
 QString CaptureEngine::saveImage(const QImage &rgb) const {
-  const QDir base(outputDirectory());
+  if (m_action.outputDirectory.isEmpty())
+    return {};
+  const QDir base(m_action.outputDirectory);
   if (!base.exists() && !base.mkpath(".")) {
     return QString();
   }
@@ -388,15 +399,10 @@ void CaptureEngine::save() {
     return;
   }
 
-  std::cout << "SQUIGIT_SAVED:" << savedPath.toStdString() << std::endl;
-  std::cout.flush();
-
-  QGuiApplication::exit(0);
+  emit completed("saved", savedPath);
 }
 
 void CaptureEngine::fail() {
-  std::cout << "CAPTURE_FAIL" << std::endl;
-  std::cout.flush();
-
-  QGuiApplication::exit(1);
+  if (!m_retired)
+    emit completed("failed", "Could not complete the capture");
 }

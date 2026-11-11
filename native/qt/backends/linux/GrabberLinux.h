@@ -4,6 +4,8 @@
 #define GRABBER_LINUX_H
 
 #include "Grabber.h"
+#include <QEventLoop>
+#include <QPointer>
 
 class GrabberLinux : public Grabber {
 public:
@@ -12,6 +14,7 @@ public:
 
   std::vector<CapturedFrame> captureAll() override;
   bool authorize() override;
+  void cancel() override;
 
 private:
   std::vector<CapturedFrame> captureStandard();
@@ -19,6 +22,9 @@ private:
   std::vector<CapturedFrame> captureWayland();
   bool resetWaylandScreenshotPermission();
   QString requestWaylandScreenshot();
+  QPointer<QEventLoop> m_requestLoop;
+  QString m_requestPath;
+  bool m_requestCancelled = false;
 #endif
 };
 

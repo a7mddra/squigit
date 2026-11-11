@@ -1,4 +1,5 @@
 #include "GrabberLinux.h"
+#include "Protocol.h"
 #include <QGuiApplication>
 #include <QPixmap>
 #include <QScreen>
@@ -7,6 +8,7 @@
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusObjectPath>
+#include <QDBusPendingCall>
 #include <QDBusReply>
 #include <QEventLoop>
 #include <QFile>
@@ -23,17 +25,17 @@ class PortalHelper : public QObject {
 public:
   QString savedUri;
   bool success = false;
+  bool responded = false;
 
 public slots:
   void handleResponse(uint response, const QVariantMap &results) {
+    responded = true;
     if (response == 0) {
       savedUri = results.value("uri").toString();
       success = !savedUri.isEmpty();
     } else {
       // Response 1 is cancellation and response 2 is another failure, which
-      // includes denial. The next startup reads any persisted decision.
-      std::cout << "CAPTURE_CANCELLED" << std::endl;
-      std::cout.flush();
+      // includes denial. The next capture reads any persisted decision.
       success = false;
     }
     emit finished();
@@ -47,15 +49,13 @@ class ScopedAudioMuteIpc {
 public:
   explicit ScopedAudioMuteIpc(bool enabled = true) : m_enabled(enabled) {
     if (m_enabled) {
-      std::cout << "AUDIO_MUTE" << std::endl;
-      std::cout.flush();
+      sendEvent({{"type", "audio_mute"}});
     }
   }
 
   ~ScopedAudioMuteIpc() {
     if (m_enabled) {
-      std::cout << "AUDIO_UNMUTE" << std::endl;
-      std::cout.flush();
+      sendEvent({{"type", "audio_unmute"}});
     }
   }
 
@@ -65,6 +65,19 @@ private:
 #endif
 
 GrabberLinux::GrabberLinux(QObject *parent) : Grabber(parent) {}
+
+void GrabberLinux::cancel() {
+#if defined(Q_OS_LINUX)
+  m_requestCancelled = true;
+  if (!m_requestPath.isEmpty()) {
+    QDBusInterface request("org.freedesktop.portal.Desktop", m_requestPath,
+                           "org.freedesktop.portal.Request");
+    request.asyncCall("Close");
+  }
+  if (m_requestLoop)
+    m_requestLoop->quit();
+#endif
+}
 
 std::vector<CapturedFrame> GrabberLinux::captureAll() {
 #if defined(Q_OS_LINUX)
@@ -191,18 +204,28 @@ QString GrabberLinux::requestWaylandScreenshot() {
                    &QEventLoop::quit);
 
   bool portalCaptureSucceeded = false;
+  m_requestLoop = &loop;
+  m_requestPath = expectedPath;
+  m_requestCancelled = false;
   {
     ScopedAudioMuteIpc audioMuteScope;
     QDBusReply<QDBusObjectPath> reply =
         portal.call("Screenshot", parentWindow, options);
     if (!reply.isValid()) {
+      m_requestLoop.clear();
+      m_requestPath.clear();
       return {};
     }
-
+    m_requestPath = reply.value().path();
     QTimer::singleShot(60000000, &loop, &QEventLoop::quit);
-    loop.exec();
-    portalCaptureSucceeded = helper.success;
+    if (!helper.responded && !m_requestCancelled)
+      loop.exec();
+    portalCaptureSucceeded = helper.success && !m_requestCancelled;
+    if (!portalCaptureSucceeded)
+      cancel();
   }
+  m_requestLoop.clear();
+  m_requestPath.clear();
 
   if (!portalCaptureSucceeded) {
     return {};

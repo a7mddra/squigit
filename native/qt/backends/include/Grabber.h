@@ -25,6 +25,7 @@ public:
   explicit Grabber(QObject *parent = nullptr) : QObject(parent) {}
   virtual ~Grabber() = default;
   virtual std::vector<CapturedFrame> captureAll() = 0;
+  virtual void cancel() {}
   virtual bool authorize() { return !captureAll().empty(); }
   static void sortLeftToRight(std::vector<CapturedFrame> &frames) {
     std::sort(frames.begin(), frames.end(),
