@@ -1,0 +1,8 @@
+# Copyright 2026 a7mddra
+# SPDX-License-Identifier: Apache-2.0
+
+# Compatibility aggregator for OCR build requirements.
+# New build flow installs from split requirement groups directly.
+-r requirements-build.txt
+-r requirements-core.txt
+-r requirements-runtime.txt

@@ -1,0 +1,7 @@
+# Copyright 2026 a7mddra
+# SPDX-License-Identifier: Apache-2.0
+
+# Core OCR stack. Installed with --no-deps to avoid pulling optional extras.
+paddlepaddle==3.3.0
+paddleocr==3.4.0
+paddlex==3.4.2
