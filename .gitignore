@@ -5,11 +5,12 @@
 **/*.rs.bk
 
 # -----------------------------------------------------------------------------
-# Qt Native
+# Native
 # -----------------------------------------------------------------------------
 /native/qt/build/
 /native/qt/build-debug/
 /native/qt/_internal/
+/native/qt/_internal-debug/
 /native/ocr/venv/
 /native/ocr/build/
 /native/ocr/dist/
