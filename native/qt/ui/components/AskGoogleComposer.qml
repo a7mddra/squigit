@@ -51,18 +51,17 @@ Item {
             target: root
             property: "openScale"
             from: 0
-            to: 1.2
-            duration: 260
+            to: 1.08
+            duration: 150
             easing.type: Easing.OutCubic
         }
         NumberAnimation {
             target: root
             property: "openScale"
-            from: 1.2
+            from: 1.08
             to: 1.0
-            duration: 340
-            easing.type: Easing.OutBack
-            easing.overshoot: 2.4
+            duration: 130
+            easing.type: Easing.OutCubic
         }
     }
 

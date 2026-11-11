@@ -209,10 +209,11 @@ Other capture contracts:
 
 - Snapshot keeps only the chosen display's overlay after selection, with a
   movable, resizable crop and a Save button, saving to `Pictures/Squigit`. Ask
-  Google replaces the Save button with a floating composer layered above the
-  crop's bottom-right; sending writes the crop to app data `blob_storage`,
-  prints the prompt, and closes the overlay. Circle to Search saves
-  automatically, and QR scans automatically; neither has buttons.
+  Google replaces the Save button with a floating composer centered at the
+  bottom of the chosen display and layered above the crop; sending writes the
+  crop to app data `blob_storage`, prints the prompt, and closes the overlay.
+  Circle to Search saves automatically, and QR scans automatically; neither has
+  buttons.
 
 - Hide the radial window and its center label immediately, with zero hide
   animation. Disable native transitions where supported and allow 350 ms for

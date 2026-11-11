@@ -197,10 +197,8 @@ Window {
         AskGoogleComposer {
             id: askComposer
             visible: root.controller.action === "ask-google" && root.controller.hasSelection
-            x: Math.max(8, Math.min(selectionStage.area.x + selectionStage.area.width - width - 12,
-                                    root.width - width - 8))
-            y: Math.max(8, Math.min(selectionStage.area.y + selectionStage.area.height - height - 12,
-                                    root.height - height - 8))
+            x: Math.max(8, (root.width - width) / 2)
+            y: Math.max(8, root.height - height - 48)
             onSent: function(text) {
                 root.controller.askGoogle(text)
             }
