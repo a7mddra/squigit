@@ -197,6 +197,7 @@ Window {
         AskGoogleComposer {
             id: askComposer
             visible: root.controller.action === "ask-google" && root.controller.hasSelection
+            backdropItem: background
             x: Math.max(8, (root.width - width) / 2)
             y: Math.max(8, root.height - height - 48)
             onSent: function(text) {

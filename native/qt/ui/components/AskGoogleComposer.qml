@@ -1,4 +1,5 @@
 import QtQuick
+import Qt5Compat.GraphicalEffects
 
 Item {
     id: root
@@ -8,6 +9,9 @@ Item {
     readonly property real capRadius: composerHeight / 2
     readonly property int maxBodyHeight: 200
     readonly property bool hasText: textArea.text.trim().length > 0
+    readonly property real maxBlurRadius: 24
+
+    property Item backdropItem
 
     signal sent(string text)
 
@@ -18,13 +22,15 @@ Item {
     opacity: openOpacity
     transformOrigin: Item.Center
 
-    property real openScale: 0.5
+    property real openScale: 1.15
     property real openOpacity: 0
+    property real openBlur: 0
 
     onVisibleChanged: {
         openAnimation.stop()
-        openScale = 0.5
+        openScale = 1.15
         openOpacity = 0
+        openBlur = 0
         if (visible) {
             openAnimation.start()
             Qt.callLater(function() { textArea.forceActiveFocus() })
@@ -39,18 +45,29 @@ Item {
         NumberAnimation {
             target: root
             property: "openScale"
-            from: 0.5
+            from: 1.15
             to: 1.0
-            duration: 180
-            easing.type: Easing.OutQuint
+            duration: 700
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: [0.16, 1, 0.3, 1, 1, 1]
         }
         NumberAnimation {
             target: root
             property: "openOpacity"
             from: 0
             to: 1
-            duration: 110
-            easing.type: Easing.OutQuad
+            duration: 700
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: [0.16, 1, 0.3, 1, 1, 1]
+        }
+        NumberAnimation {
+            target: root
+            property: "openBlur"
+            from: 0
+            to: root.maxBlurRadius
+            duration: 700
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: [0.16, 1, 0.3, 1, 1, 1]
         }
     }
 
@@ -59,6 +76,68 @@ Item {
             return
         root.sent(textArea.text)
         textArea.text = ""
+    }
+
+    Item {
+        id: backdrop
+        anchors.fill: parent
+        visible: root.backdropItem !== null
+
+        readonly property real padding: root.maxBlurRadius
+
+        ShaderEffectSource {
+            id: backdropSource
+            x: -backdrop.padding
+            y: -backdrop.padding
+            width: root.width + backdrop.padding * 2
+            height: root.height + backdrop.padding * 2
+            sourceItem: root.backdropItem
+            sourceRect: {
+                if (!root.backdropItem)
+                    return Qt.rect(0, 0, 0, 0)
+                const topLeft = backdrop.mapToItem(root.backdropItem, x, y)
+                const bottomRight = backdrop.mapToItem(root.backdropItem, x + width, y + height)
+                return Qt.rect(topLeft.x, topLeft.y,
+                                bottomRight.x - topLeft.x,
+                                bottomRight.y - topLeft.y)
+            }
+            live: openAnimation.running
+            smooth: true
+            visible: false
+        }
+
+        GaussianBlur {
+            id: backdropBlur
+            anchors.fill: backdropSource
+            source: backdropSource
+            radius: root.openBlur
+            deviation: (root.maxBlurRadius + 1) / 3.3333
+            samples: 49
+            cached: false
+        }
+
+        Item {
+            id: backdropMask
+            anchors.fill: backdropBlur
+            visible: false
+
+            Rectangle {
+                x: backdrop.padding
+                y: backdrop.padding
+                width: root.width
+                height: root.height
+                radius: body.radius
+                color: "white"
+                antialiasing: true
+            }
+        }
+
+        OpacityMask {
+            anchors.fill: backdropBlur
+            source: backdropBlur
+            maskSource: backdropMask
+            cached: false
+        }
     }
 
     Rectangle {
@@ -70,7 +149,7 @@ Item {
                          Math.max(root.composerHeight,
                                   textArea.contentHeight + root.capRadius * 2 - textArea.font.pixelSize))
         radius: root.capRadius
-        color: Qt.rgba(0.96, 0.96, 0.98, 0.95)
+        color: Qt.rgba(0.96, 0.96, 0.98, 0.82)
         border.width: 1.0
         border.color: Qt.rgba(1, 1, 1, 0.6)
         antialiasing: true
