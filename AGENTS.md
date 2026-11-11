@@ -14,20 +14,25 @@ squigit/
 ├── squigit/              # Rust application, tray, Rune windows, icons
 ├── crates/
 │   ├── squigit-qt/       # Rust Qt process wrapper and capture sandbox
-│   └── squigit-ocr/      # Rust OCR runner and JSON result types
-├── native/qt/           # C++/QML overlay and platform grabbers
+│   └── squigit-ocr/      # Rust OCR runner, embedded runtime and model manager
+├── native/
+│   ├── qt/              # C++/QML overlay and platform grabbers
+│   └── ocr/             # Forked Python OCR runtime, patches and build scripts
 ├── xtask/               # Build, deployment, packaging, and development tasks
 ├── Cargo.toml           # Workspace manifest
 └── README.md
 ```
 
 The only public application is `squigit`. It owns the tray, settings, about,
-and distribution. `squigit-qt` is a private sidecar. OCR uses the separately
-installed `squigit-ocr` package; this repository does not build or bundle it.
+and distribution. `squigit-qt` is a private sidecar. The complete `squigit-ocr`
+runtime is embedded in the Rust executable and extracted to its cache on demand.
+Never resolve OCR through PATH, system package managers, or an installed package.
 
 Do not add or run tests unless asked. Do not automate runtime or UI
 validation; ask the user to validate interactive flows. Never use sub-agents.
 Refactors replace old formats; do not introduce legacy compatibility paths.
+Commit each completed milestone as work progresses. Keep commits focused and
+avoid accumulating unrelated changes in the working tree.
 
 ---
 
@@ -60,11 +65,20 @@ cmake --build native/qt/build --config Debug --parallel 2
 ```
 
 ```bash
-# Full pipeline: CMake build -> runtime deploy -> cargo release build -> package
+# Full pipeline: OCR build -> CMake build -> Qt deploy -> cargo release build -> package
 cargo xtask build
 
 # Only configure + build the Qt runtime (fast iteration on native code)
 cargo xtask build --qt
+
+# Build and deploy Qt for packaging without rebuilding OCR or Rust
+cargo xtask build --qt --release
+
+# Build Rust and package already-staged OCR and Qt
+cargo xtask build --app
+
+# Only build and stage the forked OCR runtime
+cargo xtask build --ocr
 
 # Execute the packaged binary; arguments after -- are forwarded to it
 cargo xtask run
@@ -80,7 +94,7 @@ cargo xtask fmt
 # Format everything
 cargo xtask fmt --all
 
-# Remove target/, native/qt/build, native/qt/_internal, binaries/
+# Remove target/, native/qt/build, native/qt/_internal, native/ocr/build, native/ocr/dist, binaries/
 cargo xtask clean
 ```
 
@@ -93,7 +107,7 @@ Packaging output layout:
 
 ```text
 binaries/<host-triple>/
-├── squigit            # the Rust binary (or squigit.exe on Windows)
+├── squigit            # Rust binary with embedded OCR (squigit.exe on Windows)
 └── _internal/         # private Qt deployment tree
 ```
 
@@ -121,9 +135,11 @@ whenever a marker changes. The wrapper forwards its verdict to the user.
 
 OCR uses `OCR_REQUEST:{"id":"...","image":"<path>"}` from Qt and one
 newline-delimited JSON response on Qt stdin, with the same `id` and either
-`boxes` or `error`. Rust starts the separately installed `squigit-ocr` command
-from PATH for each request. Do not build or bundle an OCR engine or models. The OCR
-CLI prints exactly one JSON array of `{text, confidence, box}` on success,
+`boxes` or `error`. Rust extracts and starts the embedded `squigit-ocr` sidecar
+for each request. The selected recognition model is read for each new scan and
+passed as `--rec-model-dir`; English uses the bundled default. Never fall back to
+an installed OCR package. The OCR CLI prints one JSON array of
+`{text, confidence, box}` on success,
 or an `{error}` object on failure. Coordinates are physical pixels relative
 to the entire frozen image of the chosen display. Qt caches successful results
 and partitions characters by the current crop. `--auto-ocr` starts recognition
@@ -134,7 +150,8 @@ Qt cancels a pending scan with `OCR_CANCEL:{"id":"..."}`. Rust terminates and
 reaps the OCR process tree before replying `{"id":"...","cancelled":true}`.
 Termination failures return `cancelled:false` and `error`. Qt ignores racing
 scan results while cancellation is pending. Cancelling OCR keeps the overlay
-open and does not change the Auto OCR preference. Unix process groups and
+open. Captures default to Traditional with Auto OCR enabled; the former capture preferences
+are not read. Configuration contains only OCR models and their selector. Unix process groups and
 Windows Job Objects contain each OCR job. Closing the overlay stops its jobs.
 Keep this contract in sync across both Rust crates and Qt.
 
@@ -200,11 +217,25 @@ Other capture contracts:
   the desktop portal and are re-cropped per screen.
 - Deploy flows: `linuxdeployqt` (Linux), `macdeployqt` + optional codesign
   (macOS), `windeployqt` with VC runtime bundling (Windows). These live in
-  `xtask/src/native.rs`.
+  `crates/squigit-qt/build.rs`, included by xtask with Cargo auto-build disabled.
 - Keep the runtime's stdout markers identical to §4; do not add prose output
   on stdout.
 
 ---
+
+OCR native inputs are forked from `squigit/squigit-ocr` at
+`39a6aa9efa6d81e5e06493fee991c67db5550733`. Preserve its split dependency
+installation, all patches, model bootstrap, PyInstaller spec, loader behavior,
+validation scripts, and symlink-preserving packaging. The build driver lives in
+`crates/squigit-ocr/build.rs`; `crates/squigit-ocr/embed.rs` embeds its staged output.
+Model downloads stream real byte progress to Rune through the Rust model manager.
+The application's `squigit/src/storage.rs` owns app data paths and atomic, process-locked
+`config.toml` updates. Rune ensures this directory and its `models/` subdirectory
+exist on launch and settings focus; model access also recreates missing data.
+Use `~/.config/squigit` (or `$XDG_CONFIG_HOME/squigit`) on Linux,
+`%APPDATA%\Squigit` on Windows, and `~/Library/Application Support/Squigit` on macOS.
+`SQUIGIT_CONFIG_DIR` overrides that root. The only current setting is
+`[ocr].selected_model`; do not restore the removed capture or demo preferences.
 
 ## 6. Writing Rules (Comments & Emojis)
 
