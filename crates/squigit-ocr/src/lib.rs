@@ -1,3 +1,5 @@
+pub mod models;
+mod network;
 mod sidecar;
 
 use serde::{Deserialize, Serialize};
