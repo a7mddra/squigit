@@ -18,6 +18,7 @@ use std::time::{Duration, Instant};
 
 pub enum RuntimeEvent {
     Saved { action: String, path: PathBuf },
+    Asked { prompt: String },
     Failed(String),
     Stopped,
 }
@@ -347,6 +348,12 @@ fn read_events(
                             .context("Missing capture action")?
                             .to_owned(),
                         path: event["path"].as_str().context("Missing saved path")?.into(),
+                    }),
+                    Some("ask_google") => on_event(RuntimeEvent::Asked {
+                        prompt: event["prompt"]
+                            .as_str()
+                            .context("Missing Ask Google prompt")?
+                            .to_owned(),
                     }),
                     Some("qr_open") => {
                         let url = qr::parse_url(event["url"].as_str().context("Missing QR URL")?)?;

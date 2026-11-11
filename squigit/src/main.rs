@@ -79,6 +79,7 @@ fn run() -> Result<ExitCode> {
                 notifications::saved(path);
             }
             squigit_qt::RuntimeEvent::Saved { .. } => {}
+            squigit_qt::RuntimeEvent::Asked { prompt } => println!("{prompt}"),
             squigit_qt::RuntimeEvent::Failed(error) => eprintln!("[squigit] {error}"),
             squigit_qt::RuntimeEvent::Stopped => {
                 eprintln!("[squigit] The Qt runtime stopped unexpectedly");

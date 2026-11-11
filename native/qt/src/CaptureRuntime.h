@@ -31,7 +31,8 @@ private:
   void showMenu();
   void startAction(const QString &name);
   void beginCapture(const CaptureAction &action, quint64 generation);
-  void finishCapture(const QString &status, const QString &detail = {});
+  void finishCapture(const QString &status, const QString &detail = {},
+                     const QString &prompt = {});
   void releaseCapture(const QString &session);
   QQmlApplicationEngine m_qml;
   QQmlComponent m_captureComponent;

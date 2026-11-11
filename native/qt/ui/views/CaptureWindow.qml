@@ -23,7 +23,7 @@ Window {
 
     required property var controller
     property bool ownsInput: false
-    readonly property bool saveMode: controller.action === "snapshot" || controller.action === "ask-google"
+    readonly property bool saveMode: controller.action === "snapshot"
 
     function escapeTapped() {
         if (!selectionCrop.clearTextSelection())
@@ -193,6 +193,18 @@ Window {
                 color: "white"
             }
         }
+
+        AskGoogleComposer {
+            id: askComposer
+            visible: root.controller.action === "ask-google" && root.controller.hasSelection
+            x: Math.max(8, Math.min(selectionStage.area.x + selectionStage.area.width - width - 12,
+                                    root.width - width - 8))
+            y: Math.max(8, Math.min(selectionStage.area.y + selectionStage.area.height - height - 12,
+                                    root.height - height - 8))
+            onSent: function(text) {
+                root.controller.askGoogle(text)
+            }
+        }
     }
 
     CaptureExitHint {
@@ -203,7 +215,7 @@ Window {
     Shortcut {
         sequence: "Q"
         context: Qt.ApplicationShortcut
-        enabled: root.ownsInput && root.visible
+        enabled: root.ownsInput && root.visible && !askComposer.visible
         onActivated: root.controller.cancel()
     }
 
@@ -217,7 +229,7 @@ Window {
     Shortcut {
         sequences: ["Ctrl+Shift+C", "Meta+Shift+C"]
         context: Qt.ApplicationShortcut
-        enabled: root.ownsInput && root.visible && root.controller.hasSelection
+        enabled: root.ownsInput && root.visible && root.controller.hasSelection && !askComposer.visible
         onActivated: root.controller.copyText()
     }
 }

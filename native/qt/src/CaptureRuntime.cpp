@@ -256,6 +256,8 @@ void CaptureRuntime::beginCapture(const CaptureAction &action, quint64 generatio
     m_controllers.append(controller);
     connect(controller, &CaptureEngine::completed, this,
             [this](const QString &status, const QString &detail) { finishCapture(status, detail); });
+    connect(controller, &CaptureEngine::askGoogleSubmitted, this,
+            [this](const QString &prompt, const QString &path) { finishCapture("ask_google", path, prompt); });
     connect(controller, &CaptureEngine::selectionStarted, this, [this, controller]() {
       for (int index = 0; index < m_controllers.size(); ++index) {
         const bool chosen = m_controllers[index] == controller;
@@ -312,7 +314,8 @@ void CaptureRuntime::beginCapture(const CaptureAction &action, quint64 generatio
   });
 }
 
-void CaptureRuntime::finishCapture(const QString &status, const QString &detail) {
+void CaptureRuntime::finishCapture(const QString &status, const QString &detail,
+                                   const QString &prompt) {
   if (m_action.id.isEmpty())
     return;
   m_grabber->cancel();
@@ -334,6 +337,8 @@ void CaptureRuntime::finishCapture(const QString &status, const QString &detail)
     event.insert("path", detail);
   else if (status == "qr_open")
     event.insert("url", detail);
+  else if (status == "ask_google")
+    event.insert("prompt", prompt);
   else if (!detail.isEmpty())
     event.insert("error", detail);
   m_action = {};

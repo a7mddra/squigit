@@ -402,6 +402,20 @@ void CaptureEngine::save() {
   emit completed("saved", savedPath);
 }
 
+void CaptureEngine::askGoogle(const QString &prompt) {
+  if (m_retired || !hasSelection() || prompt.trimmed().isEmpty())
+    return;
+  const QString savedPath = saveImage(selectedImage());
+  if (savedPath.isEmpty()) {
+    std::cerr << "CAPTURE_NATIVE_ERROR: could not write the captured image"
+              << std::endl;
+    fail();
+    return;
+  }
+
+  emit askGoogleSubmitted(prompt, savedPath);
+}
+
 void CaptureEngine::fail() {
   if (!m_retired)
     emit completed("failed", "Could not complete the capture");
