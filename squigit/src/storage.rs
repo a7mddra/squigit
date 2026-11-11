@@ -59,6 +59,10 @@ impl AppData {
         self.root.join("models")
     }
 
+    pub fn blobs_dir(&self) -> PathBuf {
+        self.root.join("blob_storage")
+    }
+
     pub fn ensure(&self) -> Result<()> {
         self.load().map(|_| ())
     }
@@ -78,6 +82,7 @@ impl AppData {
     fn access(&self, action: impl FnOnce(&mut Config) -> Result<()>) -> Result<Config> {
         fs::create_dir_all(self.models_dir())
             .with_context(|| format!("Could not create app data at {}", self.root.display()))?;
+        fs::create_dir_all(self.blobs_dir())?;
         let lock = OpenOptions::new()
             .read(true)
             .write(true)
@@ -112,6 +117,13 @@ impl AppData {
             .context("Could not save Squigit settings")?;
         Ok(())
     }
+}
+
+pub fn snapshots_dir() -> Result<PathBuf> {
+    dirs::picture_dir()
+        .or_else(|| dirs::home_dir().map(|home| home.join("Pictures")))
+        .context("Could not find Pictures")
+        .map(|directory| directory.join("Squigit"))
 }
 
 impl ModelStorage for AppData {

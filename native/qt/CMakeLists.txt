@@ -46,6 +46,13 @@ set(SOURCES
     src/menu/RadialPetal.cpp
     src/menu/RadialPetal.h
     src/menu/RadialGeometry.h
+    src/actions/Actions.h
+    src/actions/Actions.cpp
+    src/actions/CircleToSearch.cpp
+    src/actions/Snapshot.cpp
+    src/actions/ScanQr.cpp
+    src/actions/Ocr.cpp
+    src/actions/AskGoogle.cpp
     backends/include/Grabber.h
     ui/qml.qrc
 )
