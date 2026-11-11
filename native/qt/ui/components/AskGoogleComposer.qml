@@ -9,9 +9,7 @@ Item {
     readonly property real capRadius: composerHeight / 2
     readonly property int maxBodyHeight: 200
     readonly property bool hasText: textArea.text.trim().length > 0
-    readonly property real maxBlurRadius: 24
-
-    property Item backdropItem
+    readonly property real startBlurRadius: 24
 
     signal sent(string text)
 
@@ -22,15 +20,24 @@ Item {
     opacity: openOpacity
     transformOrigin: Item.Center
 
+    layer.enabled: root.visible && openBlur > 0
+    layer.effect: GaussianBlur {
+        radius: root.openBlur
+        deviation: (root.startBlurRadius + 1) / 3.3333
+        samples: 49
+        transparentBorder: true
+        cached: false
+    }
+
     property real openScale: 1.15
     property real openOpacity: 0
-    property real openBlur: 0
+    property real openBlur: startBlurRadius
 
     onVisibleChanged: {
         openAnimation.stop()
         openScale = 1.15
         openOpacity = 0
-        openBlur = 0
+        openBlur = startBlurRadius
         if (visible) {
             openAnimation.start()
             Qt.callLater(function() { textArea.forceActiveFocus() })
@@ -63,8 +70,8 @@ Item {
         NumberAnimation {
             target: root
             property: "openBlur"
-            from: 0
-            to: root.maxBlurRadius
+            from: root.startBlurRadius
+            to: 0
             duration: 700
             easing.type: Easing.BezierSpline
             easing.bezierCurve: [0.16, 1, 0.3, 1, 1, 1]
@@ -78,68 +85,6 @@ Item {
         textArea.text = ""
     }
 
-    Item {
-        id: backdrop
-        anchors.fill: parent
-        visible: root.backdropItem !== null
-
-        readonly property real padding: root.maxBlurRadius
-
-        ShaderEffectSource {
-            id: backdropSource
-            x: -backdrop.padding
-            y: -backdrop.padding
-            width: root.width + backdrop.padding * 2
-            height: root.height + backdrop.padding * 2
-            sourceItem: root.backdropItem
-            sourceRect: {
-                if (!root.backdropItem)
-                    return Qt.rect(0, 0, 0, 0)
-                const topLeft = backdrop.mapToItem(root.backdropItem, x, y)
-                const bottomRight = backdrop.mapToItem(root.backdropItem, x + width, y + height)
-                return Qt.rect(topLeft.x, topLeft.y,
-                                bottomRight.x - topLeft.x,
-                                bottomRight.y - topLeft.y)
-            }
-            live: openAnimation.running
-            smooth: true
-            visible: false
-        }
-
-        GaussianBlur {
-            id: backdropBlur
-            anchors.fill: backdropSource
-            source: backdropSource
-            radius: root.openBlur
-            deviation: (root.maxBlurRadius + 1) / 3.3333
-            samples: 49
-            cached: false
-        }
-
-        Item {
-            id: backdropMask
-            anchors.fill: backdropBlur
-            visible: false
-
-            Rectangle {
-                x: backdrop.padding
-                y: backdrop.padding
-                width: root.width
-                height: root.height
-                radius: body.radius
-                color: "white"
-                antialiasing: true
-            }
-        }
-
-        OpacityMask {
-            anchors.fill: backdropBlur
-            source: backdropBlur
-            maskSource: backdropMask
-            cached: false
-        }
-    }
-
     Rectangle {
         id: body
 
@@ -149,7 +94,7 @@ Item {
                          Math.max(root.composerHeight,
                                   textArea.contentHeight + root.capRadius * 2 - textArea.font.pixelSize))
         radius: root.capRadius
-        color: Qt.rgba(0.96, 0.96, 0.98, 0.82)
+        color: Qt.rgba(0.96, 0.96, 0.98, 0.95)
         border.width: 1.0
         border.color: Qt.rgba(1, 1, 1, 0.6)
         antialiasing: true
