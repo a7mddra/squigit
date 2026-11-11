@@ -3602,11 +3602,11 @@ dependencies = [
  "fs2",
  "image",
  "opener",
+ "process-wrap",
  "rqrr",
  "serde_json",
  "squigit-ocr",
  "url",
- "windows-sys 0.61.2",
 ]
 
 [[package]]

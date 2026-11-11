@@ -59,12 +59,9 @@ pub fn recognize(
                 | windows::Win32::System::Threading::BELOW_NORMAL_PRIORITY_CLASS,
         ))
         .wrap(process_wrap::std::JobObject);
-    let mut child = command.spawn().with_context(|| {
-        format!(
-            "Could not start the embedded OCR runtime at {}",
-            binary.display()
-        )
-    })?;
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("Could not start the OCR runtime at {}", binary.display()))?;
     let Some(mut stdout) = child.stdout().take() else {
         stop(child.as_mut())?;
         anyhow::bail!("Missing OCR stdout");

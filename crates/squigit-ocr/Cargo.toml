@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 build = "embed.rs"
 
+[features]
+staged-runtime = []
+
 [dependencies]
 anyhow = "1"
 dirs = "6"

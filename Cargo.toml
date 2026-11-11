@@ -3,6 +3,12 @@ members = ["squigit", "crates/squigit-qt", "crates/squigit-ocr", "xtask"]
 default-members = ["squigit"]
 resolver = "2"
 
+[profile.dev]
+opt-level = 0
+debug = 1
+incremental = true
+codegen-units = 256
+
 [profile.release]
 lto = true
 codegen-units = 1

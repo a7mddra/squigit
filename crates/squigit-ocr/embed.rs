@@ -18,11 +18,31 @@ fn main() {
     } else {
         "squigit-ocr"
     });
-    println!("cargo:rerun-if-changed={}", runtime.display());
     println!(
         "cargo:rerun-if-changed={}",
         root.join("native/ocr/VERSION").display()
     );
+
+    if std::env::var_os("CARGO_FEATURE_STAGED_RUNTIME").is_some() {
+        assert_eq!(
+            std::env::var("PROFILE").unwrap(),
+            "debug",
+            "The staged-runtime feature is only available for debug builds"
+        );
+        assert!(
+            executable.is_file(),
+            "OCR runtime is missing; run cargo xtask build --ocr before cargo xtask build --debug"
+        );
+        println!("cargo:rerun-if-changed={}", executable.display());
+        fs::write(
+            source,
+            format!("const STAGED_RUNTIME: &str = {runtime:?};\n"),
+        )
+        .unwrap();
+        return;
+    }
+
+    println!("cargo:rerun-if-changed={}", runtime.display());
 
     if !executable.is_file() {
         if std::env::var("PROFILE").unwrap() == "release" {

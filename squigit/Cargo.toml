@@ -3,6 +3,9 @@ name = "squigit"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+development = ["squigit-qt/development", "squigit-ocr/staged-runtime"]
+
 [dependencies]
 anyhow = "1"
 dirs = "5"

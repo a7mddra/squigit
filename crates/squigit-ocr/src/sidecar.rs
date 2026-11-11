@@ -1,6 +1,9 @@
 use anyhow::{Context, Result};
+#[cfg(not(feature = "staged-runtime"))]
 use flate2::read::GzDecoder;
+#[cfg(not(feature = "staged-runtime"))]
 use fs2::FileExt;
+#[cfg(not(feature = "staged-runtime"))]
 use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
 
@@ -8,6 +11,22 @@ include!(concat!(env!("OUT_DIR"), "/runtime.rs"));
 
 pub const VERSION: &str = include_str!("../../../native/ocr/VERSION");
 
+#[cfg(feature = "staged-runtime")]
+pub fn resolve_sidecar_path() -> Result<PathBuf> {
+    let executable = PathBuf::from(STAGED_RUNTIME).join(if cfg!(windows) {
+        "squigit-ocr.exe"
+    } else {
+        "squigit-ocr"
+    });
+    anyhow::ensure!(
+        executable.is_file(),
+        "The complete staged OCR runtime is required at {}; run cargo xtask build --ocr",
+        executable.display()
+    );
+    Ok(executable)
+}
+
+#[cfg(not(feature = "staged-runtime"))]
 pub fn resolve_sidecar_path() -> Result<PathBuf> {
     anyhow::ensure!(
         !RUNTIME.is_empty(),

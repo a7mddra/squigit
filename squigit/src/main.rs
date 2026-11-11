@@ -9,12 +9,8 @@ use anyhow::{Context, Result};
 use fs2::FileExt;
 use rune::{Tray, TrayEvent, TrayIcon, TrayItem, TraySpec, WindowSpec};
 use std::process::{Command, ExitCode};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 const ICON: &[u8] = include_bytes!("../icons/128x128.png");
-const CAPTURE_DELAY: Duration = Duration::from_millis(300);
 
 fn main() -> ExitCode {
     match run() {
@@ -36,13 +32,13 @@ fn run() -> Result<ExitCode> {
             return Ok(ExitCode::SUCCESS);
         }
         Some("--help" | "-h") => {
-            println!("Squigit\n\nUsage: squigit [OPTION]\n\nNo options: start in the system tray.\n  --squiggle          Open a freeform screenshot overlay\n  --traditional       Open a rectangular screenshot overlay (default)\n  --auto-ocr          Recognize the frozen display while drawing (default)\n  --no-auto-ocr       Start OCR only when the OCR button is clicked\n  --output-dir <DIR>  Choose where captures are saved\n  --configuration     Open the Rune settings window\n  --about             Open About Squigit\n  --authorize         Request screen capture permission\n  --preflight         Check screen capture permission\n  --version           Print the application version");
+            println!("Squigit\n\nUsage: squigit [OPTION]\n\nNo options: start the tray and persistent Qt menu, initially hidden.\n  --configuration     Open the Rune settings window\n  --about             Open About Squigit\n  --version           Print the application version");
             return Ok(ExitCode::SUCCESS);
         }
         _ => {}
     }
 
-    let models = squigit_ocr::models::ModelManager::new(storage::AppData::open()?);
+    let data = storage::AppData::open()?;
     match args.first().map(String::as_str) {
         Some("--configuration") => {
             settings::app().args(args.into_iter().skip(1)).run();
@@ -52,7 +48,7 @@ fn run() -> Result<ExitCode> {
             about::app().args(args.into_iter().skip(1)).run();
             return Ok(ExitCode::SUCCESS);
         }
-        Some(_) => return Ok(squigit_qt::run(args, models).exit_code),
+        Some(argument) => anyhow::bail!("Unknown application argument: {argument}"),
         None => {}
     }
 
@@ -73,11 +69,26 @@ fn run() -> Result<ExitCode> {
     lock.try_lock_exclusive()
         .context("Squigit is already running")?;
 
+    let models = squigit_ocr::models::ModelManager::new(data.clone());
+    let mut qt = squigit_qt::Runtime::start(
+        models,
+        storage::snapshots_dir()?,
+        data.blobs_dir(),
+        |event| match event {
+            squigit_qt::RuntimeEvent::Saved { action, path } if action == "snapshot" => {
+                notifications::saved(path);
+            }
+            squigit_qt::RuntimeEvent::Saved { .. } => {}
+            squigit_qt::RuntimeEvent::Failed(error) => eprintln!("[squigit] {error}"),
+            squigit_qt::RuntimeEvent::Stopped => {
+                eprintln!("[squigit] The Qt runtime stopped unexpectedly");
+            }
+        },
+    )?;
     let mut app = settings::app()
         .args(Vec::new())
         .windowless()
-        .release_gpu_when_closed()
-        .on_quit(|_, _| squigit_qt::cancel_active());
+        .release_gpu_when_closed();
     let settings = app.handle();
     let (about, _) = app.window(WindowSpec::from_app(
         "about",
@@ -91,39 +102,29 @@ fn run() -> Result<ExitCode> {
     )
     .tooltip("Squigit")
     .menu(vec![
-        TrayItem::action("capture", "Take screenshot"),
+        TrayItem::action("show-menu", "Show menu"),
+        TrayItem::action("hide-menu", "Hide menu"),
         TrayItem::action("savepath", "Open savepath"),
         TrayItem::action("configuration", "Configuration"),
         TrayItem::action("about", "About"),
         TrayItem::action("quit", "Quit"),
     ]);
-    let capturing = Arc::new(AtomicBool::new(false));
-    let capture = Arc::new(Mutex::new(None));
-    let capture_task = Arc::clone(&capture);
+    let menu = qt.handle();
     let tray = Tray::new(spec, move |event| {
         let action = match event {
-            TrayEvent::Activate { .. } => "capture".to_owned(),
+            TrayEvent::Activate { .. } => "show-menu".to_owned(),
             TrayEvent::Menu(action) => action,
             _ => return,
         };
         match action.as_str() {
-            "capture" => {
-                if capturing.swap(true, Ordering::AcqRel) {
-                    return;
-                }
-                let active = Arc::clone(&capturing);
-                let models = models.clone();
-                let task = std::thread::spawn(move || {
-                    std::thread::sleep(CAPTURE_DELAY);
-                    let arguments = vec!["--traditional".into(), "--auto-ocr".into()];
-                    let outcome = squigit_qt::run(arguments, models);
-                    active.store(false, Ordering::Release);
-                    if let Some(path) = outcome.saved_path {
-                        notifications::saved(path);
-                    }
-                });
-                if let Ok(mut capture) = capture_task.lock() {
-                    *capture = Some(task);
+            "show-menu" | "hide-menu" => {
+                let result = if action == "show-menu" {
+                    menu.show_menu()
+                } else {
+                    menu.hide_menu()
+                };
+                if let Err(error) = result {
+                    eprintln!("[squigit] {error:#}");
                 }
             }
             "savepath" => {
@@ -141,20 +142,12 @@ fn run() -> Result<ExitCode> {
     })?;
     app.run();
     drop(tray);
-    squigit_qt::cancel_active();
-    if let Ok(mut capture) = capture.lock() {
-        if let Some(task) = capture.take() {
-            let _ = task.join();
-        }
-    }
+    qt.shutdown();
     Ok(ExitCode::SUCCESS)
 }
 
 fn open_savepath() -> Result<()> {
-    let path = dirs::picture_dir()
-        .or_else(|| dirs::home_dir().map(|home| home.join("Pictures")))
-        .context("Could not find Pictures")?
-        .join("squigit");
+    let path = storage::snapshots_dir()?;
     std::fs::create_dir_all(&path)?;
     #[cfg(target_os = "linux")]
     let status = Command::new("xdg-open").arg(&path).status()?;
