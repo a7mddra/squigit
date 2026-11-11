@@ -3,6 +3,7 @@
 mod about;
 mod notifications;
 mod settings;
+mod storage;
 
 use anyhow::{Context, Result};
 use fs2::FileExt;

@@ -13,8 +13,11 @@ opener = { version = "0.8", features = ["reveal"] }
 rune = { git = "https://github.com/anomalyco/rune", rev = "2259d0c82af372dbb4d43dfd5989f72c44d152be" }
 rune-kit = { git = "https://github.com/anomalyco/rune", rev = "2259d0c82af372dbb4d43dfd5989f72c44d152be" }
 serde = { version = "1", features = ["derive"] }
-toml = "0.9"
+squigit-ocr = { path = "../crates/squigit-ocr" }
 squigit-qt = { path = "../crates/squigit-qt" }
+tempfile = "3"
+tokio = { version = "1.37", features = ["rt-multi-thread", "sync"] }
+toml = "0.9"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
