@@ -41,6 +41,11 @@ set(SOURCES
     src/main.cpp
     src/CaptureEngine.cpp
     src/CaptureEngine.h
+    src/menu/RadialMenu.cpp
+    src/menu/RadialMenu.h
+    src/menu/RadialPetal.cpp
+    src/menu/RadialPetal.h
+    src/menu/RadialGeometry.h
     backends/include/Grabber.h
     ui/qml.qrc
 )
