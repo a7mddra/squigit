@@ -11,8 +11,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 
 const USAGE: &str = "Usage:
-  cargo xtask build [--qt [--release] | --ocr | --app]
-  cargo xtask run [-- <ARGS>]
+  cargo xtask build [--debug | --ocr | --app]
+  cargo xtask stage-qt
+  cargo xtask run [--release] [-- <ARGS>]
   cargo xtask doctor
   cargo xtask fmt [--all]
   cargo xtask clean
@@ -40,8 +41,7 @@ fn dispatch() -> Result<(), String> {
     match command.as_str() {
         "build" => match arguments.as_slice() {
             [] => build::run(&root),
-            [flag] if flag == "--qt" => qt::run(&root, true),
-            [flag, profile] if flag == "--qt" && profile == "--release" => qt::run(&root, false),
+            [flag] if flag == "--debug" => build::debug(&root),
             [flag] if flag == "--app" => build::app(&root),
             [flag] if flag == "--ocr" => ocr::run(&root, false),
             _ => Err(format!(
@@ -49,6 +49,10 @@ fn dispatch() -> Result<(), String> {
                 arguments.join(" ")
             )),
         },
+        "stage-qt" => {
+            reject_arguments("stage-qt", &arguments)?;
+            qt::release(&root)
+        }
         "run" => run_binary(&root, &arguments),
         "doctor" => {
             reject_arguments("doctor", &arguments)?;
@@ -105,23 +109,40 @@ fn reject_arguments(command: &str, arguments: &[String]) -> Result<(), String> {
 }
 
 fn run_binary(root: &Path, arguments: &[String]) -> Result<(), String> {
+    let (release, arguments) = if arguments
+        .first()
+        .is_some_and(|argument| argument == "--release")
+    {
+        (true, &arguments[1..])
+    } else {
+        (false, arguments)
+    };
     let forwarding = match arguments.first().map(String::as_str) {
         Some("--") => arguments.iter().skip(1).cloned().collect::<Vec<_>>(),
         _ => arguments.to_vec(),
     };
 
-    let host = build::host_target_triple().map_err(|error| error.to_string())?;
     let binary_name = if cfg!(windows) {
         "squigit.exe"
     } else {
         "squigit"
     };
-    let binary = root.join("binaries").join(host).join(binary_name);
+    let binary = if release {
+        let host = build::host_target_triple().map_err(|error| error.to_string())?;
+        root.join("binaries").join(host).join(binary_name)
+    } else {
+        root.join("target/debug").join(binary_name)
+    };
 
     if !binary.is_file() {
         return Err(format!(
-            "the packaged binary is missing at {}\nrun 'cargo xtask build' first",
-            binary.display()
+            "the application is missing at {}\nrun '{}' first",
+            binary.display(),
+            if release {
+                "cargo xtask build"
+            } else {
+                "cargo xtask build --debug"
+            }
         ));
     }
 
@@ -151,13 +172,14 @@ fn doctor(root: &Path) -> Result<(), String> {
     )?;
 
     let native_dir = root.join("native/qt");
-    let build_dir = native_dir.join("build");
+    let build_dir = native_dir.join("build-debug");
     let mut cmake = Command::new("cmake");
     cmake
         .arg("-S")
         .arg(&native_dir)
         .arg("-B")
         .arg(&build_dir)
+        .arg("-DCMAKE_BUILD_TYPE=Debug")
         .current_dir(root);
     if let Ok(qt6_dir) = env::var("Qt6_DIR") {
         cmake.arg(format!("-DCMAKE_PREFIX_PATH={qt6_dir}"));
@@ -180,6 +202,7 @@ fn clean(root: &Path) -> Result<(), String> {
     )?;
 
     remove_directory(&root.join("native/qt/build"))?;
+    remove_directory(&root.join("native/qt/build-debug"))?;
     remove_directory(&root.join("native/qt/_internal"))?;
     remove_directory(&root.join("native/ocr/build"))?;
     remove_directory(&root.join("native/ocr/dist"))?;

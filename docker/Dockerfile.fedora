@@ -34,6 +34,7 @@ RUN dnf install -y \
     qt6-qt5compat-devel \
     qt6-qtshadertools-devel \
     qt6-qtimageformats \
+    qt6-qtmultimedia-devel \
     && dnf clean all
 
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- \

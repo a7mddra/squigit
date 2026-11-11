@@ -5,7 +5,7 @@ use std::process::Command;
 
 pub fn run(repo_root: &Path) -> Result<(), String> {
     crate::ocr::run(repo_root, false)?;
-    crate::qt::run(repo_root, false)?;
+    crate::qt::release(repo_root)?;
     app(repo_root)
 }
 
@@ -13,10 +13,41 @@ pub fn app(repo_root: &Path) -> Result<(), String> {
     app_inner(repo_root).map_err(|error| format!("{error:#}"))
 }
 
+pub fn debug(repo_root: &Path) -> Result<(), String> {
+    debug_inner(repo_root).map_err(|error| format!("{error:#}"))
+}
+
+fn debug_inner(repo_root: &Path) -> Result<()> {
+    let host = host_target_triple()?;
+    let ocr = repo_root
+        .join("binaries")
+        .join(format!("paddle-ocr-{host}"))
+        .join(if cfg!(windows) {
+            "squigit-ocr.exe"
+        } else {
+            "squigit-ocr"
+        });
+    anyhow::ensure!(
+        ocr.is_file(),
+        "The complete OCR runtime is required at {}. Run cargo xtask build --ocr once; debug builds never rebuild Python.",
+        ocr.display()
+    );
+    crate::qt::debug(repo_root).map_err(anyhow::Error::msg)?;
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    run_command(
+        Command::new(cargo)
+            .args(["build", "-p", "squigit", "--features", "development"])
+            .current_dir(repo_root),
+        "cargo build -p squigit --features development",
+    )?;
+    println!("\nDebug application ready. Run cargo xtask run.");
+    Ok(())
+}
+
 fn app_inner(repo_root: &Path) -> Result<()> {
     anyhow::ensure!(
         repo_root.join("native/qt/_internal").is_dir(),
-        "The staged Qt runtime is missing; run cargo xtask build --qt --release first"
+        "The staged Qt runtime is missing; run cargo xtask stage-qt first"
     );
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     run_command(
@@ -55,6 +86,10 @@ fn package(repo_root: &Path) -> Result<()> {
         )
     })?;
 
+    copy_app_files(repo_root, &destination)
+}
+
+fn copy_app_files(repo_root: &Path, destination: &Path) -> Result<()> {
     fs::copy(
         repo_root.join("squigit/icons/icon.png"),
         destination.join("squigit.png"),

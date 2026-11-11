@@ -8,6 +8,7 @@
 # Qt Native
 # -----------------------------------------------------------------------------
 /native/qt/build/
+/native/qt/build-debug/
 /native/qt/_internal/
 /native/ocr/venv/
 /native/ocr/build/

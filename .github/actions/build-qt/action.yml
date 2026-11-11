@@ -18,7 +18,7 @@ runs:
         version: "6.6.0"
         host: "mac"
         target: "desktop"
-        modules: "qt5compat qtshadertools qtimageformats"
+        modules: "qt5compat qtshadertools qtimageformats qtmultimedia"
 
     - name: Install Qt (Windows)
       if: runner.os == 'Windows'
@@ -28,7 +28,7 @@ runs:
         host: "windows"
         target: "desktop"
         arch: "win64_msvc2019_64"
-        modules: "qt5compat qtshadertools qtimageformats"
+        modules: "qt5compat qtshadertools qtimageformats qtmultimedia"
 
     - name: Build and deploy Qt (Linux)
       if: runner.os == 'Linux'
@@ -39,7 +39,7 @@ runs:
         set -euo pipefail
         docker run --rm -v "$PWD:/build" -w /build \
           -e CARGO_HTTP_MULTIPLEXING=false \
-          "$BUILD_IMAGE" bash -c 'cargo xtask build --qt --release'
+          "$BUILD_IMAGE" bash -c 'cargo xtask stage-qt'
         for path in target native/qt/build native/qt/_internal; do
           if [ -e "$path" ]; then
             sudo chown -R "$(id -u):$(id -g)" "$path"
@@ -49,4 +49,4 @@ runs:
     - name: Build and deploy Qt (macOS and Windows)
       if: runner.os != 'Linux'
       shell: bash
-      run: cargo xtask build --qt --release
+      run: cargo xtask stage-qt
