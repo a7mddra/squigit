@@ -1,12 +1,11 @@
 name: "Build Squigit"
-description: "Builds, deploys, and signs the native Squigit screenshot tool via xtask"
+description: "Builds OCR and Qt independently, then embeds OCR and packages the Rust application"
 inputs:
   target:
-    description: "Rust target triple"
+    description: "Rust host target triple"
     required: true
   distro:
-    description: "Linux distro for container build (ubuntu or fedora)"
-    required: false
+    description: "Linux distribution for the shared builder image (ubuntu or fedora)"
     default: "ubuntu"
 runs:
   using: "composite"
@@ -15,85 +14,66 @@ runs:
       if: runner.os != 'Linux'
       uses: dtolnay/rust-toolchain@stable
 
-    - name: Build Linux Artifacts (Docker)
+    - name: Prepare Linux builder
       if: runner.os == 'Linux'
       shell: bash
+      env:
+        BUILD_DISTRO: ${{ inputs.distro }}
+        BUILD_IMAGE: squigit-screenshot-builder-${{ inputs.distro }}
       run: |
         set -euo pipefail
-        DOCKERFILE="docker/Dockerfile.${{ inputs.distro }}"
-        if [ ! -f "$DOCKERFILE" ]; then
-          echo "Error: Dockerfile not found at $DOCKERFILE"
-          exit 1
-        fi
-        IMAGE="squigit-screenshot-builder-${{ inputs.distro }}"
-        docker build -t "$IMAGE" -f "$DOCKERFILE" .
-        docker run --rm \
-          -v "$PWD:/build" \
-          -w /build \
+        docker build -t "$BUILD_IMAGE" -f "docker/Dockerfile.$BUILD_DISTRO" .
+
+    - name: Build OCR runtime
+      uses: ./.github/actions/build-ocr
+      with:
+        target: ${{ inputs.target }}
+        distro: ${{ inputs.distro }}
+
+    - name: Build Qt runtime
+      uses: ./.github/actions/build-qt
+      with:
+        distro: ${{ inputs.distro }}
+
+    - name: Build and package application (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        BUILD_TARGET: ${{ inputs.target }}
+        BUILD_IMAGE: squigit-screenshot-builder-${{ inputs.distro }}
+      run: |
+        set -euo pipefail
+        docker run --rm -v "$PWD:/build" -w /build \
           -e CARGO_HTTP_MULTIPLEXING=false \
-          "$IMAGE" \
-          bash -lc 'cargo xtask build && binaries/${{ inputs.target }}/squigit --version'
-        for path in target binaries native/qt/build; do
+          -e SQUIGIT_BUILD_TARGET="$BUILD_TARGET" \
+          "$BUILD_IMAGE" bash -c 'cargo xtask build --app && "binaries/$SQUIGIT_BUILD_TARGET/squigit" --version'
+        for path in target binaries; do
           if [ -e "$path" ]; then
             sudo chown -R "$(id -u):$(id -g)" "$path"
           fi
         done
 
-    - name: Install Qt (macOS)
-      if: runner.os == 'macOS'
-      uses: jurplel/install-qt-action@v4
-      with:
-        version: "6.6.0"
-        host: "mac"
-        target: "desktop"
-        modules: "qt5compat qtshadertools qtimageformats"
+    - name: Build and package application (macOS and Windows)
+      if: runner.os != 'Linux'
+      shell: bash
+      run: cargo xtask build --app
 
-    - name: Install Qt (Windows)
-      if: runner.os == 'Windows'
-      uses: jurplel/install-qt-action@v4
-      with:
-        version: "6.6.0"
-        host: "windows"
-        target: "desktop"
-        arch: "win64_msvc2019_64"
-        modules: "qt5compat qtshadertools qtimageformats"
-
-    - name: Build Squigit (macOS)
+    - name: Sign application (macOS)
       if: runner.os == 'macOS'
       shell: bash
-      run: cargo xtask build
-
-    - name: Sign Squigit (macOS)
-      if: runner.os == 'macOS'
-      shell: bash
+      env:
+        BUILD_TARGET: ${{ inputs.target }}
       run: |
         set -euo pipefail
-        IDENTITY="-"
-        DIR="binaries/${{ inputs.target }}"
-        APP_BUNDLE="$DIR/_internal/qt/squigit-qt.app"
+        codesign --force --options runtime --timestamp=none --sign - "binaries/$BUILD_TARGET/squigit"
 
-        if [ -d "$DIR" ]; then
-          find "$DIR" -type f \( -name "*.dylib" -o -name "squigit-qt" -o -name "squigit" \) -print0 | while IFS= read -r -d '' f; do
-            codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$f"
-          done
-
-          if [ -d "$APP_BUNDLE" ]; then
-            find "$APP_BUNDLE" -type d -name "*.framework" -print0 | while IFS= read -r -d '' fw; do
-              codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$fw"
-            done
-          fi
-
-          codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$APP_BUNDLE"
-        fi
-
-        "$DIR/squigit" --version
-
-    - name: Build Squigit (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
+    - name: Check application version (macOS and Windows)
+      if: runner.os != 'Linux'
+      shell: bash
+      env:
+        BUILD_TARGET: ${{ inputs.target }}
       run: |
-        $ErrorActionPreference = "Stop"
-        cargo xtask build
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        & "binaries/${{ inputs.target }}/squigit.exe" --version
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        set -euo pipefail
+        executable="binaries/$BUILD_TARGET/squigit"
+        if [ "$RUNNER_OS" = "Windows" ]; then executable="$executable.exe"; fi
+        "$executable" --version

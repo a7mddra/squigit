@@ -1,0 +1,52 @@
+name: "Build Squigit Qt"
+description: "Builds, deploys, and signs the private Qt screenshot runtime through the Qt crate's build driver"
+inputs:
+  distro:
+    description: "Linux builder image distribution (ubuntu or fedora)"
+    default: "ubuntu"
+outputs:
+  runtime-dir:
+    description: "Staged Qt runtime consumed by application packaging"
+    value: native/qt/_internal
+runs:
+  using: "composite"
+  steps:
+    - name: Install Qt (macOS)
+      if: runner.os == 'macOS'
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: "6.6.0"
+        host: "mac"
+        target: "desktop"
+        modules: "qt5compat qtshadertools qtimageformats"
+
+    - name: Install Qt (Windows)
+      if: runner.os == 'Windows'
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: "6.6.0"
+        host: "windows"
+        target: "desktop"
+        arch: "win64_msvc2019_64"
+        modules: "qt5compat qtshadertools qtimageformats"
+
+    - name: Build and deploy Qt (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        BUILD_IMAGE: squigit-screenshot-builder-${{ inputs.distro }}
+      run: |
+        set -euo pipefail
+        docker run --rm -v "$PWD:/build" -w /build \
+          -e CARGO_HTTP_MULTIPLEXING=false \
+          "$BUILD_IMAGE" bash -c 'cargo xtask build --qt --release'
+        for path in target native/qt/build native/qt/_internal; do
+          if [ -e "$path" ]; then
+            sudo chown -R "$(id -u):$(id -g)" "$path"
+          fi
+        done
+
+    - name: Build and deploy Qt (macOS and Windows)
+      if: runner.os != 'Linux'
+      shell: bash
+      run: cargo xtask build --qt --release

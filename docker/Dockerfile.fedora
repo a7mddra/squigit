@@ -11,6 +11,7 @@ RUN dnf install -y \
     wget \
     curl \
     tar \
+    python3.12 \
     pkgconf-pkg-config \
     openssl-devel \
     glibc-devel \
@@ -46,6 +47,10 @@ RUN wget https://github.com/probonopd/linuxdeployqt/releases/download/continuous
     mv squashfs-root /opt/linuxdeployqt && \
     ln -s /opt/linuxdeployqt/AppRun /usr/bin/linuxdeployqt && \
     rm /tmp/linuxdeployqt.AppImage
+
+RUN mkdir -p /opt/ocr-python/bin && \
+    ln -s /usr/bin/python3.12 /opt/ocr-python/bin/python3
+ENV PATH="/opt/ocr-python/bin:${PATH}"
 
 WORKDIR /build
 CMD ["/bin/bash"]

@@ -1,0 +1,66 @@
+name: "Build Squigit OCR"
+description: "Builds the forked OCR runtime locally with its original dependency, patch, model, and PyInstaller pipeline"
+inputs:
+  target:
+    description: "Rust host target triple"
+    required: true
+  distro:
+    description: "Linux builder image distribution (ubuntu or fedora)"
+    default: "ubuntu"
+  pyi-mode:
+    description: "PyInstaller runtime format"
+    default: "onedir"
+  measure-runtime:
+    description: "Measure the staged OCR runtime size"
+    default: "false"
+outputs:
+  runtime-dir:
+    description: "Staged runtime embedded by the Rust OCR crate"
+    value: ${{ steps.runtime.outputs.directory }}
+runs:
+  using: "composite"
+  steps:
+    - name: Setup OCR Python
+      if: runner.os != 'Linux'
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.12"
+
+    - name: Build OCR (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        BUILD_TARGET: ${{ inputs.target }}
+        BUILD_IMAGE: squigit-screenshot-builder-${{ inputs.distro }}
+        SQUIGIT_OCR_PYI_MODE: ${{ inputs.pyi-mode }}
+        SQUIGIT_OCR_MEASURE_SIZE: ${{ inputs.measure-runtime }}
+      run: |
+        set -euo pipefail
+        docker run --rm -v "$PWD:/build" -w /build \
+          -e CARGO_HTTP_MULTIPLEXING=false \
+          -e SQUIGIT_OCR_PYI_MODE -e SQUIGIT_OCR_MEASURE_SIZE \
+          "$BUILD_IMAGE" bash -c 'cargo xtask build --ocr'
+        for path in target "binaries/paddle-ocr-$BUILD_TARGET" native/ocr; do
+          if [ -e "$path" ]; then
+            sudo chown -R "$(id -u):$(id -g)" "$path"
+          fi
+        done
+
+    - name: Build OCR (macOS and Windows)
+      if: runner.os != 'Linux'
+      shell: bash
+      env:
+        SQUIGIT_OCR_PYI_MODE: ${{ inputs.pyi-mode }}
+        SQUIGIT_OCR_MEASURE_SIZE: ${{ inputs.measure-runtime }}
+      run: cargo xtask build --ocr
+
+    - name: Expose OCR runtime
+      id: runtime
+      shell: bash
+      env:
+        BUILD_TARGET: ${{ inputs.target }}
+      run: |
+        set -euo pipefail
+        runtime="binaries/paddle-ocr-$BUILD_TARGET"
+        test -d "$runtime"
+        echo "directory=$runtime" >> "$GITHUB_OUTPUT"
