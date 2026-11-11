@@ -1,216 +1,294 @@
-mod config;
 mod pages;
 pub(crate) mod ui;
 
-use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::collections::{HashMap, HashSet};
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::{Duration, Instant};
 
-use rune::{AppSpec, Cx, El, Key, KeyEvent, Latest, TextEdit, Tx, Waker};
+use rune::{AppSpec, Cx, El, Tx, Waker};
+use squigit_ocr::models::{ModelDownloadJobSnapshot, ModelManager, DEFAULT_OCR_MODEL_ID};
 
-static CONFIG_PATH: OnceLock<PathBuf> = OnceLock::new();
+const SPINNER_GRACE: Duration = Duration::from_secs(3);
+const CATCH_UP: Duration = Duration::from_millis(650);
+const DELETE_HOLD: Duration = Duration::from_secs(2);
+const DELETE_ARM: Duration = Duration::from_secs(3);
 
-pub fn capture_arguments(path: &Path) -> Result<Vec<String>, String> {
-    let toml = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
-    let general = config::Config::from_toml_string(&toml)?.general;
-    let mut arguments = vec![general.capture_mode.argument().into()];
-    if general.auto_ocr {
-        arguments.push("--auto-ocr".into());
-    }
-    Ok(arguments)
+type JobUpdates = Arc<Mutex<Option<Vec<ModelDownloadJobSnapshot>>>>;
+
+enum Action {
+    Engine,
+    Models,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Page {
-    General,
-    Appearance,
-    Editor,
-    Advanced,
-    ConfigFile,
+struct Finished {
+    key: String,
+    result: Result<Action, String>,
 }
 
-impl Page {
-    pub fn slug(self) -> &'static str {
-        match self {
-            Page::General => "general",
-            Page::Appearance => "appearance",
-            Page::Editor => "editor",
-            Page::Advanced => "advanced",
-            Page::ConfigFile => "config-file",
-        }
-    }
-}
-
-pub struct Edits {
-    pub nickname: TextEdit,
-    pub endpoint: TextEdit,
-    pub prompt: TextEdit,
+struct DeleteGesture {
+    id: String,
+    armed: Instant,
+    holding: Option<Instant>,
 }
 
 pub struct App {
-    pub cfg: config::Config,
-    pub path: PathBuf,
-    pub edits: Edits,
-    pub page: Page,
-    pub open: Option<&'static str>,
-    pub saved_at: Option<String>,
-    pub error: Option<String>,
-    pub(crate) dirty: bool,
-    saves: Latest<Result<(), String>>,
+    models: Option<ModelManager>,
+    runtime: Option<tokio::runtime::Runtime>,
+    jobs: Vec<ModelDownloadJobSnapshot>,
+    installed: HashSet<String>,
+    selected: String,
+    open: bool,
+    error: Option<String>,
+    engine_ready: bool,
+    pending: HashSet<String>,
+    started: HashMap<String, Instant>,
+    visual: HashMap<String, f32>,
+    delete: Option<DeleteGesture>,
+    updates: JobUpdates,
+    finished_tx: mpsc::Sender<Finished>,
+    finished_rx: mpsc::Receiver<Finished>,
+    waker: Option<Waker>,
 }
 
 impl App {
-    pub fn touch(&mut self) {
-        self.dirty = true;
-    }
-
-    pub fn save(&mut self) {
-        self.dirty = true;
-        self.flush();
-    }
-
-    fn flush(&mut self) {
-        match self.cfg.to_toml_string() {
-            Ok(toml) => {
-                let path = self.path.clone();
-                self.saves.request((path, toml), |(path, toml)| {
-                    std::fs::write(path, toml).map_err(|e| e.to_string())
-                });
-                self.dirty = false;
+    fn refresh(&mut self) {
+        let Some(models) = &self.models else { return };
+        match models
+            .list_downloaded_models()
+            .and_then(|installed| Ok((installed, models.selected_model()?)))
+        {
+            Ok((installed, selected)) => {
+                self.installed = installed.into_iter().collect();
+                self.installed.insert(DEFAULT_OCR_MODEL_ID.to_string());
+                self.selected = selected;
             }
-            Err(e) => self.error = Some(e),
+            Err(error) => self.error = Some(error.to_string()),
         }
     }
 
-    pub fn reload(&mut self) {
-        match std::fs::read_to_string(&self.path)
-            .map_err(|e| e.to_string())
-            .and_then(|toml| config::Config::from_toml_string(&toml))
-        {
-            Ok(cfg) => {
-                self.cfg = cfg;
-                self.sync_edits();
+    fn work(
+        &mut self,
+        key: String,
+        work: impl FnOnce() -> Result<Action, String> + Send + 'static,
+    ) {
+        if !self.pending.insert(key.clone()) {
+            return;
+        }
+        let (Some(runtime), Some(waker)) = (&self.runtime, self.waker.clone()) else {
+            self.pending.remove(&key);
+            return;
+        };
+        let sender = self.finished_tx.clone();
+        runtime.spawn_blocking(move || {
+            let result = work();
+            let _ = sender.send(Finished { key, result });
+            waker();
+        });
+    }
+
+    fn download(&mut self, id: &str) {
+        let (Some(runtime), Some(models)) = (&self.runtime, &self.models) else {
+            return;
+        };
+        let _context = runtime.enter();
+        match models.start_download(id) {
+            Ok(()) => {
+                self.started.insert(id.to_string(), Instant::now());
+                self.visual.insert(id.to_string(), -1.0);
+                self.jobs = models.download_jobs_snapshot();
                 self.error = None;
             }
-            Err(e) => self.error = Some(e),
+            Err(error) => self.error = Some(error.to_string()),
         }
     }
 
-    pub fn reset(&mut self) {
-        self.cfg = config::Config::default();
-        self.sync_edits();
-        self.touch();
+    fn cancel(&mut self, id: &str) {
+        if let Some(models) = &self.models {
+            models.cancel_download(id);
+            self.jobs = models.download_jobs_snapshot();
+        }
     }
 
-    fn sync_edits(&mut self) {
-        self.edits
-            .nickname
-            .replace_text(self.cfg.general.nickname.clone());
-        self.edits
-            .endpoint
-            .replace_text(self.cfg.advanced.endpoint.clone());
-        self.edits
-            .prompt
-            .replace_text(self.cfg.editor.prompt_template.clone());
+    fn select(&mut self, id: &str) {
+        self.open = false;
+        let Some(models) = self.models.clone() else {
+            return;
+        };
+        let id = id.to_string();
+        self.work("selection".to_string(), move || {
+            models
+                .select_model(&id)
+                .map_err(|error| error.to_string())?;
+            Ok(Action::Models)
+        });
     }
-}
 
-fn now_utc_hms() -> String {
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let (h, m, s) = (secs / 3600, secs % 3600 / 60, secs % 60);
-    format!("{h:02}:{m:02}:{s:02} UTC")
+    fn remove(&mut self, id: &str) {
+        self.delete = None;
+        let Some(models) = self.models.clone() else {
+            return;
+        };
+        let id = id.to_string();
+        self.work(id.clone(), move || {
+            models
+                .trash_downloaded_model(&id)
+                .map_err(|error| error.to_string())?;
+            Ok(Action::Models)
+        });
+    }
+
+    fn job(&self, id: &str) -> Option<&ModelDownloadJobSnapshot> {
+        self.jobs.iter().find(|job| job.id == id)
+    }
 }
 
 fn init() -> App {
-    let path = CONFIG_PATH
-        .get()
-        .cloned()
-        .unwrap_or_else(|| PathBuf::from("config.toml"));
-    let (cfg, error) = match std::fs::read_to_string(&path) {
-        Ok(toml) => config::Config::from_toml_string(&toml)
-            .map_or_else(|e| (config::Config::default(), Some(e)), |cfg| (cfg, None)),
-        Err(_) => {
-            let cfg = config::Config::default();
-            if let Ok(toml) = cfg.to_toml_string() {
-                let _ = std::fs::write(&path, toml);
-            }
-            (cfg, None)
-        }
+    let (finished_tx, finished_rx) = mpsc::channel();
+    let mut s = App {
+        models: None,
+        runtime: None,
+        jobs: Vec::new(),
+        installed: HashSet::new(),
+        selected: DEFAULT_OCR_MODEL_ID.to_string(),
+        open: false,
+        error: None,
+        engine_ready: false,
+        pending: HashSet::new(),
+        started: HashMap::new(),
+        visual: HashMap::new(),
+        delete: None,
+        updates: Arc::new(Mutex::new(None)),
+        finished_tx,
+        finished_rx,
+        waker: None,
     };
-    App {
-        edits: Edits {
-            nickname: TextEdit::new(cfg.general.nickname.clone()),
-            endpoint: TextEdit::new(cfg.advanced.endpoint.clone()),
-            prompt: TextEdit::new(cfg.editor.prompt_template.clone()),
-        },
-        cfg,
-        path,
-        page: Page::General,
-        open: None,
-        saved_at: None,
-        error,
-        dirty: false,
-        saves: Latest::default().debounce(Duration::from_millis(40)),
+    match crate::storage::AppData::open().map(ModelManager::new) {
+        Ok(models) => s.models = Some(models),
+        Err(error) => s.error = Some(error.to_string()),
     }
+    match tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => s.runtime = Some(runtime),
+        Err(error) => s.error = Some(error.to_string()),
+    }
+    s.refresh();
+    s
 }
 
 fn setup(s: &mut App, waker: Waker) {
-    s.saves.set_waker(waker);
+    s.waker = Some(waker.clone());
+    if let (Some(models), Some(runtime)) = (&s.models, &s.runtime) {
+        let mut changes = models.subscribe_downloads();
+        let slot = s.updates.clone();
+        runtime.spawn(async move {
+            while changes.changed().await.is_ok() {
+                let snapshot = changes.borrow_and_update().clone();
+                if let Ok(mut slot) = slot.lock() {
+                    *slot = Some(snapshot);
+                }
+                waker();
+            }
+        });
+    }
+    s.work("engine".to_string(), || {
+        squigit_ocr::sidecar::resolve_sidecar_path()
+            .map(|_| Action::Engine)
+            .map_err(|error| format!("{error:#}"))
+    });
 }
 
 fn view(s: &App, cx: &mut Cx<App>) -> El {
-    let dark = match s.cfg.appearance.theme.as_str() {
-        "light" => false,
-        "dark" => true,
-        _ => cx.system_dark(),
-    };
-    cx.reduced_motion(s.cfg.appearance.reduce_motion);
-    cx.time_scale(ui::speed_of(s.cfg.appearance.animation_speed));
-    let k = ui::kit(dark, s.cfg.appearance.accent_index);
-    let hair = 1.0 / cx.env().scale;
+    let k = ui::kit(true);
     let mut layer = Vec::new();
-    let body = pages::page(s, &k, &mut layer, hair);
-    rune_kit::root(ui::chrome(s, &k, body), layer)
+    let body = pages::page(s, &k, &mut layer, 1.0 / cx.env().scale);
+    rune_kit::root(ui::chrome(&k, body), layer)
 }
 
-fn poll(s: &mut App, _now: f64, _tx: &mut Tx) -> bool {
+fn poll(s: &mut App, _now: f64, tx: &mut Tx) -> bool {
     let mut changed = false;
-    if s.dirty {
-        s.flush();
+    let snapshot = s.updates.lock().ok().and_then(|mut slot| slot.take());
+    if let Some(jobs) = snapshot {
+        for job in &jobs {
+            if job.status == "failed"
+                && s.job(&job.id)
+                    .is_none_or(|previous| previous.error != job.error)
+            {
+                s.error = job.error.clone();
+            }
+        }
+        s.jobs = jobs;
         changed = true;
     }
-    if let Some(result) = s.saves.take() {
-        match result {
-            Ok(()) => {
-                s.saved_at = Some(now_utc_hms());
-                s.error = None;
-            }
-            Err(e) => s.error = Some(e),
+    while let Ok(finished) = s.finished_rx.try_recv() {
+        s.pending.remove(&finished.key);
+        match finished.result {
+            Ok(Action::Engine) => s.engine_ready = true,
+            Ok(Action::Models) => s.error = None,
+            Err(error) => s.error = Some(error),
         }
         changed = true;
+    }
+    if changed {
+        s.refresh();
+    }
+    for job in &s.jobs {
+        if !pages::active(&job.status) {
+            continue;
+        }
+        let started = s.started.entry(job.id.clone()).or_insert_with(Instant::now);
+        let elapsed = started.elapsed();
+        if elapsed < SPINNER_GRACE {
+            tx.wake_after(SPINNER_GRACE - elapsed);
+        } else {
+            let fraction =
+                ((elapsed - SPINNER_GRACE).as_secs_f32() / CATCH_UP.as_secs_f32()).min(1.0);
+            let visible = f32::from(job.progress) * fraction;
+            let previous = s.visual.insert(job.id.clone(), visible);
+            changed |= previous != Some(visible);
+            if fraction < 1.0 {
+                tx.wake_after(Duration::from_millis(16));
+            }
+        }
+    }
+    if let Some(gesture) = &s.delete {
+        if let Some(started) = gesture.holding {
+            if started.elapsed() >= DELETE_HOLD {
+                let id = gesture.id.clone();
+                s.remove(&id);
+                changed = true;
+            } else {
+                tx.wake_after(Duration::from_millis(16));
+                changed = true;
+            }
+        } else if gesture.armed.elapsed() >= DELETE_ARM {
+            s.delete = None;
+            changed = true;
+        } else {
+            tx.wake_after(DELETE_ARM - gesture.armed.elapsed());
+        }
     }
     changed
 }
 
-fn on_key(s: &mut App, e: &KeyEvent, _tx: &mut Tx) -> bool {
-    if e.key == Key::Command('s') {
-        s.save();
-        return true;
-    }
-    false
-}
-
-pub fn app(path: PathBuf) -> rune::App<App> {
-    let _ = CONFIG_PATH.set(path);
+pub fn app() -> rune::App<App> {
     rune::App::new(AppSpec::<App> {
         min_size: Some((640.0, 480.0)),
         setup: Some(setup),
         poll: Some(poll),
-        on_key: Some(on_key),
         ..AppSpec::new("Squigit Configuration", (760.0, 560.0), init, view)
     })
-    .on_close(|s, _| s.save())
+    .on_focus(|s, focused, _| {
+        if focused {
+            s.refresh();
+        } else {
+            s.delete = None;
+        }
+    })
+    .on_close(|s, _| {
+        s.open = false;
+        s.delete = None;
+    })
 }

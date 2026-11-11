@@ -36,11 +36,12 @@ Usage:
   squigit --version
 
 Capture modes:
-  --squiggle     Capture a freeform squiggle selection (default)
-  --traditional  Capture a rectangular selection
+  --squiggle     Capture a freeform squiggle selection
+  --traditional  Capture a rectangular selection (default)
 
 Options:
-  --auto-ocr          Recognize the frozen display while drawing a selection
+  --auto-ocr          Recognize the frozen display while drawing (default)
+  --no-auto-ocr       Start OCR only when the OCR button is clicked
   --output-dir <DIR>  Save the captured image into DIR (default: Pictures/squigit)
   --authorize         Request screenshot access without opening the selection overlay
   --preflight         Check screenshot access without requesting permission
@@ -57,8 +58,8 @@ enum CaptureCommand {
     },
 }
 
-pub fn run(arguments: Vec<String>) -> CaptureOutcome {
-    match dispatch(arguments) {
+pub fn run(arguments: Vec<String>, models: squigit_ocr::models::ModelManager) -> CaptureOutcome {
+    match dispatch(arguments, models) {
         Ok(code) => code,
         Err(e) => {
             eprintln!("[squigit] Error: {:#}", e);
@@ -69,7 +70,10 @@ pub fn run(arguments: Vec<String>) -> CaptureOutcome {
     }
 }
 
-fn dispatch(arguments: Vec<String>) -> Result<CaptureOutcome> {
+fn dispatch(
+    arguments: Vec<String>,
+    models: squigit_ocr::models::ModelManager,
+) -> Result<CaptureOutcome> {
     if arguments
         .iter()
         .any(|argument| argument == "--help" || argument == "-h")
@@ -96,24 +100,26 @@ fn dispatch(arguments: Vec<String>) -> Result<CaptureOutcome> {
             output_dir,
         } => Instance::capture(mode, auto_ocr).with_output_dir(output_dir),
     };
-    instance.run()
+    instance.run(models)
 }
 
 fn parse_arguments(arguments: Vec<String>) -> Result<CaptureCommand> {
     let mut mode = None;
     let mut output_dir = None;
-    let mut auto_ocr = false;
+    let mut auto_ocr = true;
+    let mut auto_ocr_set = false;
     let mut authorize = false;
     let mut preflight = false;
     let mut index = 0;
 
     while index < arguments.len() {
         match arguments[index].as_str() {
-            "--auto-ocr" => {
-                if auto_ocr {
-                    anyhow::bail!("--auto-ocr may only be provided once");
+            "--auto-ocr" | "--no-auto-ocr" => {
+                if auto_ocr_set {
+                    anyhow::bail!("OCR mode may only be provided once");
                 }
-                auto_ocr = true;
+                auto_ocr_set = true;
+                auto_ocr = arguments[index] == "--auto-ocr";
             }
             "--squiggle" | "--traditional" => {
                 if mode.is_some() {
@@ -149,7 +155,7 @@ fn parse_arguments(arguments: Vec<String>) -> Result<CaptureCommand> {
     }
 
     if authorize || preflight {
-        if mode.is_some() || output_dir.is_some() || auto_ocr {
+        if mode.is_some() || output_dir.is_some() || auto_ocr_set {
             anyhow::bail!("Permission commands cannot be combined with capture options");
         }
         if authorize && preflight {
@@ -163,7 +169,7 @@ fn parse_arguments(arguments: Vec<String>) -> Result<CaptureCommand> {
     }
 
     Ok(CaptureCommand::Capture {
-        mode: mode.unwrap_or_else(|| "--squiggle".to_string()),
+        mode: mode.unwrap_or_else(|| "--traditional".to_string()),
         auto_ocr,
         output_dir,
     })

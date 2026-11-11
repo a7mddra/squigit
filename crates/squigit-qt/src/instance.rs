@@ -99,7 +99,7 @@ impl Instance {
         self
     }
 
-    pub fn run(&mut self) -> Result<CaptureOutcome> {
+    pub fn run(&mut self, models: squigit_ocr::models::ModelManager) -> Result<CaptureOutcome> {
         if SHUTTING_DOWN.load(Ordering::Acquire) {
             return Ok(CaptureOutcome::exit(ExitCode::from(2)));
         }
@@ -233,8 +233,10 @@ impl Instance {
                         let cancel_job = Arc::clone(&cancelled);
                         let job_id = id.clone();
                         jobs.workers.retain(|_, job| !job.worker.is_finished());
+                        let models = models.clone();
                         let worker = std::thread::spawn(move || {
-                            let response = match squigit_ocr::recognize(&image, &cancelled) {
+                            let response = match squigit_ocr::recognize(&image, &cancelled, &models)
+                            {
                                 Ok(squigit_ocr::Recognition::Text(boxes)) => {
                                     serde_json::json!({"id": id, "boxes": boxes})
                                 }

@@ -15,7 +15,7 @@ fn init() -> About {
 }
 
 fn view(state: &About, cx: &mut Cx<About>) -> El {
-    let k = crate::settings::ui::kit(cx.system_dark(), 1);
+    let k = crate::settings::ui::kit(cx.system_dark());
     col()
         .fill(k.c.page)
         .padding(24.0)

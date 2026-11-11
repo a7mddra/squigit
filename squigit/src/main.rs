@@ -8,7 +8,6 @@ mod storage;
 use anyhow::{Context, Result};
 use fs2::FileExt;
 use rune::{Tray, TrayEvent, TrayIcon, TrayItem, TraySpec, WindowSpec};
-use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -27,14 +26,6 @@ fn main() -> ExitCode {
     }
 }
 
-fn config_path() -> Result<PathBuf> {
-    let directory = dirs::config_dir()
-        .context("Could not find the configuration directory")?
-        .join("squigit");
-    std::fs::create_dir_all(&directory)?;
-    Ok(directory.join("config.toml"))
-}
-
 fn run() -> Result<ExitCode> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     rune::set_app_id("squigit");
@@ -45,20 +36,23 @@ fn run() -> Result<ExitCode> {
             return Ok(ExitCode::SUCCESS);
         }
         Some("--help" | "-h") => {
-            println!("Squigit\n\nUsage: squigit [OPTION]\n\nNo options: start in the system tray.\n  --squiggle          Open a freeform screenshot overlay\n  --traditional       Open a rectangular screenshot overlay\n  --auto-ocr          Recognize the frozen display while drawing a selection\n  --output-dir <DIR>  Choose where captures are saved\n  --configuration     Open the Rune settings window\n  --about             Open About Squigit\n  --authorize         Request screen capture permission\n  --preflight         Check screen capture permission\n  --version           Print the application version");
+            println!("Squigit\n\nUsage: squigit [OPTION]\n\nNo options: start in the system tray.\n  --squiggle          Open a freeform screenshot overlay\n  --traditional       Open a rectangular screenshot overlay (default)\n  --auto-ocr          Recognize the frozen display while drawing (default)\n  --no-auto-ocr       Start OCR only when the OCR button is clicked\n  --output-dir <DIR>  Choose where captures are saved\n  --configuration     Open the Rune settings window\n  --about             Open About Squigit\n  --authorize         Request screen capture permission\n  --preflight         Check screen capture permission\n  --version           Print the application version");
             return Ok(ExitCode::SUCCESS);
         }
+        _ => {}
+    }
+
+    let models = squigit_ocr::models::ModelManager::new(storage::AppData::open()?);
+    match args.first().map(String::as_str) {
         Some("--configuration") => {
-            settings::app(config_path()?)
-                .args(args.into_iter().skip(1))
-                .run();
+            settings::app().args(args.into_iter().skip(1)).run();
             return Ok(ExitCode::SUCCESS);
         }
         Some("--about") => {
             about::app().args(args.into_iter().skip(1)).run();
             return Ok(ExitCode::SUCCESS);
         }
-        Some(_) => return Ok(squigit_qt::run(args).exit_code),
+        Some(_) => return Ok(squigit_qt::run(args, models).exit_code),
         None => {}
     }
 
@@ -79,8 +73,7 @@ fn run() -> Result<ExitCode> {
     lock.try_lock_exclusive()
         .context("Squigit is already running")?;
 
-    let config_path = config_path()?;
-    let mut app = settings::app(config_path.clone())
+    let mut app = settings::app()
         .args(Vec::new())
         .windowless()
         .release_gpu_when_closed()
@@ -119,14 +112,11 @@ fn run() -> Result<ExitCode> {
                     return;
                 }
                 let active = Arc::clone(&capturing);
-                let path = config_path.clone();
+                let models = models.clone();
                 let task = std::thread::spawn(move || {
                     std::thread::sleep(CAPTURE_DELAY);
-                    let arguments = settings::capture_arguments(&path).unwrap_or_else(|error| {
-                        eprintln!("[squigit] Could not read capture settings: {error}");
-                        vec!["--squiggle".into()]
-                    });
-                    let outcome = squigit_qt::run(arguments);
+                    let arguments = vec!["--traditional".into(), "--auto-ocr".into()];
+                    let outcome = squigit_qt::run(arguments, models);
                     active.store(false, Ordering::Release);
                     if let Some(path) = outcome.saved_path {
                         notifications::saved(path);

@@ -1,9 +1,10 @@
 pub mod models;
 mod network;
-mod sidecar;
+pub mod ocr;
+pub mod sidecar;
 
+pub use ocr::recognize;
 use serde::{Deserialize, Serialize};
-pub use sidecar::recognize;
 
 pub enum Recognition {
     Text(Vec<TextBox>),
