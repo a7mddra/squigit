@@ -206,8 +206,10 @@ Window {
     }
 
     CaptureExitHint {
+        anchors.fill: parent
         active: root.visible
         z: 100
+        onExitRequested: root.controller.cancel()
     }
 
     Shortcut {
