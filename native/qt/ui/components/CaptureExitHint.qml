@@ -110,7 +110,7 @@ Item {
 
     Rectangle {
         id: exitButton
-        y: root.topInset
+        y: root.exitVisible ? root.topInset : -height
         width: 44
         height: 44
         radius: width / 2
@@ -120,6 +120,10 @@ Item {
         border.color: "#45494f"
         opacity: root.exitVisible ? 1 : 0
         visible: opacity > 0
+
+        Behavior on y {
+            NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+        }
 
         Behavior on opacity {
             NumberAnimation { duration: 160; easing.type: Easing.OutCubic }

@@ -15,53 +15,42 @@ Item {
     height: body.height
     z: 10
     scale: openScale
-    opacity: Math.min(1, openScale / 0.4)
-    transformOrigin: Item.Bottom
+    opacity: openOpacity
+    transformOrigin: Item.Center
 
-    property real openScale: 0
-    property bool openingPending: false
+    property real openScale: 0.5
+    property real openOpacity: 0
 
     onVisibleChanged: {
-        jellyAnimation.stop()
-        openScale = 0
-        openingPending = visible
+        openAnimation.stop()
+        openScale = 0.5
+        openOpacity = 0
         if (visible) {
-            openTimer.restart()
+            openAnimation.start()
             Qt.callLater(function() { textArea.forceActiveFocus() })
         } else {
             textArea.text = ""
         }
     }
 
-    Timer {
-        id: openTimer
-        interval: 16
-        onTriggered: {
-            if (!root.openingPending)
-                return
-            root.openingPending = false
-            jellyAnimation.start()
-        }
-    }
-
-    SequentialAnimation {
-        id: jellyAnimation
+    ParallelAnimation {
+        id: openAnimation
 
         NumberAnimation {
             target: root
             property: "openScale"
-            from: 0
-            to: 1.08
-            duration: 150
-            easing.type: Easing.OutCubic
-        }
-        NumberAnimation {
-            target: root
-            property: "openScale"
-            from: 1.08
+            from: 0.5
             to: 1.0
-            duration: 130
-            easing.type: Easing.OutCubic
+            duration: 180
+            easing.type: Easing.OutQuint
+        }
+        NumberAnimation {
+            target: root
+            property: "openOpacity"
+            from: 0
+            to: 1
+            duration: 110
+            easing.type: Easing.OutQuad
         }
     }
 

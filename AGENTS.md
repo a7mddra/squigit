@@ -194,7 +194,7 @@ another text line clears previous selections without focusing an editor.
 Tapping Escape clears OCR text selection before dismissing the capture on a
 subsequent tap. Holding Escape for 650 ms cancels the active capture directly,
 including pending OCR or QR work. Each capture briefly fades in a hint below the
-top edge with an Esc keycap; hovering the top-center edge reveals an X exit
+top edge with an Esc keycap; hovering the top-center edge drops down an X exit
 button that cancels the capture. Clicking blank space or starting a crop
 move/resize clears text selection.
 Keyboard focus stays in the overlay throughout text selection and deselection.
