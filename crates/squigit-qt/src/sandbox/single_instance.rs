@@ -21,7 +21,7 @@ impl InstanceLock {
             .open(&path)
             .with_context(|| format!("Could not open {}", path.display()))?;
         file.try_lock_exclusive()
-            .map_err(|_| anyhow!("A screenshot overlay is already running"))?;
+            .map_err(|_| anyhow!("The Qt runtime is already running"))?;
         Ok(Self { file })
     }
 }

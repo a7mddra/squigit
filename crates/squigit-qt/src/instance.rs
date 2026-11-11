@@ -2,37 +2,197 @@ use crate::paths::RuntimePaths;
 use crate::qr;
 #[cfg(target_os = "linux")]
 use crate::sandbox::audio_guard::AudioGuard;
-use crate::sandbox::display_hotplug::DisplayWatcher;
 use crate::sandbox::single_instance::InstanceLock;
-use crate::CaptureOutcome;
 use anyhow::{Context, Result};
+use process_wrap::std::{ChildWrapper, CommandWrap};
+use serde_json::{json, Value};
+use squigit_ocr::models::ModelManager;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, Command, ExitCode, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
+use std::path::PathBuf;
+use std::process::{ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+pub enum RuntimeEvent {
+    Saved { action: String, path: PathBuf },
+    Failed(String),
+    Stopped,
+}
 
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
+struct Inner {
+    input: Mutex<Option<ChildStdin>>,
+    child: Mutex<Box<dyn ChildWrapper>>,
+    stopping: AtomicBool,
+}
 
-static ACTIVE_PID: AtomicU32 = AtomicU32::new(0);
-static SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
+#[derive(Clone)]
+pub struct Handle {
+    inner: Arc<Inner>,
+}
 
-pub fn cancel_active() {
-    SHUTTING_DOWN.store(true, Ordering::Release);
-    let pid = ACTIVE_PID.load(Ordering::Acquire);
-    if pid != 0 {
-        Instance::kill_process(pid);
+impl Handle {
+    fn write(&self, message: &Value) -> Result<()> {
+        let mut input = self
+            .inner
+            .input
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Qt input is unavailable"))?;
+        let Some(input) = input.as_mut() else {
+            anyhow::ensure!(
+                self.inner.stopping.load(Ordering::Acquire),
+                "Qt input is closed"
+            );
+            return Ok(());
+        };
+        serde_json::to_writer(&mut *input, message)?;
+        input.write_all(b"\n")?;
+        input.flush()?;
+        Ok(())
+    }
+
+    fn command(&self, name: &str) -> Result<()> {
+        anyhow::ensure!(
+            !self.inner.stopping.load(Ordering::Acquire),
+            "The Qt runtime is stopping"
+        );
+        self.write(&json!({"type": name}))
+    }
+
+    pub fn show_menu(&self) -> Result<()> {
+        self.command("show_menu")
+    }
+
+    pub fn hide_menu(&self) -> Result<()> {
+        self.command("hide_menu")
+    }
+
+    pub fn shutdown(&self) -> Result<()> {
+        if self.inner.stopping.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+        let _ = self.write(&json!({"type": "shutdown"}));
+        self.inner
+            .input
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Qt input is unavailable"))?
+            .take();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let mut child = self
+                .inner
+                .child
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Qt process is unavailable"))?;
+            if child.try_wait()?.is_some() {
+                return Ok(());
+            }
+            if Instant::now() >= deadline {
+                child.kill().context("Could not stop the Qt process tree")?;
+                child.wait().context("Could not reap the Qt process tree")?;
+                return Ok(());
+            }
+            drop(child);
+            thread::sleep(Duration::from_millis(25));
+        }
+    }
+}
+
+pub struct Runtime {
+    handle: Handle,
+    worker: Option<JoinHandle<()>>,
+    _lock: InstanceLock,
+}
+
+impl Runtime {
+    pub fn start(
+        models: ModelManager,
+        snapshots: PathBuf,
+        blobs: PathBuf,
+        on_event: impl Fn(RuntimeEvent) + Send + 'static,
+    ) -> Result<Self> {
+        let lock = InstanceLock::try_acquire()?;
+        let paths = RuntimePaths::resolve()?;
+        let mut command = Command::new(&paths.bin);
+        command
+            .env("GIO_LAUNCHED_DESKTOP_APP_ID", "squigit")
+            .env("G_APPLICATION_ID", "squigit")
+            .env("SQUIGIT_SNAPSHOT_DIR", snapshots)
+            .env("SQUIGIT_BLOB_DIR", blobs)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit());
+        for (name, value) in paths.env_vars {
+            command.env(name, value);
+        }
+        let mut command = CommandWrap::from(command);
+        #[cfg(unix)]
+        command.wrap(process_wrap::std::ProcessGroup::leader());
+        #[cfg(windows)]
+        command
+            .wrap(process_wrap::std::CreationFlags(0x08000000))
+            .wrap(process_wrap::std::JobObject);
+        let mut child = command.spawn().context("Could not start the Qt runtime")?;
+        let input = child.stdin().take().context("Missing Qt stdin")?;
+        let output = child.stdout().take().context("Missing Qt stdout")?;
+        let handle = Handle {
+            inner: Arc::new(Inner {
+                input: Mutex::new(Some(input)),
+                child: Mutex::new(child),
+                stopping: AtomicBool::new(false),
+            }),
+        };
+        let reader_handle = handle.clone();
+        let (ready_tx, ready_rx) = mpsc::sync_channel(1);
+        let worker = thread::spawn(move || {
+            if let Err(error) = read_events(output, &reader_handle, models, ready_tx, &on_event) {
+                on_event(RuntimeEvent::Failed(format!("{error:#}")));
+            }
+            #[cfg(target_os = "linux")]
+            AudioGuard::unmute();
+            if !reader_handle.inner.stopping.load(Ordering::Acquire) {
+                on_event(RuntimeEvent::Stopped);
+            }
+            if let Err(error) = reader_handle.shutdown() {
+                eprintln!("[squigit] {error:#}");
+            }
+        });
+        let runtime = Self {
+            handle,
+            worker: Some(worker),
+            _lock: lock,
+        };
+        ready_rx
+            .recv_timeout(Duration::from_secs(15))
+            .context("The Qt runtime did not become ready")?;
+        Ok(runtime)
+    }
+
+    pub fn handle(&self) -> Handle {
+        self.handle.clone()
+    }
+
+    pub fn shutdown(&mut self) {
+        if let Err(error) = self.handle.shutdown() {
+            eprintln!("[squigit] {error:#}");
+        }
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
+impl Drop for Runtime {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }
 
 struct Job {
     cancelled: Arc<AtomicBool>,
-    worker: JoinHandle<Result<(), String>>,
+    worker: JoinHandle<Result<()>>,
 }
 
 #[derive(Default)]
@@ -41,340 +201,179 @@ struct Jobs {
 }
 
 impl Jobs {
-    fn cancel(&mut self, id: &str) -> Result<(), String> {
+    fn cancel(&mut self, id: &str) -> Result<()> {
         if let Some(job) = self.workers.remove(id) {
             job.cancelled.store(true, Ordering::Release);
             job.worker
                 .join()
-                .map_err(|_| "Capture worker stopped unexpectedly".to_owned())??;
+                .map_err(|_| anyhow::anyhow!("Capture worker stopped unexpectedly"))??;
         }
         Ok(())
+    }
+
+    fn cancel_all(&mut self) {
+        for job in self.workers.values() {
+            job.cancelled.store(true, Ordering::Release);
+        }
+        for (_, job) in self.workers.drain() {
+            match job.worker.join() {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => eprintln!("[squigit] {error:#}"),
+                Err(_) => eprintln!("[squigit] Capture worker stopped unexpectedly"),
+            }
+        }
+    }
+
+    fn reap(&mut self) {
+        let finished = self
+            .workers
+            .iter()
+            .filter(|(_, job)| job.worker.is_finished())
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>();
+        for id in finished {
+            if let Err(error) = self.cancel(&id) {
+                eprintln!("[squigit] {error:#}");
+            }
+        }
     }
 }
 
 impl Drop for Jobs {
     fn drop(&mut self) {
-        for job in self.workers.values() {
-            job.cancelled.store(true, Ordering::Release);
-        }
-        for (_, job) in self.workers.drain() {
-            let _ = job.worker.join();
-        }
+        self.cancel_all();
     }
 }
 
-pub struct Instance {
-    args: Vec<String>,
-    output_dir: Option<String>,
-}
-
-impl Instance {
-    pub fn preflight() -> Self {
-        Self {
-            args: vec!["--preflight".to_string()],
-            output_dir: None,
-        }
-    }
-
-    pub fn authorize() -> Self {
-        Self {
-            args: vec!["--authorize".to_string()],
-            output_dir: None,
-        }
-    }
-
-    pub fn capture(mode: String, auto_ocr: bool) -> Self {
-        let mut args = vec![mode];
-        if auto_ocr {
-            args.push("--auto-ocr".into());
-        }
-        Self {
-            args,
-            output_dir: None,
-        }
-    }
-
-    pub fn with_output_dir(mut self, output_dir: Option<String>) -> Self {
-        self.output_dir = output_dir;
-        self
-    }
-
-    pub fn run(&mut self, models: squigit_ocr::models::ModelManager) -> Result<CaptureOutcome> {
-        if SHUTTING_DOWN.load(Ordering::Acquire) {
-            return Ok(CaptureOutcome::exit(ExitCode::from(2)));
-        }
-        let _lock = InstanceLock::try_acquire()
-            .context("Failed to acquire instance lock - is another squigit running?")?;
-
-        let mut child = self.spawn_process()?;
-        let child_pid = child.id();
-        ACTIVE_PID.store(child_pid, Ordering::Release);
-        if SHUTTING_DOWN.load(Ordering::Acquire) {
-            let _ = child.kill();
-        }
-
-        let watcher = DisplayWatcher::start(move || {
-            Self::kill_process(child_pid);
-        });
-
-        let exit_code = self.handle_ipc(&mut child);
-
-        if exit_code.is_err() {
-            let _ = child.kill();
-        }
-        watcher.stop();
-        let status = child.wait();
-        ACTIVE_PID.store(0, Ordering::Release);
-        #[cfg(target_os = "linux")]
-        AudioGuard::unmute();
-
-        let (outcome, qr_url) = exit_code?;
-        status.context("Could not wait for the Qt capture overlay to close")?;
-        if let Some(url) = qr_url {
-            opener::open_browser(url.as_str())
-                .context("Could not open the QR URL in the default browser")?;
-        }
-        Ok(outcome)
-    }
-
-    fn spawn_process(&self) -> Result<Child> {
-        let paths = RuntimePaths::resolve()?;
-        let mut cmd = Command::new(&paths.bin);
-
-        cmd.args(&self.args)
-            .env("GIO_LAUNCHED_DESKTOP_APP_ID", "squigit")
-            .env("G_APPLICATION_ID", "squigit")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit());
-
-        #[cfg(target_os = "windows")]
-        cmd.creation_flags(CREATE_NO_WINDOW);
-
-        for (key, val) in paths.env_vars {
-            cmd.env(key, val);
-        }
-
-        if let Some(dir) = &self.output_dir {
-            cmd.env("SQUIGIT_OUTPUT_DIR", dir);
-        }
-
-        cmd.spawn()
-            .context("Failed to spawn the squigit Qt runtime")
-    }
-
-    fn handle_ipc(&self, child: &mut Child) -> Result<(CaptureOutcome, Option<url::Url>)> {
-        let stdout = child
-            .stdout
-            .take()
-            .context("The squigit Qt runtime did not expose stdout")?;
-        let stdin = Arc::new(Mutex::new(child.stdin.take().context("Missing Qt stdin")?));
-        let mut jobs = Jobs::default();
-        let mut reader = BufReader::new(stdout);
-        let mut line = String::new();
-        let mut terminal_exit_code = None;
-        let mut capture_authorized = false;
-        let mut capture_permission = None;
-        let mut capture_saved: Option<String> = None;
-        let mut qr_url = None;
-
-        loop {
-            line.clear();
-            if reader
-                .read_line(&mut line)
-                .context("Could not read the squigit Qt runtime output")?
-                == 0
-            {
-                break;
+fn read_events(
+    output: ChildStdout,
+    handle: &Handle,
+    models: ModelManager,
+    ready: mpsc::SyncSender<()>,
+    on_event: &impl Fn(RuntimeEvent),
+) -> Result<()> {
+    let mut jobs = Jobs::default();
+    for line in BufReader::new(output).lines() {
+        let line = line.context("Could not read the Qt runtime output")?;
+        let event: Value = serde_json::from_str(&line).context("Invalid Qt event")?;
+        jobs.reap();
+        match event["type"].as_str().context("Missing Qt event type")? {
+            "ready" => {
+                let _ = ready.try_send(());
             }
-            let trimmed = line.trim();
-            match trimmed {
-                "AUDIO_MUTE" | "REQ_MUTE" => {
-                    #[cfg(target_os = "linux")]
-                    AudioGuard::mute();
-                }
-                "AUDIO_UNMUTE" => {
-                    #[cfg(target_os = "linux")]
-                    AudioGuard::unmute();
-                }
-                "CAPTURE_AUTHORIZED" => {
-                    capture_authorized = true;
-                    break;
-                }
-                "CAPTURE_PERMISSION_GRANTED" => {
-                    capture_permission = Some(true);
-                    break;
-                }
-                "CAPTURE_PERMISSION_DENIED" => {
-                    capture_permission = Some(false);
-                    break;
-                }
-                "CAPTURE_CANCELLED" => {
-                    terminal_exit_code = Some(ExitCode::from(2));
-                    break;
-                }
-                "CAPTURE_FAIL" => {
-                    terminal_exit_code = Some(ExitCode::from(1));
-                    break;
-                }
-                _ => {
-                    if let Some(payload) = trimmed.strip_prefix("OCR_REQUEST:") {
-                        let request: serde_json::Value =
-                            serde_json::from_str(payload).context("Invalid Qt OCR request")?;
-                        let id = request["id"]
-                            .as_str()
-                            .context("Missing OCR request id")?
-                            .to_owned();
-                        let image = std::path::PathBuf::from(
-                            request["image"].as_str().context("Missing OCR image")?,
-                        );
-                        let input = Arc::clone(&stdin);
-                        let cancelled = Arc::new(AtomicBool::new(false));
-                        let cancel_job = Arc::clone(&cancelled);
-                        let job_id = id.clone();
-                        jobs.workers.retain(|_, job| !job.worker.is_finished());
-                        let models = models.clone();
-                        let worker = std::thread::spawn(move || {
-                            let response = match squigit_ocr::recognize(&image, &cancelled, &models)
-                            {
-                                Ok(squigit_ocr::Recognition::Text(boxes)) => {
-                                    serde_json::json!({"id": id, "boxes": boxes})
-                                }
-                                Ok(squigit_ocr::Recognition::Cancelled) => return Ok(()),
-                                Err(error) => {
-                                    if cancelled.load(Ordering::Acquire) {
-                                        return Err(format!("{error:#}"));
-                                    }
-                                    serde_json::json!({"id": id, "error": format!("{error:#}")})
-                                }
-                            };
-                            if let Ok(mut input) = input.lock() {
-                                let _ = writeln!(input, "{response}");
+            "audio_mute" => {
+                #[cfg(target_os = "linux")]
+                AudioGuard::mute();
+            }
+            "audio_unmute" => {
+                #[cfg(target_os = "linux")]
+                AudioGuard::unmute();
+            }
+            "ocr_request" | "qr_request" => {
+                let id = event["id"]
+                    .as_str()
+                    .context("Missing capture request id")?
+                    .to_owned();
+                anyhow::ensure!(
+                    !jobs.workers.contains_key(&id),
+                    "Duplicate capture request id"
+                );
+                let image =
+                    PathBuf::from(event["image"].as_str().context("Missing capture image")?);
+                let ocr = event["type"] == "ocr_request";
+                let input = handle.clone();
+                let models = models.clone();
+                let cancelled = Arc::new(AtomicBool::new(false));
+                let cancel_job = cancelled.clone();
+                let job_id = id.clone();
+                let worker = thread::spawn(move || {
+                    let response = if ocr {
+                        match squigit_ocr::recognize(&image, &cancelled, &models) {
+                            Ok(squigit_ocr::Recognition::Text(boxes)) => {
+                                json!({"type": "ocr_result", "id": id, "boxes": boxes})
                             }
-                            Ok(())
-                        });
-                        jobs.workers.insert(
-                            job_id,
-                            Job {
-                                cancelled: cancel_job,
-                                worker,
-                            },
-                        );
-                    }
-                    if let Some(payload) = trimmed.strip_prefix("QR_REQUEST:") {
-                        let request: serde_json::Value =
-                            serde_json::from_str(payload).context("Invalid Qt QR request")?;
-                        let id = request["id"]
-                            .as_str()
-                            .context("Missing QR request id")?
-                            .to_owned();
-                        let image = std::path::PathBuf::from(
-                            request["image"].as_str().context("Missing QR image")?,
-                        );
-                        let input = Arc::clone(&stdin);
-                        let cancelled = Arc::new(AtomicBool::new(false));
-                        let cancel_job = Arc::clone(&cancelled);
-                        let job_id = id.clone();
-                        jobs.workers.retain(|_, job| !job.worker.is_finished());
-                        let worker = std::thread::spawn(move || {
-                            let response = match qr::scan(&image, &cancelled) {
-                                Ok(Some(url)) => serde_json::json!({"id": id, "url": url}),
-                                Ok(None) => return Ok(()),
-                                Err(error) => {
-                                    serde_json::json!({"id": id, "error": format!("{error:#}")})
-                                }
-                            };
-                            if !cancelled.load(Ordering::Acquire) {
-                                if let Ok(mut input) = input.lock() {
-                                    let _ = writeln!(input, "{response}");
-                                }
-                            }
-                            Ok(())
-                        });
-                        jobs.workers.insert(
-                            job_id,
-                            Job {
-                                cancelled: cancel_job,
-                                worker,
-                            },
-                        );
-                    }
-                    if let Some(payload) = trimmed.strip_prefix("QR_OPEN:") {
-                        let request: serde_json::Value =
-                            serde_json::from_str(payload).context("Invalid Qt QR URL")?;
-                        qr_url = Some(qr::parse_url(
-                            request["url"].as_str().context("Missing QR URL")?,
-                        )?);
-                        terminal_exit_code = Some(ExitCode::SUCCESS);
-                        break;
-                    }
-                    if let Some(payload) = trimmed.strip_prefix("OCR_CANCEL:") {
-                        let request: serde_json::Value =
-                            serde_json::from_str(payload).context("Invalid Qt OCR cancellation")?;
-                        let id = request["id"]
-                            .as_str()
-                            .context("Missing OCR cancellation id")?;
-                        let response = match jobs.cancel(id) {
-                            Ok(()) => serde_json::json!({"id": id, "cancelled": true}),
+                            Ok(squigit_ocr::Recognition::Cancelled) => return Ok(()),
                             Err(error) => {
-                                serde_json::json!({"id": id, "cancelled": false, "error": error})
+                                if cancelled.load(Ordering::Acquire) {
+                                    return Err(error);
+                                }
+                                json!({"type": "ocr_result", "id": id, "error": format!("{error:#}")})
                             }
-                        };
-                        if let Ok(mut input) = stdin.lock() {
-                            let _ = writeln!(input, "{response}");
                         }
+                    } else {
+                        match qr::scan(&image, &cancelled) {
+                            Ok(Some(url)) => json!({"type": "qr_result", "id": id, "url": url}),
+                            Ok(None) => return Ok(()),
+                            Err(error) => {
+                                json!({"type": "qr_result", "id": id, "error": format!("{error:#}")})
+                            }
+                        }
+                    };
+                    if !cancelled.load(Ordering::Acquire) {
+                        input.write(&response)?;
                     }
-                    if let Some(path) = trimmed.strip_prefix("SQUIGIT_SAVED:") {
-                        capture_saved = Some(path.to_string());
-                        break;
-                    }
-                }
-            }
-        }
-
-        let outcome = if let Some(granted) = capture_permission {
-            println!(
-                "{}",
-                if granted {
-                    "CAPTURE_PERMISSION_GRANTED"
-                } else {
-                    "CAPTURE_PERMISSION_DENIED"
-                }
-            );
-            CaptureOutcome::exit(ExitCode::SUCCESS)
-        } else if capture_authorized {
-            println!("CAPTURE_AUTHORIZED");
-            CaptureOutcome::exit(ExitCode::SUCCESS)
-        } else if let Some(path) = capture_saved {
-            println!("{path}");
-            CaptureOutcome {
-                exit_code: ExitCode::SUCCESS,
-                saved_path: Some(path.into()),
-            }
-        } else {
-            if terminal_exit_code.is_none() {
-                eprintln!(
-                    "[squigit] The Qt runtime exited without terminal protocol output. \
-This usually indicates a native crash during startup or capture."
+                    Ok(())
+                });
+                jobs.workers.insert(
+                    job_id,
+                    Job {
+                        cancelled: cancel_job,
+                        worker,
+                    },
                 );
             }
-            CaptureOutcome::exit(terminal_exit_code.unwrap_or(ExitCode::FAILURE))
-        };
-        Ok((outcome, qr_url))
-    }
-
-    fn kill_process(pid: u32) {
-        #[cfg(unix)]
-        {
-            let _ = Command::new("kill").arg("-9").arg(pid.to_string()).output();
+            "ocr_cancel" => {
+                let id = event["id"]
+                    .as_str()
+                    .context("Missing OCR cancellation id")?;
+                let response = match jobs.cancel(id) {
+                    Ok(()) => json!({"type": "ocr_result", "id": id, "cancelled": true}),
+                    Err(error) => {
+                        json!({"type": "ocr_result", "id": id, "cancelled": false, "error": format!("{error:#}")})
+                    }
+                };
+                handle.write(&response)?;
+            }
+            "capture_finished" => {
+                jobs.cancel_all();
+                let session = event["session"]
+                    .as_str()
+                    .context("Missing capture session")?;
+                handle.write(&json!({"type": "capture_released", "session": session}))?;
+                match event["status"].as_str() {
+                    Some("saved") => on_event(RuntimeEvent::Saved {
+                        action: event["action"]
+                            .as_str()
+                            .context("Missing capture action")?
+                            .to_owned(),
+                        path: event["path"].as_str().context("Missing saved path")?.into(),
+                    }),
+                    Some("qr_open") => {
+                        let url = qr::parse_url(event["url"].as_str().context("Missing QR URL")?)?;
+                        if let Err(error) = opener::open_browser(url.as_str()) {
+                            on_event(RuntimeEvent::Failed(format!(
+                                "Could not open the QR URL: {error}"
+                            )));
+                        }
+                    }
+                    Some("failed") => on_event(RuntimeEvent::Failed(
+                        event["error"]
+                            .as_str()
+                            .unwrap_or("Capture failed")
+                            .to_owned(),
+                    )),
+                    Some("cancelled") => {}
+                    _ => anyhow::bail!("Unknown capture status"),
+                }
+            }
+            "error" => on_event(RuntimeEvent::Failed(
+                event["message"]
+                    .as_str()
+                    .unwrap_or("Qt runtime error")
+                    .to_owned(),
+            )),
+            kind => anyhow::bail!("Unknown Qt event: {kind}"),
         }
-        #[cfg(windows)]
-        {
-            let mut cmd = Command::new("taskkill");
-            let _ = cmd
-                .creation_flags(CREATE_NO_WINDOW)
-                .args(["/F", "/PID", &pid.to_string()])
-                .output();
-        }
     }
+    Ok(())
 }

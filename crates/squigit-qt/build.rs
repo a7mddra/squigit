@@ -1,22 +1,37 @@
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-pub fn run(repo_root: &Path, native_only: bool) -> Result<(), String> {
-    run_inner(repo_root, native_only).map_err(|error| format!("{error:#}"))
+pub fn release(repo_root: &Path) -> Result<(), String> {
+    release_inner(repo_root).map_err(|error| format!("{error:#}"))
 }
 
-fn run_inner(repo_root: &Path, native_only: bool) -> Result<()> {
+fn release_inner(repo_root: &Path) -> Result<()> {
     let native_dir = repo_root.join("native/qt");
-    let profile = if native_only { "Debug" } else { "Release" };
-    println!("\nBuilding Squigit Qt runtime ({profile})...");
-    build_native(&native_dir, profile)?;
-    if !native_only {
-        deploy(&native_dir)?;
-        #[cfg(target_os = "macos")]
-        macos::sign(&native_dir)?;
-    }
+    println!("\nBuilding Squigit Qt runtime (Release)...");
+    build_native(&native_dir, "Release")?;
+    deploy(&native_dir)?;
+    #[cfg(target_os = "macos")]
+    macos::sign(&native_dir.join("_internal"))?;
     Ok(())
+}
+
+pub fn debug(repo_root: &Path) -> Result<(), String> {
+    debug_inner(repo_root).map_err(|error| format!("{error:#}"))
+}
+
+fn debug_inner(repo_root: &Path) -> Result<()> {
+    let native_dir = repo_root.join("native/qt");
+    println!("\nBuilding Squigit Qt runtime (Debug)...");
+    build_native(&native_dir, "Debug")
+}
+
+fn build_directory(native_dir: &Path, profile: &str) -> PathBuf {
+    native_dir.join(if profile == "Debug" {
+        "build-debug"
+    } else {
+        "build"
+    })
 }
 
 #[cfg(target_os = "linux")]
@@ -156,7 +171,7 @@ mod linux {
     use std::process::Command;
 
     pub fn build(native_dir: &Path, profile: &str) -> Result<()> {
-        let build_dir = native_dir.join("build");
+        let build_dir = super::build_directory(native_dir, profile);
         println!("  Configuring CMake...");
         fs::create_dir_all(&build_dir)?;
 
@@ -167,6 +182,13 @@ mod linux {
             .arg("-B")
             .arg(&build_dir)
             .arg(format!("-DCMAKE_BUILD_TYPE={profile}"));
+
+        if profile == "Debug" {
+            cmake_cmd.arg("-DCMAKE_CXX_FLAGS_DEBUG=-O0 -g1");
+            if !build_dir.join("CMakeCache.txt").exists() && which::which("ninja").is_ok() {
+                cmake_cmd.args(["-G", "Ninja"]);
+            }
+        }
 
         if let Ok(qt6_dir) = std::env::var("Qt6_DIR") {
             cmake_cmd.arg(format!("-DCMAKE_PREFIX_PATH={qt6_dir}"));
@@ -195,7 +217,7 @@ mod linux {
     }
 
     pub fn deploy(native_dir: &Path) -> Result<()> {
-        let build_dir = native_dir.join("build");
+        let build_dir = super::build_directory(native_dir, "Release");
         let runtime_dir = native_dir.join("_internal");
         println!("  Creating '_internal' distribution using linuxdeployqt...");
         create_runtime_distribution(native_dir, &build_dir, &runtime_dir)
@@ -318,19 +340,27 @@ mod macos {
     use std::process::Command;
 
     pub fn build(native_dir: &Path, profile: &str) -> Result<()> {
-        let build_dir = native_dir.join("build");
+        let build_dir = super::build_directory(native_dir, profile);
         let qt_prefix = find_qt_prefix()?;
         println!("  Qt Prefix: {qt_prefix}");
 
         println!("  Configuring CMake...");
         fs::create_dir_all(&build_dir)?;
-        let status = Command::new("cmake")
+        let mut configure = Command::new("cmake");
+        configure
             .arg("-S")
             .arg(native_dir)
             .arg("-B")
             .arg(&build_dir)
             .arg(format!("-DCMAKE_BUILD_TYPE={profile}"))
-            .arg(format!("-DCMAKE_PREFIX_PATH={qt_prefix}"))
+            .arg(format!("-DCMAKE_PREFIX_PATH={qt_prefix}"));
+        if profile == "Debug" {
+            configure.arg("-DCMAKE_CXX_FLAGS_DEBUG=-O0 -g1");
+            if !build_dir.join("CMakeCache.txt").exists() && which::which("ninja").is_ok() {
+                configure.args(["-G", "Ninja"]);
+            }
+        }
+        let status = configure
             .status()
             .context("Failed to run cmake configure")?;
         if !status.success() {
@@ -351,16 +381,16 @@ mod macos {
     }
 
     pub fn deploy(native_dir: &Path) -> Result<()> {
-        let build_dir = native_dir.join("build");
+        let build_dir = super::build_directory(native_dir, "Release");
         let distribution_dir = native_dir.join("_internal");
         let qt_prefix = find_qt_prefix()?;
         println!("  Running macdeployqt...");
         create_distribution(&build_dir, &distribution_dir, &qt_prefix)
     }
 
-    pub fn sign(native_dir: &Path) -> Result<()> {
+    pub fn sign(runtime_dir: &Path) -> Result<()> {
         println!("  Signing bundle...");
-        let app_bundle = native_dir.join("_internal/squigit-qt.app");
+        let app_bundle = runtime_dir.join("squigit-qt.app");
         if !app_bundle.exists() {
             anyhow::bail!("App bundle not found at {}", app_bundle.display());
         }
@@ -464,7 +494,7 @@ mod windows {
     use std::process::Command;
 
     pub fn build(native_dir: &Path, profile: &str) -> Result<()> {
-        let build_dir = native_dir.join("build");
+        let build_dir = super::build_directory(native_dir, profile);
         let qt_path = find_qt_path()?;
         println!("  Qt Path: {qt_path}");
 
@@ -508,9 +538,6 @@ mod windows {
         profile: &str,
         extra_args: &[&str],
     ) -> Result<bool> {
-        if build_dir.exists() {
-            fs::remove_dir_all(build_dir)?;
-        }
         fs::create_dir_all(build_dir)?;
 
         let mut arguments = vec![
@@ -568,7 +595,7 @@ mod windows {
     }
 
     pub fn deploy(native_dir: &Path) -> Result<()> {
-        let build_dir = native_dir.join("build");
+        let build_dir = super::build_directory(native_dir, "Release");
         let distribution_dir = native_dir.join("_internal");
         let qt_path = find_qt_path()?;
         println!("  Running windeployqt...");
@@ -628,7 +655,7 @@ mod windows {
             }
         }
         anyhow::bail!(
-            "Qt6 with required modules not found. Checked: {}. Install Qt Declarative (Qt Quick/QML) and Qt5Compat.GraphicalEffects for this kit, or set Qt6_DIR to a full Qt kit root.",
+            "Qt6 with required modules not found. Checked: {}. Install Qt Declarative (Qt Quick/QML), Qt Multimedia, and Qt5Compat.GraphicalEffects for this kit, or set Qt6_DIR to a full Qt kit root.",
             attempted.join(", ")
         )
     }
@@ -662,6 +689,7 @@ mod windows {
             prefix.join(r"lib\cmake\Qt6\Qt6Config.cmake"),
             prefix.join(r"lib\cmake\Qt6Quick\Qt6QuickConfig.cmake"),
             prefix.join(r"lib\cmake\Qt6Qml\Qt6QmlConfig.cmake"),
+            prefix.join(r"lib\cmake\Qt6Multimedia\Qt6MultimediaConfig.cmake"),
             prefix.join(r"qml\Qt5Compat\GraphicalEffects\qmldir"),
         ]
         .iter()
@@ -685,11 +713,11 @@ mod windows {
         if executable_source.exists() {
             fs::copy(&executable_source, &executable_destination)?;
         } else {
-            let release_executable = build_dir.join("Release").join(executable_name);
-            if !release_executable.exists() {
+            let configured_executable = build_dir.join("Release").join(executable_name);
+            if !configured_executable.exists() {
                 anyhow::bail!("Built exe not found: {}", executable_source.display());
             }
-            fs::copy(release_executable, &executable_destination)?;
+            fs::copy(configured_executable, &executable_destination)?;
         }
 
         let windeployqt = Path::new(qt_path).join("bin/windeployqt.exe");
@@ -710,9 +738,10 @@ mod windows {
             ])
             .status()
             .context("Failed to run windeployqt")?;
-        if !status.success() {
-            println!("  Warning: windeployqt failed");
-        }
+        anyhow::ensure!(
+            status.success(),
+            "windeployqt failed to bundle the Qt runtime"
+        );
 
         ensure_qt5compat_graphicaleffects(distribution_dir, qt_path)?;
         bundle_vc_runtime(distribution_dir)
