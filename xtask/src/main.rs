@@ -1,4 +1,8 @@
-mod native;
+mod build;
+#[path = "../../crates/squigit-ocr/build.rs"]
+mod ocr;
+#[path = "../../crates/squigit-qt/build.rs"]
+mod qt;
 
 use std::env;
 use std::ffi::OsStr;
@@ -7,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 
 const USAGE: &str = "Usage:
-  cargo xtask build [--qt]
+  cargo xtask build [--qt [--release] | --ocr | --app]
   cargo xtask run [-- <ARGS>]
   cargo xtask doctor
   cargo xtask fmt [--all]
@@ -35,8 +39,11 @@ fn dispatch() -> Result<(), String> {
 
     match command.as_str() {
         "build" => match arguments.as_slice() {
-            [] => native::run(&root, false),
-            [flag] if flag == "--qt" => native::run(&root, true),
+            [] => build::run(&root),
+            [flag] if flag == "--qt" => qt::run(&root, true),
+            [flag, profile] if flag == "--qt" && profile == "--release" => qt::run(&root, false),
+            [flag] if flag == "--app" => build::app(&root),
+            [flag] if flag == "--ocr" => ocr::run(&root, false),
             _ => Err(format!(
                 "unknown argument for build: {}\n\n{USAGE}",
                 arguments.join(" ")
@@ -103,7 +110,7 @@ fn run_binary(root: &Path, arguments: &[String]) -> Result<(), String> {
         _ => arguments.to_vec(),
     };
 
-    let host = native::host_target_triple().map_err(|error| error.to_string())?;
+    let host = build::host_target_triple().map_err(|error| error.to_string())?;
     let binary_name = if cfg!(windows) {
         "squigit.exe"
     } else {
@@ -174,6 +181,8 @@ fn clean(root: &Path) -> Result<(), String> {
 
     remove_directory(&root.join("native/qt/build"))?;
     remove_directory(&root.join("native/qt/_internal"))?;
+    remove_directory(&root.join("native/ocr/build"))?;
+    remove_directory(&root.join("native/ocr/dist"))?;
     remove_directory(&root.join("binaries"))
 }
 

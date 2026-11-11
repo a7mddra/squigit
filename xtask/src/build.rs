@@ -1,0 +1,115 @@
+use anyhow::{Context, Result};
+use std::fs;
+use std::path::Path;
+use std::process::Command;
+
+pub fn run(repo_root: &Path) -> Result<(), String> {
+    crate::ocr::run(repo_root, false)?;
+    crate::qt::run(repo_root, false)?;
+    app(repo_root)
+}
+
+pub fn app(repo_root: &Path) -> Result<(), String> {
+    app_inner(repo_root).map_err(|error| format!("{error:#}"))
+}
+
+fn app_inner(repo_root: &Path) -> Result<()> {
+    anyhow::ensure!(
+        repo_root.join("native/qt/_internal").is_dir(),
+        "The staged Qt runtime is missing; run cargo xtask build --qt --release first"
+    );
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    run_command(
+        Command::new(cargo)
+            .args(["build", "--release", "-p", "squigit"])
+            .current_dir(repo_root),
+        "cargo build --release -p squigit",
+    )?;
+    package(repo_root)
+}
+
+fn package(repo_root: &Path) -> Result<()> {
+    let destination = repo_root.join("binaries").join(host_target_triple()?);
+    remove_existing_path(&destination)?;
+    fs::create_dir_all(&destination)?;
+    crate::qt::package(repo_root, &destination)?;
+    let binary_name = if cfg!(windows) {
+        "squigit.exe"
+    } else {
+        "squigit"
+    };
+    let binary_source = repo_root.join("target/release").join(binary_name);
+    if !binary_source.is_file() {
+        anyhow::bail!("Rust binary not found: {}", binary_source.display());
+    }
+    let binary_destination = destination.join(binary_name);
+    println!(
+        "  Copying squigit binary to {}",
+        binary_destination.display()
+    );
+    fs::copy(&binary_source, &binary_destination).with_context(|| {
+        format!(
+            "Could not copy {} to {}",
+            binary_source.display(),
+            binary_destination.display()
+        )
+    })?;
+
+    fs::copy(
+        repo_root.join("squigit/icons/icon.png"),
+        destination.join("squigit.png"),
+    )?;
+    #[cfg(target_os = "linux")]
+    fs::copy(
+        repo_root.join("squigit/squigit.desktop"),
+        destination.join("squigit.desktop"),
+    )?;
+    Ok(())
+}
+
+pub fn host_target_triple() -> Result<String> {
+    let output = Command::new("rustc")
+        .arg("-vV")
+        .output()
+        .context("Could not inspect the Rust host target")?;
+    if !output.status.success() {
+        anyhow::bail!("Could not inspect the Rust host target with 'rustc -vV'");
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .find_map(|line| line.strip_prefix("host: ").map(str::trim))
+        .filter(|host| !host.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| anyhow::anyhow!("Rust did not report a host target in 'rustc -vV'"))
+}
+
+fn run_command(command: &mut Command, display: &str) -> Result<()> {
+    println!("  $ {display}");
+    let status = command
+        .stdin(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .status()
+        .with_context(|| format!("Failed to run: {display}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        anyhow::bail!("'{display}' failed with exit code {:?}", status.code())
+    }
+}
+
+fn remove_existing_path(path: &Path) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || metadata.is_file() => {
+            fs::remove_file(path)
+                .with_context(|| format!("Could not remove {}", path.display()))?;
+        }
+        Ok(_) => fs::remove_dir_all(path)
+            .with_context(|| format!("Could not remove {}", path.display()))?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(error).with_context(|| format!("Could not inspect {}", path.display()));
+        }
+    }
+    Ok(())
+}

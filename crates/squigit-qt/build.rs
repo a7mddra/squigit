@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 pub fn run(repo_root: &Path, native_only: bool) -> Result<(), String> {
     run_inner(repo_root, native_only).map_err(|error| format!("{error:#}"))
@@ -9,59 +8,34 @@ pub fn run(repo_root: &Path, native_only: bool) -> Result<(), String> {
 
 fn run_inner(repo_root: &Path, native_only: bool) -> Result<()> {
     let native_dir = repo_root.join("native/qt");
-
-    if native_only {
-        println!("\nBuilding Squigit Qt runtime (CMake only)...");
-        build_native(&native_dir)?;
-        println!("\nSquigit Qt runtime build complete!");
-        return Ok(());
-    }
-
-    println!("\nBuilding Squigit...");
-    println!("\nRunning Qt CMake build...");
-    build_native(&native_dir)?;
-
-    println!("\nDeploying Qt runtime...");
-    deploy(&native_dir)?;
-
-    #[cfg(target_os = "macos")]
-    {
-        println!("\nSigning macOS bundle...");
+    let profile = if native_only { "Debug" } else { "Release" };
+    println!("\nBuilding Squigit Qt runtime ({profile})...");
+    build_native(&native_dir, profile)?;
+    if !native_only {
+        deploy(&native_dir)?;
+        #[cfg(target_os = "macos")]
         macos::sign(&native_dir)?;
     }
-
-    println!("\nBuilding Rust binary...");
-    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-    run_command(
-        Command::new(cargo)
-            .args(["build", "--release", "-p", "squigit"])
-            .current_dir(repo_root),
-        "cargo build --release -p squigit",
-    )?;
-
-    println!("\nPackaging Squigit...");
-    package(repo_root, &native_dir)?;
-    println!("\nSquigit build complete!");
     Ok(())
 }
 
 #[cfg(target_os = "linux")]
-fn build_native(native_dir: &Path) -> Result<()> {
-    linux::build(native_dir)
+fn build_native(native_dir: &Path, profile: &str) -> Result<()> {
+    linux::build(native_dir, profile)
 }
 
 #[cfg(target_os = "macos")]
-fn build_native(native_dir: &Path) -> Result<()> {
-    macos::build(native_dir)
+fn build_native(native_dir: &Path, profile: &str) -> Result<()> {
+    macos::build(native_dir, profile)
 }
 
 #[cfg(target_os = "windows")]
-fn build_native(native_dir: &Path) -> Result<()> {
-    windows::build(native_dir)
+fn build_native(native_dir: &Path, profile: &str) -> Result<()> {
+    windows::build(native_dir, profile)
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-fn build_native(_native_dir: &Path) -> Result<()> {
+fn build_native(_native_dir: &Path, _profile: &str) -> Result<()> {
     Err(anyhow::anyhow!(
         "Squigit Qt runtime builds are unsupported on this operating system"
     ))
@@ -89,13 +63,8 @@ fn deploy(_native_dir: &Path) -> Result<()> {
     ))
 }
 
-fn package(repo_root: &Path, native_dir: &Path) -> Result<()> {
-    let host = host_target_triple()?;
-    let destination = repo_root.join("binaries").join(host);
-    remove_existing_path(&destination)?;
-    fs::create_dir_all(&destination)
-        .with_context(|| format!("Could not create {}", destination.display()))?;
-
+pub fn package(repo_root: &Path, destination: &Path) -> Result<()> {
+    let native_dir = repo_root.join("native/qt");
     let runtime_source = native_dir.join("_internal");
     if !runtime_source.exists() {
         anyhow::bail!("Qt runtime not found at {}", runtime_source.display());
@@ -114,69 +83,7 @@ fn package(repo_root: &Path, native_dir: &Path) -> Result<()> {
         })?;
     }
 
-    let binary_name = if cfg!(windows) {
-        "squigit.exe"
-    } else {
-        "squigit"
-    };
-    let binary_source = repo_root.join("target/release").join(binary_name);
-    if !binary_source.is_file() {
-        anyhow::bail!("Rust binary not found: {}", binary_source.display());
-    }
-    let binary_destination = destination.join(binary_name);
-    println!(
-        "  Copying squigit binary to {}",
-        binary_destination.display()
-    );
-    fs::copy(&binary_source, &binary_destination).with_context(|| {
-        format!(
-            "Could not copy {} to {}",
-            binary_source.display(),
-            binary_destination.display()
-        )
-    })?;
-
-    fs::copy(
-        repo_root.join("squigit/icons/icon.png"),
-        destination.join("squigit.png"),
-    )?;
-    #[cfg(target_os = "linux")]
-    fs::copy(
-        repo_root.join("squigit/squigit.desktop"),
-        destination.join("squigit.desktop"),
-    )?;
     Ok(())
-}
-
-pub fn host_target_triple() -> Result<String> {
-    let output = Command::new("rustc")
-        .arg("-vV")
-        .output()
-        .context("Could not inspect the Rust host target")?;
-    if !output.status.success() {
-        anyhow::bail!("Could not inspect the Rust host target with 'rustc -vV'");
-    }
-    String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .find_map(|line| line.strip_prefix("host: ").map(str::trim))
-        .filter(|host| !host.is_empty())
-        .map(str::to_string)
-        .ok_or_else(|| anyhow::anyhow!("Rust did not report a host target in 'rustc -vV'"))
-}
-
-fn run_command(command: &mut Command, display: &str) -> Result<()> {
-    println!("  $ {display}");
-    let status = command
-        .stdin(std::process::Stdio::inherit())
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::inherit())
-        .status()
-        .with_context(|| format!("Failed to run: {display}"))?;
-    if status.success() {
-        Ok(())
-    } else {
-        anyhow::bail!("'{display}' failed with exit code {:?}", status.code())
-    }
 }
 
 fn remove_existing_path(path: &Path) -> Result<()> {
@@ -248,7 +155,7 @@ mod linux {
     use std::path::Path;
     use std::process::Command;
 
-    pub fn build(native_dir: &Path) -> Result<()> {
+    pub fn build(native_dir: &Path, profile: &str) -> Result<()> {
         let build_dir = native_dir.join("build");
         println!("  Configuring CMake...");
         fs::create_dir_all(&build_dir)?;
@@ -259,7 +166,7 @@ mod linux {
             .arg(native_dir)
             .arg("-B")
             .arg(&build_dir)
-            .arg("-DCMAKE_BUILD_TYPE=Release");
+            .arg(format!("-DCMAKE_BUILD_TYPE={profile}"));
 
         if let Ok(qt6_dir) = std::env::var("Qt6_DIR") {
             cmake_cmd.arg(format!("-DCMAKE_PREFIX_PATH={qt6_dir}"));
@@ -278,7 +185,7 @@ mod linux {
         let status = Command::new("cmake")
             .arg("--build")
             .arg(&build_dir)
-            .args(["--config", "Release", "--parallel"])
+            .args(["--config", profile, "--parallel", "2"])
             .status()
             .context("Failed to run cmake build")?;
         if !status.success() {
@@ -410,7 +317,7 @@ mod macos {
     use std::path::Path;
     use std::process::Command;
 
-    pub fn build(native_dir: &Path) -> Result<()> {
+    pub fn build(native_dir: &Path, profile: &str) -> Result<()> {
         let build_dir = native_dir.join("build");
         let qt_prefix = find_qt_prefix()?;
         println!("  Qt Prefix: {qt_prefix}");
@@ -422,7 +329,7 @@ mod macos {
             .arg(native_dir)
             .arg("-B")
             .arg(&build_dir)
-            .arg("-DCMAKE_BUILD_TYPE=Release")
+            .arg(format!("-DCMAKE_BUILD_TYPE={profile}"))
             .arg(format!("-DCMAKE_PREFIX_PATH={qt_prefix}"))
             .status()
             .context("Failed to run cmake configure")?;
@@ -434,7 +341,7 @@ mod macos {
         let status = Command::new("cmake")
             .arg("--build")
             .arg(&build_dir)
-            .args(["--config", "Release", "--parallel"])
+            .args(["--config", profile, "--parallel", "2"])
             .status()
             .context("Failed to run cmake build")?;
         if !status.success() {
@@ -556,7 +463,7 @@ mod windows {
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
-    pub fn build(native_dir: &Path) -> Result<()> {
+    pub fn build(native_dir: &Path, profile: &str) -> Result<()> {
         let build_dir = native_dir.join("build");
         let qt_path = find_qt_path()?;
         println!("  Qt Path: {qt_path}");
@@ -568,8 +475,14 @@ mod windows {
             );
         };
         println!("  Using CMake generator '{generator}'.");
-        let configured =
-            run_cmake_configure(native_dir, &build_dir, &qt_path, generator, &["-A", "x64"])?;
+        let configured = run_cmake_configure(
+            native_dir,
+            &build_dir,
+            &qt_path,
+            generator,
+            profile,
+            &["-A", "x64"],
+        )?;
         if !configured {
             anyhow::bail!("CMake configure failed");
         }
@@ -578,7 +491,7 @@ mod windows {
         let status = Command::new("cmake")
             .arg("--build")
             .arg(&build_dir)
-            .args(["--config", "Release", "--parallel"])
+            .args(["--config", profile, "--parallel", "2"])
             .status()
             .context("Failed to run cmake build")?;
         if !status.success() {
@@ -592,6 +505,7 @@ mod windows {
         build_dir: &Path,
         qt_path: &str,
         generator: &str,
+        profile: &str,
         extra_args: &[&str],
     ) -> Result<bool> {
         if build_dir.exists() {
@@ -606,7 +520,7 @@ mod windows {
             build_dir.to_string_lossy().to_string(),
             "-G".to_string(),
             generator.to_string(),
-            "-DCMAKE_BUILD_TYPE=Release".to_string(),
+            format!("-DCMAKE_BUILD_TYPE={profile}"),
             format!("-DCMAKE_PREFIX_PATH={qt_path}"),
         ];
         arguments.extend(extra_args.iter().map(|argument| argument.to_string()));
