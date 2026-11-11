@@ -17,9 +17,47 @@ Window {
     property bool openingPending: false
     property Item hoveredButton: null
     property Item focusedButton: null
+    property Item lastSoundedButton: null
+    property bool keyboardNavigation: false
+    property int navigationIndex: -1
+    readonly property Item highlightedButton: keyboardNavigation ? focusedButton : hoveredButton
     readonly property string previewLabel: {
-        const button = hoveredButton || focusedButton
+        const button = highlightedButton
         return button ? button.label : ""
+    }
+
+    function moveFocus(step) {
+        if (!active || !visible || petals.count === 0)
+            return
+        const nextIndex = navigationIndex < 0
+            ? (step > 0 ? 0 : petals.count - 1)
+            : (navigationIndex + step + petals.count) % petals.count
+        const button = petals.itemAt(nextIndex)
+        if (!button)
+            return
+        navigationIndex = nextIndex
+        button.forceActiveFocus(step > 0 ? Qt.TabFocusReason : Qt.BacktabFocusReason)
+        keyboardNavigation = true
+        hoveredButton = null
+    }
+
+    onHighlightedButtonChanged: tickDelay.restart()
+
+    onActiveChanged: {
+        if (active && !focusedButton)
+            wheel.forceActiveFocus()
+    }
+
+    Timer {
+        id: tickDelay
+        interval: 35
+        onTriggered: {
+            if (window.active && window.visible && window.highlightedButton
+                && window.highlightedButton !== window.lastSoundedButton) {
+                menuActions.playTick()
+                window.lastSoundedButton = window.highlightedButton
+            }
+        }
     }
 
     width: diameter + 24
@@ -39,11 +77,18 @@ Window {
 
     onVisibleChanged: {
         openingAnimation.stop()
-        openingProgress = 0.7
         openingPending = visible
-        if (!visible) {
+        opacity = visible ? 1 : 0
+        if (visible) {
+            openingProgress = 0.7
+            wheel.forceActiveFocus()
+        } else {
+            tickDelay.stop()
             hoveredButton = null
             focusedButton = null
+            lastSoundedButton = null
+            keyboardNavigation = false
+            navigationIndex = -1
         }
     }
 
@@ -66,34 +111,34 @@ Window {
 
     Shortcut {
         sequence: "Escape"
-        enabled: window.visible
+        enabled: window.visible && window.active
         onActivated: menuActions.hide()
     }
     Shortcut {
         sequence: "Ctrl+Q"
-        enabled: window.visible
+        enabled: window.visible && window.active
         onActivated: menuActions.hide()
     }
 
     Window {
         id: hoverBadge
+        objectName: "hoverBadge"
         readonly property real uiScale: window.diameter / 1000
         transientParent: window
         title: "Squigit"
-        flags: Qt.ToolTip | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint
+        flags: Qt.Tool | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint
                | Qt.WindowTransparentForInput | Qt.WindowDoesNotAcceptFocus
         color: "transparent"
         visible: window.visible && window.openingProgress === 1 && window.previewLabel.length > 0
-        width: Math.ceil(window.innerRadius * 2 * uiScale)
-        height: width
+        onVisibleChanged: opacity = visible ? 1 : 0
+        width: Math.ceil(Math.min(hoverText.implicitWidth + 48 * uiScale,
+                                 window.innerRadius * 1.8 * uiScale))
+        height: Math.ceil(hoverText.implicitHeight + 32 * uiScale)
         x: window.x + Math.round((window.width - width) / 2)
         y: window.y + Math.round((window.height - height) / 2)
 
         Rectangle {
-            anchors.centerIn: parent
-            width: Math.min(hoverText.implicitWidth + 48 * hoverBadge.uiScale,
-                            window.innerRadius * 1.8 * hoverBadge.uiScale)
-            height: hoverText.implicitHeight + 32 * hoverBadge.uiScale
+            anchors.fill: parent
             radius: 24 * hoverBadge.uiScale
             color: window.petalColor
             antialiasing: true
@@ -124,6 +169,31 @@ Window {
         width: 1000
         height: 1000
         scale: window.diameter / 1000
+        focus: true
+
+        Keys.onPressed: function(event) {
+            if (!window.active || (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)))
+                return
+            let step = 0
+            switch (event.key) {
+            case Qt.Key_Right:
+            case Qt.Key_Down:
+                step = 1
+                break
+            case Qt.Key_Left:
+            case Qt.Key_Up:
+            case Qt.Key_Backtab:
+                step = -1
+                break
+            case Qt.Key_Tab:
+                step = event.modifiers & Qt.ShiftModifier ? -1 : 1
+                break
+            default:
+                return
+            }
+            event.accepted = true
+            window.moveFocus(step)
+        }
 
         Rectangle {
             anchors.centerIn: parent
@@ -149,17 +219,21 @@ Window {
         }
 
         Repeater {
+            id: petals
             model: [
-                { label: "CIRCLE TO\nSEARCH", action: "Circle to Search", icon: "circle-to-search", angle: 0 },
+                { label: "Circle to Search", action: "Circle to Search", icon: "circle-to-search", angle: 0 },
                 { label: "OCR", action: "OCR", icon: "ocr", angle: 72 },
-                { label: "SNAPSHOT", action: "Snapshot", icon: "snapshot", angle: 144 },
-                { label: "ASK GOOGLE", action: "Ask Google", icon: "ask-google", angle: 216 },
-                { label: "SCAN QR", action: "Scan QR", icon: "scan-qr", angle: 288 }
+                { label: "Snapshot", action: "Snapshot", icon: "snapshot", angle: 144 },
+                { label: "Ask Google", action: "Ask Google", icon: "ask-google", angle: 216 },
+                { label: "Scan QR", action: "Scan QR", icon: "scan-qr", angle: 288 }
             ]
 
             RadialButton {
                 id: radialButton
                 required property var modelData
+                required property int index
+                navigationTarget: wheel
+                highlighted: window.highlightedButton === radialButton
                 label: modelData.label
                 action: modelData.action
                 iconName: modelData.icon
@@ -171,12 +245,27 @@ Window {
                 backgroundColor: window.petalColor
                 hoverAlpha: window.hoverAlpha
                 onHoveredChanged: {
-                    if (hovered) window.hoveredButton = radialButton
-                    else if (window.hoveredButton === radialButton) window.hoveredButton = null
+                    if (hovered) {
+                        pointAt()
+                    } else if (window.hoveredButton === radialButton) {
+                        window.hoveredButton = null
+                    }
                 }
+                function pointAt() {
+                    window.hoveredButton = radialButton
+                    window.keyboardNavigation = false
+                    window.navigationIndex = index
+                    if (!activeFocus)
+                        forceActiveFocus(Qt.MouseFocusReason)
+                }
+                onPointerMoved: pointAt()
                 onActiveFocusChanged: {
-                    if (activeFocus) window.focusedButton = radialButton
-                    else if (window.focusedButton === radialButton) window.focusedButton = null
+                    if (activeFocus) {
+                        window.focusedButton = radialButton
+                        window.navigationIndex = index
+                    } else if (window.focusedButton === radialButton) {
+                        window.focusedButton = null
+                    }
                 }
                 onActivated: menuActions.press(action)
             }

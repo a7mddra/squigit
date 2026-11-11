@@ -1,6 +1,7 @@
 #include "RadialMenu.h"
 #include "RadialGeometry.h"
 #include "RadialPetal.h"
+#include "WindowEffects.h"
 
 #include <QCursor>
 #include <QGuiApplication>
@@ -9,6 +10,7 @@
 #include <QQmlContext>
 #include <QRegion>
 #include <QScreen>
+#include <QSoundEffect>
 #include <QVariantMap>
 #include <algorithm>
 #include <iostream>
@@ -33,6 +35,9 @@ RadialMenu::RadialMenu(QQmlApplicationEngine *engine, QObject *parent)
   auto *context = new QQmlContext(engine->rootContext(), this);
   context->setContextProperty("menuConfig", config);
   context->setContextProperty("menuActions", this);
+  m_tick = new QSoundEffect(this);
+  m_tick->setVolume(0.5);
+  m_tick->setSource(QUrl(QStringLiteral("qrc:/menu/tick.wav")));
   QQmlComponent component(engine, QUrl("qrc:/menu/RadialWindow.qml"));
   m_window = qobject_cast<QQuickWindow *>(component.create(context));
   if (!m_window) {
@@ -41,6 +46,12 @@ RadialMenu::RadialMenu(QQmlApplicationEngine *engine, QObject *parent)
   }
   m_window->QObject::setParent(this);
   m_window->create();
+  disableWindowAnimations(m_window);
+  m_badge = m_window->findChild<QQuickWindow *>(QStringLiteral("hoverBadge"));
+  if (m_badge) {
+    m_badge->create();
+    disableWindowAnimations(m_badge);
+  }
   const QPointF center(m_window->width() / 2.0, m_window->height() / 2.0);
   const qreal radius = diameter * RadialGeometry::HoleRadius / RadialGeometry::Size - 1;
   const QRect hole = QRectF(center.x() - radius, center.y() - radius, radius * 2, radius * 2).toRect();
@@ -67,10 +78,22 @@ void RadialMenu::show() {
 }
 
 void RadialMenu::hide() {
-  if (m_window)
-    m_window->hide();
+  if (!m_window)
+    return;
+  if (m_badge) {
+    m_badge->setOpacity(0);
+    m_badge->hide();
+  }
+  m_window->setOpacity(0);
+  m_window->hide();
 }
 
 void RadialMenu::press(const QString &action) {
   emit actionActivated(action);
+}
+
+void RadialMenu::playTick() {
+  if (m_window && m_window->isVisible() && m_window->isActive() &&
+      m_tick->status() == QSoundEffect::Ready)
+    m_tick->play();
 }

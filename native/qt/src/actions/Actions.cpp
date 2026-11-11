@@ -1,15 +1,15 @@
 #include "Actions.h"
 
 CaptureAction captureAction(const QString &name) {
-  if (name == "Circle to Search" || name == "circle-to-search")
+  if (name == "Circle to Search")
     return circleToSearchAction();
-  if (name == "Snapshot" || name == "snapshot")
+  if (name == "Snapshot")
     return snapshotAction();
-  if (name == "Scan QR" || name == "scan-qr")
+  if (name == "Scan QR")
     return scanQrAction();
-  if (name == "OCR" || name == "ocr")
+  if (name == "OCR")
     return ocrAction();
-  if (name == "Ask Google" || name == "ask-google")
+  if (name == "Ask Google")
     return askGoogleAction();
   return {};
 }

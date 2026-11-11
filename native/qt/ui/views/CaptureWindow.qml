@@ -14,10 +14,21 @@ Window {
     width: Screen.width
     height: Screen.height
 
+    onClosing: function(close) {
+        close.accepted = false;
+        root.controller.cancel();
+    }
+
     color: "transparent"
 
     required property var controller
     property bool ownsInput: false
+    readonly property bool saveMode: controller.action === "snapshot" || controller.action === "ask-google"
+
+    function escapeTapped() {
+        if (!selectionCrop.clearTextSelection())
+            root.controller.cancel();
+    }
 
     Image {
         id: background
@@ -103,49 +114,62 @@ Window {
             id: toolbar
             x: Math.max(8, Math.min(parent.area.x, root.width - width - 8))
             y: Math.max(8, Math.min(parent.area.y + parent.area.height + 10, root.height - height - 8))
-            width: actions.width + 12
+            width: (root.saveMode ? saveButton.width : visibilityButton.width) + 12
             height: 44
             radius: 6
             color: "#202124"
-            Row {
-                id: actions
+            visible: root.saveMode || root.controller.action === "ocr"
+            Rectangle {
+                id: saveButton
                 anchors.centerIn: parent
-                spacing: 6
-                Repeater {
-                    model: root.controller.ocrPending ? ["Save", "Cancel OCR", "QR"] : ["Save", "OCR", "QR"]
-                    delegate: Rectangle {
-                        id: actionButton
-                        required property string modelData
-                        readonly property bool checked: modelData === "OCR" && root.controller.ocrVisible
-                        readonly property bool available: (modelData !== "Cancel OCR" || !root.controller.ocrCancelling) && (modelData !== "QR" || !root.controller.qrPending)
-                        width: modelData === "Cancel OCR" ? 110 : 76
-                        height: 32
-                        radius: 4
-                        color: checked ? "#356ab0" : actionMouse.containsMouse ? "#505154" : "#353639"
-                        opacity: available ? 1 : 0.5
-                        Text {
-                            anchors.centerIn: parent
-                            text: parent.modelData
-                            color: "white"
-                            font.pixelSize: 14
-                        }
-                        MouseArea {
-                            id: actionMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            enabled: actionButton.available
-                            onClicked: {
-                                if (actionButton.modelData === "Save")
-                                    root.controller.save();
-                                else if (actionButton.modelData === "Cancel OCR")
-                                    root.controller.cancelOcr();
-                                else if (actionButton.modelData === "QR")
-                                    root.controller.scanQr();
-                                else
-                                    root.controller.toggleOcr();
-                            }
-                        }
+                width: 88
+                height: 32
+                radius: 4
+                color: saveMouse.containsMouse ? "#505154" : "#353639"
+                visible: root.saveMode
+                Text {
+                    anchors.centerIn: parent
+                    text: "Save"
+                    color: "white"
+                    font.pixelSize: 14
+                }
+                MouseArea {
+                    id: saveMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.controller.save()
+                }
+            }
+            Rectangle {
+                id: visibilityButton
+                anchors.centerIn: parent
+                visible: root.controller.action === "ocr"
+                width: 132
+                height: 32
+                radius: 4
+                color: actionMouse.containsMouse ? "#505154" : "#353639"
+                opacity: root.controller.ocrCancelling ? 0.5 : 1
+                Text {
+                    anchors.centerIn: parent
+                    text: root.controller.ocrCancelling ? "Stopping OCR..."
+                        : root.controller.ocrPending ? "Cancel OCR"
+                        : !root.controller.ocrReady ? (root.controller.ocrFailed ? "Retry OCR" : "Scan OCR")
+                        : root.controller.ocrVisible ? "Hide OCR" : "Show OCR"
+                    color: "white"
+                    font.pixelSize: 14
+                }
+                MouseArea {
+                    id: actionMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    enabled: !root.controller.ocrCancelling
+                    onClicked: {
+                        if (root.controller.ocrPending)
+                            root.controller.cancelOcr();
+                        else
+                            root.controller.toggleOcr();
                     }
                 }
             }
@@ -171,15 +195,9 @@ Window {
         }
     }
 
-    Shortcut {
-        sequence: "Escape"
-        autoRepeat: false
-        context: Qt.ApplicationShortcut
-        enabled: root.ownsInput && root.visible
-        onActivated: {
-            if (!selectionCrop.clearTextSelection())
-                root.controller.cancel();
-        }
+    CaptureExitHint {
+        active: root.visible
+        z: 100
     }
 
     Shortcut {

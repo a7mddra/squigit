@@ -4,9 +4,11 @@
         <file>components/TraditionalCanvas.qml</file>
         <file>components/SelectionCrop.qml</file>
         <file>components/OcrTextLayer.qml</file>
+        <file>components/CaptureExitHint.qml</file>
         <file>views/CaptureWindow.qml</file>
         <file>menu/RadialWindow.qml</file>
         <file>menu/RadialButton.qml</file>
+        <file>menu/tick.wav</file>
         <file>menu/icons/circle-to-search.svg</file>
         <file>menu/icons/ocr.svg</file>
         <file>menu/icons/snapshot.svg</file>

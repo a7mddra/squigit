@@ -15,13 +15,17 @@ Item {
     required property color hoverColor
     required property color backgroundColor
     required property real hoverAlpha
+    required property bool highlighted
+    required property Item navigationTarget
     readonly property bool hovered: pointer.containsMouse
     readonly property bool down: pointer.pressed
     signal activated()
+    signal pointerMoved()
 
     width: 1000
     height: 1000
     activeFocusOnTab: true
+    Keys.forwardTo: [button.navigationTarget]
     RadialPetal {
         id: petal
         anchors.fill: parent
@@ -29,7 +33,7 @@ Item {
         outerRadius: button.outerRadius
         contentSize: Qt.size(content.width, content.height)
         fillColor: button.down ? Qt.rgba(button.hoverColor.r, button.hoverColor.g, button.hoverColor.b, Math.min(1, button.hoverAlpha + 0.1))
-                              : button.hovered || button.activeFocus ? Qt.rgba(button.hoverColor.r, button.hoverColor.g, button.hoverColor.b, button.hoverAlpha)
+                              : button.highlighted ? Qt.rgba(button.hoverColor.r, button.hoverColor.g, button.hoverColor.b, button.hoverAlpha)
                               : button.backgroundColor
 
         Behavior on fillColor {
@@ -51,6 +55,10 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: button.activated()
+        onPositionChanged: {
+            if (containsMouse)
+                button.pointerMoved()
+        }
     }
 
     Image {
