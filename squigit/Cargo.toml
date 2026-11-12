@@ -13,6 +13,7 @@ fs2 = "0.4"
 image = { version = "0.25", default-features = false, features = ["png"] }
 notify-rust = "4.19"
 opener = { version = "0.8", features = ["reveal"] }
+rodio = { version = "=0.20.1", default-features = false }
 rune = { git = "https://github.com/anomalyco/rune", rev = "2259d0c82af372dbb4d43dfd5989f72c44d152be" }
 rune-kit = { git = "https://github.com/anomalyco/rune", rev = "2259d0c82af372dbb4d43dfd5989f72c44d152be" }
 serde = { version = "1", features = ["derive"] }

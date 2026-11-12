@@ -17,6 +17,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 pub enum RuntimeEvent {
+    MenuTick,
     Saved { action: String, path: PathBuf },
     Asked { prompt: String },
     Failed(String),
@@ -262,6 +263,7 @@ fn read_events(
             "ready" => {
                 let _ = ready.try_send(());
             }
+            "menu_tick" => on_event(RuntimeEvent::MenuTick),
             "audio_mute" => {
                 #[cfg(target_os = "linux")]
                 AudioGuard::mute();

@@ -4,6 +4,7 @@ mod about;
 mod notifications;
 mod settings;
 mod storage;
+mod tick;
 
 use anyhow::{Context, Result};
 use fs2::FileExt;
@@ -70,11 +71,13 @@ fn run() -> Result<ExitCode> {
         .context("Squigit is already running")?;
 
     let models = squigit_ocr::models::ModelManager::new(data.clone());
+    let tick = tick::Player::start();
     let mut qt = squigit_qt::Runtime::start(
         models,
         storage::snapshots_dir()?,
         data.blobs_dir(),
-        |event| match event {
+        move |event| match event {
+            squigit_qt::RuntimeEvent::MenuTick => tick.play(),
             squigit_qt::RuntimeEvent::Saved { action, path } if action == "snapshot" => {
                 notifications::saved(path);
             }
