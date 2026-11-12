@@ -16,16 +16,27 @@ Item {
     required property color backgroundColor
     required property real hoverAlpha
     required property bool highlighted
-    required property Item navigationTarget
     readonly property bool hovered: pointer.containsMouse
     readonly property bool down: pointer.pressed
+    property real departure: 0
+    property bool wasHighlighted: false
     signal activated()
     signal pointerMoved()
 
     width: 1000
     height: 1000
-    activeFocusOnTab: true
-    Keys.forwardTo: [button.navigationTarget]
+
+    onHighlightedChanged: {
+        if (highlighted) {
+            departureAnimation.stop()
+            departure = 0
+        } else if (wasHighlighted) {
+            departure = 1
+            departureAnimation.restart()
+        }
+        wasHighlighted = highlighted
+    }
+
     RadialPetal {
         id: petal
         anchors.fill: parent
@@ -35,10 +46,25 @@ Item {
         fillColor: button.down ? Qt.rgba(button.hoverColor.r, button.hoverColor.g, button.hoverColor.b, Math.min(1, button.hoverAlpha + 0.1))
                               : button.highlighted ? Qt.rgba(button.hoverColor.r, button.hoverColor.g, button.hoverColor.b, button.hoverAlpha)
                               : button.backgroundColor
+    }
 
-        Behavior on fillColor {
-            ColorAnimation { duration: 140 }
-        }
+    RadialPetal {
+        anchors.fill: parent
+        angle: button.angle
+        outerRadius: button.outerRadius
+        fillColor: Qt.rgba(button.hoverColor.r, button.hoverColor.g, button.hoverColor.b, button.hoverAlpha)
+        opacity: button.departure
+        visible: opacity > 0
+    }
+
+    NumberAnimation {
+        id: departureAnimation
+        target: button
+        property: "departure"
+        from: 1
+        to: 0
+        duration: 180
+        easing.type: Easing.OutCubic
     }
 
     Accessible.role: Accessible.Button

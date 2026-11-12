@@ -15,47 +15,50 @@ Window {
     readonly property real outerRim: menuConfig["outer-rim"]
     property real openingProgress: 0.7
     property bool openingPending: false
-    property Item hoveredButton: null
-    property Item focusedButton: null
-    property Item lastSoundedButton: null
+    property int hoveredIndex: -1
+    property int keyboardIndex: -1
     property bool keyboardNavigation: false
-    property int navigationIndex: -1
-    readonly property Item highlightedButton: keyboardNavigation ? focusedButton : hoveredButton
+    readonly property int highlightedIndex: keyboardNavigation ? keyboardIndex : hoveredIndex
     readonly property string previewLabel: {
-        const button = highlightedButton
+        const button = highlightedIndex >= 0 ? petals.itemAt(highlightedIndex) : null
         return button ? button.label : ""
     }
 
     function moveFocus(step) {
         if (!active || !visible || petals.count === 0)
             return
-        const nextIndex = navigationIndex < 0
+        const currentIndex = keyboardNavigation ? keyboardIndex : hoveredIndex
+        const nextIndex = currentIndex < 0
             ? (step > 0 ? 0 : petals.count - 1)
-            : (navigationIndex + step + petals.count) % petals.count
-        const button = petals.itemAt(nextIndex)
-        if (!button)
-            return
-        navigationIndex = nextIndex
-        button.forceActiveFocus(step > 0 ? Qt.TabFocusReason : Qt.BacktabFocusReason)
+            : (currentIndex + step + petals.count) % petals.count
         keyboardNavigation = true
-        hoveredButton = null
+        keyboardIndex = nextIndex
+        wheel.forceActiveFocus()
     }
 
-    onHighlightedButtonChanged: tickDelay.restart()
+    function pointAt(index) {
+        hoverClear.stop()
+        hoveredIndex = index
+        keyboardIndex = index
+        keyboardNavigation = false
+    }
 
-    onActiveChanged: {
-        if (active && !focusedButton)
-            wheel.forceActiveFocus()
+    function clearPointAt(index) {
+        if (hoveredIndex === index)
+            hoverClear.restart()
+    }
+
+    onHighlightedIndexChanged: {
+        if (highlightedIndex >= 0)
+            menuActions.playTick()
     }
 
     Timer {
-        id: tickDelay
-        interval: 35
+        id: hoverClear
+        interval: 60
         onTriggered: {
-            if (window.active && window.visible && window.highlightedButton
-                && window.highlightedButton !== window.lastSoundedButton) {
-                menuActions.playTick()
-                window.lastSoundedButton = window.highlightedButton
+            if (!window.keyboardNavigation) {
+                window.hoveredIndex = -1
             }
         }
     }
@@ -84,11 +87,10 @@ Window {
             wheel.forceActiveFocus()
         } else {
             tickDelay.stop()
-            hoveredButton = null
-            focusedButton = null
-            lastSoundedButton = null
+            hoverClear.stop()
+            hoveredIndex = -1
+            keyboardIndex = -1
             keyboardNavigation = false
-            navigationIndex = -1
         }
     }
 
@@ -131,17 +133,27 @@ Window {
         color: "transparent"
         visible: window.visible && window.openingProgress === 1 && window.previewLabel.length > 0
         onVisibleChanged: opacity = visible ? 1 : 0
-        width: Math.ceil(Math.min(hoverText.implicitWidth + 48 * uiScale,
-                                 window.innerRadius * 1.8 * uiScale))
+        width: Math.floor(window.innerRadius * 1.8 * uiScale)
         height: Math.ceil(hoverText.implicitHeight + 32 * uiScale)
         x: window.x + Math.round((window.width - width) / 2)
         y: window.y + Math.round((window.height - height) / 2)
 
         Rectangle {
-            anchors.fill: parent
+            id: badgeSurface
+            anchors.centerIn: parent
+            width: Math.ceil(Math.min(hoverText.implicitWidth + 48 * hoverBadge.uiScale,
+                                     hoverBadge.width))
+            height: parent.height
             radius: 24 * hoverBadge.uiScale
             color: window.petalColor
             antialiasing: true
+
+            Behavior on width {
+                NumberAnimation {
+                    duration: 120
+                    easing.type: Easing.OutCubic
+                }
+            }
 
             Text {
                 id: hoverText
@@ -171,6 +183,7 @@ Window {
         scale: window.diameter / 1000
         focus: true
 
+        Keys.priority: Keys.BeforeItem
         Keys.onPressed: function(event) {
             if (!window.active || (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)))
                 return
@@ -232,8 +245,7 @@ Window {
                 id: radialButton
                 required property var modelData
                 required property int index
-                navigationTarget: wheel
-                highlighted: window.highlightedButton === radialButton
+                highlighted: window.highlightedIndex === index
                 label: modelData.label
                 action: modelData.action
                 iconName: modelData.icon
@@ -245,28 +257,12 @@ Window {
                 backgroundColor: window.petalColor
                 hoverAlpha: window.hoverAlpha
                 onHoveredChanged: {
-                    if (hovered) {
-                        pointAt()
-                    } else if (window.hoveredButton === radialButton) {
-                        window.hoveredButton = null
-                    }
+                    if (hovered)
+                        window.pointAt(index)
+                    else
+                        window.clearPointAt(index)
                 }
-                function pointAt() {
-                    window.hoveredButton = radialButton
-                    window.keyboardNavigation = false
-                    window.navigationIndex = index
-                    if (!activeFocus)
-                        forceActiveFocus(Qt.MouseFocusReason)
-                }
-                onPointerMoved: pointAt()
-                onActiveFocusChanged: {
-                    if (activeFocus) {
-                        window.focusedButton = radialButton
-                        window.navigationIndex = index
-                    } else if (window.focusedButton === radialButton) {
-                        window.focusedButton = null
-                    }
-                }
+                onPointerMoved: window.pointAt(index)
                 onActivated: menuActions.press(action)
             }
         }

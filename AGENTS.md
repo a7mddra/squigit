@@ -143,6 +143,7 @@ whenever a marker changes. The wrapper forwards its verdict to the user.
 | `CAPTURE_CANCELLED`          | Qt → Rust | the user dismissed the overlay (exit code 2)                             |
 | `CAPTURE_FAIL`               | Qt → Rust | grab/crop/save failed (exit code 1)                                      |
 | `SQUIGIT_SAVED:<abs path>`   | Qt → Rust | the PNG was written; the wrapper prints `path`                           |
+| `menu_tick`                  | Qt → Rust | play one radial-menu navigation tick                                     |
 
 OCR uses `OCR_REQUEST:{"id":"...","image":"<path>"}` from Qt and one
 newline-delimited JSON response on Qt stdin, with the same `id` and either
@@ -241,7 +242,7 @@ Other capture contracts:
 ## 5. Qt Native Layer (`native/`)
 
 - C++17, CMake ≥ 3.16, Qt ≥ 6.4 modules: `Core`, `Gui`, `Quick`, `Qml`, and
-  `Multimedia` for the bundled menu tick, and `DBus` on Linux. The QML canvases
+  `DBus` on Linux. The QML canvases
   require `Qt5Compat.GraphicalEffects`.
 - `native/qt/backends/` holds the per-OS grabbers behind the `Grabber`
   interface; each platform module exposes `createUnixEngine` /

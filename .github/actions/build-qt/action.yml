@@ -18,7 +18,7 @@ runs:
         version: "6.6.0"
         host: "mac"
         target: "desktop"
-        modules: "qt5compat qtshadertools qtimageformats qtmultimedia"
+        modules: "qt5compat qtshadertools qtimageformats"
 
     - name: Install Qt (Windows)
       if: runner.os == 'Windows'
@@ -28,7 +28,7 @@ runs:
         host: "windows"
         target: "desktop"
         arch: "win64_msvc2019_64"
-        modules: "qt5compat qtshadertools qtimageformats qtmultimedia"
+        modules: "qt5compat qtshadertools qtimageformats"
 
     - name: Build and deploy Qt (Linux)
       if: runner.os == 'Linux'

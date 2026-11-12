@@ -4,7 +4,6 @@
 #include <QQuickWindow>
 
 class QQmlApplicationEngine;
-class QSoundEffect;
 
 class RadialMenu : public QObject {
   Q_OBJECT
@@ -19,10 +18,10 @@ public:
 
 signals:
   void actionActivated(const QString &action);
+  void tickRequested();
 
 private:
   QQuickWindow *m_window = nullptr;
   QQuickWindow *m_badge = nullptr;
-  QSoundEffect *m_tick = nullptr;
   bool m_positioned = false;
 };

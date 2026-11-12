@@ -10,7 +10,6 @@
 #include <QQmlContext>
 #include <QRegion>
 #include <QScreen>
-#include <QSoundEffect>
 #include <QVariantMap>
 #include <algorithm>
 #include <iostream>
@@ -35,9 +34,6 @@ RadialMenu::RadialMenu(QQmlApplicationEngine *engine, QObject *parent)
   auto *context = new QQmlContext(engine->rootContext(), this);
   context->setContextProperty("menuConfig", config);
   context->setContextProperty("menuActions", this);
-  m_tick = new QSoundEffect(this);
-  m_tick->setVolume(0.5);
-  m_tick->setSource(QUrl(QStringLiteral("qrc:/menu/tick.wav")));
   QQmlComponent component(engine, QUrl("qrc:/menu/RadialWindow.qml"));
   m_window = qobject_cast<QQuickWindow *>(component.create(context));
   if (!m_window) {
@@ -93,7 +89,6 @@ void RadialMenu::press(const QString &action) {
 }
 
 void RadialMenu::playTick() {
-  if (m_window && m_window->isVisible() && m_window->isActive() &&
-      m_tick->status() == QSoundEffect::Ready)
-    m_tick->play();
+  if (m_window && m_window->isVisible())
+    emit tickRequested();
 }

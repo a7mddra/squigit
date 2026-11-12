@@ -45,7 +45,7 @@ The application builds `squigit`, its private `squigit-qt` helper, and the forke
 
 ## Build and run
 
-Install Rust stable, a C++17 toolchain, CMake, and Qt 6.4 or newer with Quick/QML, Qt Multimedia, and Qt5Compat. Release packaging additionally needs the platform's Qt deployment tool (`linuxdeployqt`, `macdeployqt`, or `windeployqt`); local debug does not deploy Qt. On Ubuntu, the menu tick requires `qt6-multimedia-dev`. OCR builds need Python 3 with venv/pip; CI uses Python 3.12. The QML components use [bound component contexts](https://doc.qt.io/qt-6/qtqml-documents-structure.html#componentbehavior), available since Qt 6.4. Linux also needs fontconfig, Wayland, and xkbcommon development libraries for Rune. Set `Qt6_DIR` or `CMAKE_PREFIX_PATH` when Qt is outside the system prefix.
+Install Rust stable, a C++17 toolchain, CMake, and Qt 6.4 or newer with Quick/QML and Qt5Compat. Release packaging additionally needs the platform's Qt deployment tool (`linuxdeployqt`, `macdeployqt`, or `windeployqt`); local debug does not deploy Qt. Linux Rust builds need ALSA development headers for the radial-menu tick. OCR builds need Python 3 with venv/pip; CI uses Python 3.12. The QML components use [bound component contexts](https://doc.qt.io/qt-6/qtqml-documents-structure.html#componentbehavior), available since Qt 6.4. Linux also needs fontconfig, Wayland, and xkbcommon development libraries for Rune. Set `Qt6_DIR` or `CMAKE_PREFIX_PATH` when Qt is outside the system prefix.
 
 ```sh
 cargo xtask build          # Build OCR, Qt and Rust; package the application

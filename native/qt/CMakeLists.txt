@@ -22,7 +22,6 @@ endif()
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui)
 find_package(Qt6 6.4 REQUIRED COMPONENTS Quick)
 find_package(Qt6 6.4 REQUIRED COMPONENTS Qml)
-find_package(Qt6 6.4 REQUIRED COMPONENTS Multimedia)
 if(UNIX AND NOT APPLE)
     find_package(Qt6 6.4 REQUIRED COMPONENTS DBus)
 endif()
@@ -111,7 +110,7 @@ target_include_directories(squigit-qt PRIVATE
 
 target_link_libraries(squigit-qt PRIVATE
     Qt6::Core Qt6::Gui
-    Qt6::Quick Qt6::Qml Qt6::Multimedia
+    Qt6::Quick Qt6::Qml
     ${PLATFORM_LIBS}
 )
 

@@ -142,6 +142,8 @@ CaptureRuntime::CaptureRuntime(QObject *parent)
     std::cerr << m_captureComponent.errorString().toStdString() << std::endl;
   m_menu = std::make_unique<RadialMenu>(&m_qml, this);
   connect(m_menu.get(), &RadialMenu::actionActivated, this, &CaptureRuntime::startAction);
+  connect(m_menu.get(), &RadialMenu::tickRequested, this,
+          []() { sendEvent({{"type", "menu_tick"}}); });
   auto *displayGuard = new DisplayGuard(this);
   connect(displayGuard, &DisplayGuard::changed, this, [this]() {
     ++m_generation;
