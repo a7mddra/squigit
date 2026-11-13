@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Result};
 #[cfg(not(feature = "staged-runtime"))]
 use flate2::read::GzDecoder;
 #[cfg(not(feature = "staged-runtime"))]
