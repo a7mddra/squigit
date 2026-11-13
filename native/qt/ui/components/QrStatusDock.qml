@@ -38,19 +38,19 @@ FloatingCapsule {
             Row {
                 id: fallbackLabel
                 anchors.centerIn: parent
-                spacing: 6
+                spacing: 4
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Ask Google?"
+                    text: "Ask Google"
                     color: statusText.color
                     font: statusText.font
                 }
 
                 Image {
                     anchors.verticalCenter: parent.verticalCenter
-                    width: 16
-                    height: 16
+                    width: 12
+                    height: 12
                     source: "icons/open-external.svg"
                     sourceSize: Qt.size(32, 32)
                 }
