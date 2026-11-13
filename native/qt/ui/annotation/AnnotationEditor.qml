@@ -232,11 +232,6 @@ Item {
                         }, {
                             "label": "Format",
                             "action": "format"
-                        }, {
-                            "separator": true
-                        }, {
-                            "label": "Full screen",
-                            "action": "fullScreen"
                         }]);
             else
                 objectMenu.showAt(px, py, [{
