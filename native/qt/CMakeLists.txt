@@ -45,6 +45,8 @@ set(SOURCES
     src/CaptureRuntime.h
     src/annotation/AnnotationDocument.cpp
     src/annotation/AnnotationDocument.h
+    src/annotation/AnnotationGeometry.cpp
+    src/annotation/AnnotationGeometry.h
     src/annotation/AnnotationCanvas.cpp
     src/annotation/AnnotationCanvas.h
     src/annotation/StrokeSmoother.cpp

@@ -18,12 +18,15 @@ struct Annotation {
   QString tool;
   QPainterPath path;
   QPainterPath erased;
+  QPainterPath fragment;
+  qreal fragmentSize = 0;
   QColor color;
   qreal width = 4;
   qreal opacity = 1;
   QRectF rect;
   QString text;
   int number = 0;
+  quint64 counterId = 0;
   qreal radius = 0;
   bool autoHeight = true;
   QPointF start;
@@ -127,6 +130,7 @@ private:
   void prepareBlur();
   void cropBlur();
   void eraseAt(QPointF point);
+  void splitErasedItems();
   int hitTest(QPointF point, qreal tolerance) const;
   QRectF localBounds(const Annotation &item) const;
   QRectF selectionBounds() const;
@@ -148,6 +152,7 @@ private:
   Gesture m_gesture = Gesture::None;
   bool m_drawing = false;
   bool m_erased = false;
+  QVector<bool> m_erasedItems;
   bool m_formatting = false;
   bool m_formatModified = false;
   Annotation m_active;
@@ -161,4 +166,5 @@ private:
   qreal m_size = 5;
   QHash<QString, qreal> m_sizes;
   QString m_status;
+  quint64 m_counterSerial = 0;
 };

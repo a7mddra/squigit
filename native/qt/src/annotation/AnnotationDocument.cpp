@@ -1,4 +1,5 @@
 #include "AnnotationDocument.h"
+#include "AnnotationGeometry.h"
 #include "StrokeSmoother.h"
 
 #include <QAbstractTextDocumentLayout>
@@ -12,12 +13,12 @@
 #include <QPainter>
 #include <QPainterPathStroker>
 #include <QTextDocument>
-#include <QTextOption>
 #include <QtMath>
 #include <algorithm>
 #include <cmath>
 
 namespace {
+using AnnotationGeometry::outline;
 const QString objectMime = QStringLiteral("application/x-squigit-annotations");
 bool freehand(const QString &tool) {
   return tool == "brush" || tool == "highlighter" || tool == "blur";
@@ -25,18 +26,15 @@ bool freehand(const QString &tool) {
 bool rectangle(const QString &tool) {
   return tool == "rectangle" || tool == "fillRectangle" || tool == "highlightRectangle";
 }
-QPainterPath outline(const Annotation &item, qreal extra = 0) {
-  QPainterPathStroker stroker;
-  stroker.setWidth(item.width + extra);
-  stroker.setCapStyle(Qt::RoundCap);
-  stroker.setJoinStyle(Qt::RoundJoin);
-  return stroker.createStroke(item.path);
-}
 QPolygonF corners(const QRectF &rect) {
   return {rect.topLeft(), rect.topRight(), rect.bottomRight(), rect.bottomLeft()};
 }
 QTransform translation(QPointF delta) {
   return QTransform::fromTranslate(delta.x(), delta.y());
+}
+qreal objectSize(const Annotation &item) {
+  if (!item.fragment.isEmpty()) return item.fragmentSize;
+  return item.tool == "counter" ? item.rect.width() : item.width;
 }
 QImage blurPass(const QImage &source, int radius, bool horizontal) {
   QImage result(source.size(), QImage::Format_ARGB32_Premultiplied);
@@ -85,6 +83,7 @@ void AnnotationDocument::setImage(const QImage &image) {
   m_image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
   m_image.setDevicePixelRatio(1);
   m_items.clear();
+  m_counterSerial = 0;
   m_history = {QVector<Annotation>{}};
   m_historyIndex = 0;
   m_selected.clear();
@@ -113,7 +112,7 @@ void AnnotationDocument::notifySelection() {
   if (m_selected.size() == 1) {
     const auto &item = m_items[*m_selected.cbegin()];
     m_color = item.color;
-    m_size = item.tool == "counter" ? item.rect.width() : item.width;
+    m_size = objectSize(item);
   }
   emit selectionChanged();
   emit textBoxChanged();
@@ -176,11 +175,21 @@ void AnnotationDocument::setToolSize(qreal size) {
   bool modified = false;
   if (m_selected.size() == 1 && !solidTool()) {
     auto &item = m_items[*m_selected.cbegin()];
-    if (item.tool == "counter") {
+    if (!item.fragment.isEmpty()) {
+      const auto center = item.fragment.boundingRect().center();
+      const qreal scale = m_size / std::max(qreal(1), item.fragmentSize);
+      QTransform resize;
+      resize.translate(center.x(), center.y());
+      resize.scale(scale, scale);
+      resize.translate(-center.x(), -center.y());
+      item.transform = resize * item.transform;
+      item.fragmentSize = m_size;
+    } else if (item.tool == "counter") {
       const auto center = item.rect.center();
       item.rect = QRectF(center - QPointF(m_size / 2, m_size / 2), QSizeF(m_size, m_size));
     } else item.width = m_size;
-    if (item.tool == "arrow") updateShape(item);
+    if (item.fragment.isEmpty() && item.tool == "arrow") updateShape(item);
+    if (item.fragment.isEmpty() && item.tool == "text" && !editingText()) item.path = AnnotationGeometry::textPath(item);
     modified = true;
   }
   if (modified && !editingText()) {
@@ -287,8 +296,8 @@ void AnnotationDocument::copySelected() {
   for (int index = 0; index < m_items.size(); ++index) {
     if (!m_selected.contains(index)) continue;
     const auto &a = m_items[index];
-    stream << a.tool << a.path << a.erased << a.color << a.width << a.opacity << a.rect
-           << a.text << a.number << a.radius << a.autoHeight
+    stream << a.tool << a.path << a.erased << a.fragment << a.fragmentSize << a.color << a.width << a.opacity << a.rect
+           << a.text << a.number << a.counterId << a.radius << a.autoHeight
            << a.start << a.end << a.blur << a.blurRect << a.transform;
   }
   auto *mime = new QMimeData;
@@ -314,12 +323,17 @@ void AnnotationDocument::paste() {
   stream >> count;
   if (!count || count > 10000) return;
   QVector<Annotation> items;
+  QHash<quint64, quint64> counterIds;
   for (quint32 index = 0; index < count; ++index) {
     Annotation a;
-    stream >> a.tool >> a.path >> a.erased >> a.color >> a.width >> a.opacity >> a.rect
-           >> a.text >> a.number >> a.radius >> a.autoHeight
+    stream >> a.tool >> a.path >> a.erased >> a.fragment >> a.fragmentSize >> a.color >> a.width >> a.opacity >> a.rect
+           >> a.text >> a.number >> a.counterId >> a.radius >> a.autoHeight
            >> a.start >> a.end >> a.blur >> a.blurRect >> a.transform;
     if (stream.status() != QDataStream::Ok) { setStatus("Could not paste the annotation objects"); return; }
+    if (a.tool == "counter") {
+      if (!counterIds.contains(a.counterId)) counterIds.insert(a.counterId, ++m_counterSerial);
+      a.counterId = counterIds.value(a.counterId);
+    }
     a.transform *= translation(QPointF(16, 16));
     items.append(a);
   }
@@ -330,6 +344,7 @@ void AnnotationDocument::paste() {
 }
 
 QRectF AnnotationDocument::localBounds(const Annotation &item) const {
+  if (!item.fragment.isEmpty() || !item.erased.isEmpty()) return AnnotationGeometry::visibleInk(item).boundingRect();
   if (item.tool == "text" || item.tool == "counter" || rectangle(item.tool)
       || item.tool == "ellipse" || item.tool == "fillEllipse") return item.rect;
   return item.path.boundingRect().adjusted(-item.width / 2, -item.width / 2, item.width / 2, item.width / 2);
@@ -358,12 +373,14 @@ QVector<QPolygonF> AnnotationDocument::selectedPolygons() const {
 
 bool AnnotationDocument::lineSelection() const {
   if (m_selected.size() != 1) return false;
-  const auto tool = m_items[*m_selected.cbegin()].tool;
-  return tool == "line" || tool == "arrow";
+  const auto &item = m_items[*m_selected.cbegin()];
+  return (item.tool == "line" || item.tool == "arrow") && item.erased.isEmpty() && item.fragment.isEmpty();
 }
 
 bool AnnotationDocument::radiusSelection() const {
-  return m_selected.size() == 1 && rectangle(m_items[*m_selected.cbegin()].tool);
+  if (m_selected.size() != 1) return false;
+  const auto &item = m_items[*m_selected.cbegin()];
+  return rectangle(item.tool) && item.erased.isEmpty() && item.fragment.isEmpty();
 }
 
 QVector<QPointF> AnnotationDocument::selectionHandles(qreal pixelSize) const {
@@ -404,9 +421,14 @@ int AnnotationDocument::hitTest(QPointF point, qreal tolerance) const {
     const auto local = inverse.map(point);
     const qreal scale = std::max(qreal(.01), std::hypot(item.transform.m11(), item.transform.m12()));
     const qreal extra = tolerance / scale;
-    if (item.erased.contains(local)) continue;
-    if ((item.tool == "text" || item.tool == "counter")
-        && item.rect.adjusted(-extra, -extra, extra, extra).contains(local)) return index;
+    if (!item.erased.isEmpty() || !item.fragment.isEmpty() || item.tool == "counter") {
+      const auto visible = AnnotationGeometry::visibleInk(item);
+      QPainterPathStroker toleranceStroke;
+      toleranceStroke.setWidth(extra * 2);
+      if (!item.erased.contains(local) && (visible.contains(local) || toleranceStroke.createStroke(visible).contains(local))) return index;
+      continue;
+    }
+    if (item.tool == "text" && item.rect.adjusted(-extra, -extra, extra, extra).contains(local)) return index;
     if ((item.tool.startsWith("fill") || item.tool == "highlightRectangle") && item.path.contains(local)) return index;
     if (outline(item, extra * 2).contains(local)) return index;
   }
@@ -448,6 +470,7 @@ void AnnotationDocument::begin(QPointF point, Qt::KeyboardModifiers modifiers, q
     captureGesture();
     m_gesture = Gesture::Erase;
     m_erased = false;
+    m_erasedItems.fill(false, m_items.size());
     eraseAt(point);
     notifySelection();
     return;
@@ -465,7 +488,7 @@ void AnnotationDocument::begin(QPointF point, Qt::KeyboardModifiers modifiers, q
     if (m_selected.size() == 1) {
       const auto &item = m_items[*m_selected.cbegin()];
       m_color = item.color;
-      m_size = item.tool == "counter" ? item.rect.width() : item.width;
+      m_size = objectSize(item);
     }
     notifySelection();
     return;
@@ -490,6 +513,7 @@ void AnnotationDocument::begin(QPointF point, Qt::KeyboardModifiers modifiers, q
     const qreal diameter = std::max(qreal(12), m_size);
     m_active.rect = QRectF(point - QPointF(diameter / 2, diameter / 2), QSizeF(diameter, diameter));
     m_active.number = nextCounter();
+    m_active.counterId = ++m_counterSerial;
     m_items.append(m_active);
     commit();
     notifySelection();
@@ -670,9 +694,11 @@ void AnnotationDocument::finish(QPointF point, Qt::KeyboardModifiers modifiers) 
       beginTextEditing(m_items.size() - 1, true);
       return;
     }
+    if (gesture == Gesture::Erase && m_erased) splitErasedItems();
     if (!editingText()
         && (gesture == Gesture::Erase ? m_erased : point != m_start)) commit();
     m_beforeGesture.clear();
+    m_erasedItems.clear();
     notifySelection();
     return;
   }
@@ -707,6 +733,7 @@ void AnnotationDocument::cancelStroke() {
   m_gesture = Gesture::None;
   if (gesture != Gesture::None && !m_beforeGesture.isEmpty()) m_items = m_beforeGesture;
   m_beforeGesture.clear();
+  m_erasedItems.clear();
   m_drawing = false;
   m_active = Annotation{};
   m_points.clear();
@@ -725,26 +752,50 @@ void AnnotationDocument::eraseAt(QPointF point) {
   bool modified = false;
   for (int index = m_items.size() - 1; index >= 0; --index) {
     auto &item = m_items[index];
-    const auto local = item.transform.inverted().map(swept);
-    const bool shapeFill = item.tool.startsWith("fill") || item.tool == "highlightRectangle";
-    QPainterPath ink;
-    if (item.tool == "text" || item.tool == "counter") ink.addRect(item.rect);
-    else ink = shapeFill ? item.path : outline(item);
-    const auto remaining = ink.subtracted(item.erased);
+    bool invertible = false;
+    const auto inverse = item.transform.inverted(&invertible);
+    if (!invertible) continue;
+    const auto local = inverse.map(swept);
+    const auto remaining = AnnotationGeometry::visibleInk(item);
     if (!remaining.intersects(local)) continue;
-    if (m_tool == "objectEraser") { m_items.removeAt(index); modified = true; continue; }
-    item.erased = item.erased.united(local);
-    if (ink.subtracted(item.erased).isEmpty()) m_items.removeAt(index);
+    if (m_tool == "objectEraser" || remaining.subtracted(local).isEmpty()) {
+      m_items.removeAt(index);
+      m_erasedItems.removeAt(index);
+    } else {
+      item.erased = item.erased.united(local);
+      m_erasedItems[index] = true;
+    }
     modified = true;
   }
   m_erased = m_erased || modified;
   if (modified) { renumberCounters(); emit changed(); }
 }
 
+void AnnotationDocument::splitErasedItems() {
+  if (m_tool != "eraser") return;
+  for (int index = m_erasedItems.size() - 1; index >= 0; --index) {
+    if (!m_erasedItems[index]) continue;
+    const auto item = m_items[index];
+    const auto components = AnnotationGeometry::connectedComponents(AnnotationGeometry::visibleInk(item));
+    if (components.size() < 2) continue;
+    m_items.removeAt(index);
+    for (int component = components.size() - 1; component >= 0; --component) {
+      auto piece = item;
+      piece.fragmentSize = objectSize(item);
+      piece.fragment = components[component];
+      piece.erased = QPainterPath{};
+      m_items.insert(index, piece);
+    }
+  }
+}
+
 void AnnotationDocument::renumberCounters() {
-  int number = 0;
-  for (auto &item : m_items)
-    if (item.tool == "counter") item.number = ++number;
+  QHash<quint64, int> numbers;
+  for (auto &item : m_items) {
+    if (item.tool != "counter") continue;
+    if (!numbers.contains(item.counterId)) numbers.insert(item.counterId, numbers.size() + 1);
+    item.number = numbers.value(item.counterId);
+  }
 }
 
 int AnnotationDocument::nextCounter() const {
@@ -800,7 +851,8 @@ void AnnotationDocument::editTextAt(QPointF point, qreal tolerance) {
   finishTextEditing();
   cancelStroke();
   const int index = hitTest(point, tolerance);
-  if (index >= 0 && m_items[index].tool == "text") beginTextEditing(index);
+  if (index >= 0 && m_items[index].tool == "text"
+      && m_items[index].fragment.isEmpty() && m_items[index].erased.isEmpty()) beginTextEditing(index);
 }
 
 void AnnotationDocument::updateText(const QString &text) {
@@ -831,7 +883,10 @@ void AnnotationDocument::finishTextEditing(bool accept) {
   } else if (item.text.trimmed().isEmpty()) {
     m_items.removeAt(index); m_selected.clear();
     if (!m_textDraft) commit();
-  } else if (modified) commit();
+  } else {
+    m_items[index].path = AnnotationGeometry::textPath(item);
+    if (modified) commit();
+  }
   m_textDraft = false;
   notifySelection();
 }
@@ -840,6 +895,7 @@ void AnnotationDocument::paintAnnotation(QPainter &p, const Annotation &item) co
   p.save();
   p.setWorldTransform(item.transform, true);
   p.setOpacity(item.opacity);
+  if (!item.fragment.isEmpty()) p.setClipPath(item.fragment, Qt::IntersectClip);
   if (!item.erased.isEmpty()) {
     QPainterPath visible;
     visible.addRect(localBounds(item).adjusted(-item.width, -item.width, item.width, item.width));
@@ -857,13 +913,9 @@ void AnnotationDocument::paintAnnotation(QPainter &p, const Annotation &item) co
     p.setPen(luminance > .6 ? QColor("#171717") : Qt::white);
     p.drawText(item.rect, Qt::AlignCenter, QString::number(item.number));
   } else if (item.tool == "text") {
-    QFont font = QGuiApplication::font(); font.setPixelSize(std::max(1, qRound(item.width)));
     QTextDocument text;
-    text.setDefaultFont(font); text.setDocumentMargin(0);
-    QTextOption option; option.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere); text.setDefaultTextOption(option);
-    text.setPlainText(item.text);
+    AnnotationGeometry::configureText(item, text);
     const auto inner = item.rect.adjusted(6, 6, -6, -6);
-    text.setTextWidth(inner.width());
     p.setClipRect(inner, Qt::IntersectClip); p.translate(inner.topLeft());
     QAbstractTextDocumentLayout::PaintContext context; context.palette.setColor(QPalette::Text, item.color);
     text.documentLayout()->draw(&p, context);
