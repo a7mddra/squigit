@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import SquigitCapture 1.0
 
 Item {
     id: root
@@ -30,24 +29,6 @@ Item {
 
     function selectAllText() {
         ocrTextLayer.selectAll();
-    }
-
-    function cropTargetAt(px, py) {
-        for (let i = cropHandles.count - 1; i >= 0; --i) {
-            const handle = cropHandles.itemAt(i);
-            if (handle && px >= handle.x && py >= handle.y && px <= handle.x + handle.width && py <= handle.y + handle.height)
-                return handle.modelData;
-        }
-        for (let i = cropBorders.count - 1; i >= 0; --i) {
-            const border = cropBorders.itemAt(i);
-            if (border && px >= border.x && py >= border.y && px <= border.x + border.width && py <= border.y + border.height)
-                return {
-                    "horizontal": 0,
-                    "vertical": 0,
-                    "cursor": Qt.SizeAllCursor
-                };
-        }
-        return null;
     }
 
     function begin(item, mouse, horizontal, vertical, move) {
@@ -120,6 +101,16 @@ Item {
         color: "#70000000"
     }
 
+    MouseArea {
+        anchors.fill: parent
+        visible: !root.annotationMode
+        acceptedButtons: Qt.LeftButton
+        hoverEnabled: true
+        preventStealing: true
+        cursorShape: Qt.ArrowCursor
+        onPressed: root.clearTextSelection()
+    }
+
     OcrTextLayer {
         id: ocrTextLayer
         controller: root.controller
@@ -138,12 +129,10 @@ Item {
     }
 
     Repeater {
-        id: cropBorders
         model: 4
         delegate: MouseArea {
             id: borderMove
             required property int index
-            enabled: root.annotationMode
             x: index === 3 ? root.area.x + root.area.width - 3 : root.area.x - 3
             y: index === 2 ? root.area.y + root.area.height - 3 : root.area.y - 3
             width: index % 2 === 0 ? root.area.width + 6 : 6
@@ -167,7 +156,6 @@ Item {
     }
 
     Repeater {
-        id: cropHandles
         model: [{
                 "horizontal": -1,
                 "vertical": -1,
@@ -222,7 +210,6 @@ Item {
             MouseArea {
                 id: resizeMouse
                 anchors.fill: parent
-                enabled: root.annotationMode
                 preventStealing: true
                 hoverEnabled: true
                 cursorShape: handle.modelData.cursor
@@ -238,97 +225,6 @@ Item {
                     root.interacting = false;
                 }
                 onCanceled: root.interacting = false
-            }
-        }
-    }
-
-    CaptureCursor {
-        id: cursorSurface
-        anchors.fill: parent
-        enabled: !root.annotationMode
-        onHoverMoved: function (px, py) {
-            if (root.interacting)
-                cursorSurface.cursorShape = pointer.pressedCursor;
-            else if (pointer.selectingText)
-                cursorSurface.cursorShape = Qt.IBeamCursor;
-            else {
-                const target = root.cropTargetAt(px, py);
-                cursorSurface.cursorShape = target ? target.cursor : ocrTextLayer.lineAt(px, py) >= 0 ? Qt.IBeamCursor : Qt.ArrowCursor;
-            }
-        }
-
-        Connections {
-            target: root.controller
-            function onOcrChanged() {
-                Qt.callLater(function () {
-                        cursorSurface.refresh();
-                    });
-            }
-            function onSelectionChanged() {
-                cursorSurface.refresh();
-            }
-        }
-
-        MouseArea {
-            id: pointer
-            anchors.fill: parent
-            acceptedButtons: Qt.LeftButton
-            preventStealing: true
-            property bool selectingText: false
-            property int pressedCursor: Qt.ArrowCursor
-
-            onPressed: function (mouse) {
-                const target = root.cropTargetAt(mouse.x, mouse.y);
-                selectingText = false;
-                if (target) {
-                    pressedCursor = target.cursor;
-                    root.begin(pointer, mouse, target.horizontal, target.vertical, target.horizontal === 0 && target.vertical === 0);
-                } else {
-                    const line = ocrTextLayer.lineAt(mouse.x, mouse.y);
-                    if (line >= 0) {
-                        selectingText = true;
-                        ocrTextLayer.beginTextSelection(line, mouse.x, mouse.y, mouse.modifiers);
-                    } else {
-                        root.clearTextSelection();
-                    }
-                }
-                cursorSurface.hoverAt(Qt.point(mouse.x, mouse.y));
-            }
-            onPositionChanged: function (mouse) {
-                if (!pressed)
-                    return;
-                if (root.interacting)
-                    root.dragTo(pointer, mouse);
-                else if (selectingText)
-                    ocrTextLayer.dragSelection(mouse.x, mouse.y);
-                cursorSurface.hoverAt(Qt.point(mouse.x, mouse.y));
-            }
-            onReleased: function (mouse) {
-                if (root.interacting) {
-                    root.dragTo(pointer, mouse);
-                    root.interacting = false;
-                } else if (selectingText) {
-                    ocrTextLayer.dragSelection(mouse.x, mouse.y);
-                }
-                selectingText = false;
-                cursorSurface.hoverAt(Qt.point(mouse.x, mouse.y));
-            }
-            onDoubleClicked: function (mouse) {
-                if (root.interacting || root.cropTargetAt(mouse.x, mouse.y))
-                    return;
-                const line = ocrTextLayer.lineAt(mouse.x, mouse.y);
-                if (line >= 0) {
-                    selectingText = true;
-                    ocrTextLayer.selectWordAt(line, mouse.x, mouse.y);
-                }
-                cursorSurface.hoverAt(Qt.point(mouse.x, mouse.y));
-            }
-            onCanceled: {
-                root.interacting = false;
-                if (selectingText)
-                    root.clearTextSelection();
-                selectingText = false;
-                cursorSurface.refresh();
             }
         }
     }

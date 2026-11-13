@@ -82,20 +82,6 @@ FocusScope {
         return found;
     }
 
-    function lineAt(px, py) {
-        if (!visible || interacting)
-            return -1;
-        for (let i = textLines.count - 1; i >= 0; --i) {
-            const line = textLines.itemAt(i);
-            if (!line || !line.modelData.inside)
-                continue;
-            const point = line.mapFromItem(root, px, py);
-            if (point.x >= 0 && point.y >= 0 && point.x <= line.width && point.y <= line.height)
-                return i;
-        }
-        return -1;
-    }
-
     function dragSelection(px, py) {
         const index = nearestLine(px, py);
         if (index < 0 || anchorLine < 0)
@@ -193,6 +179,7 @@ FocusScope {
         delegate: Item {
             id: line
             required property var modelData
+            required property int index
             readonly property var box: modelData.box
             readonly property real ratio: root.controller.pixelRatio
 
@@ -247,6 +234,33 @@ FocusScope {
                 transform: Scale {
                     xScale: line.width / selectableLine.width
                 }
+            }
+            MouseArea {
+                anchors.fill: parent
+                visible: line.modelData.inside
+                acceptedButtons: Qt.LeftButton
+                hoverEnabled: true
+                preventStealing: true
+                cursorShape: Qt.IBeamCursor
+                onPressed: function (mouse) {
+                    const point = mapToItem(root, mouse.x, mouse.y);
+                    root.beginTextSelection(line.index, point.x, point.y, mouse.modifiers);
+                }
+                onPositionChanged: function (mouse) {
+                    if (pressed) {
+                        const point = mapToItem(root, mouse.x, mouse.y);
+                        root.dragSelection(point.x, point.y);
+                    }
+                }
+                onReleased: function (mouse) {
+                    const point = mapToItem(root, mouse.x, mouse.y);
+                    root.dragSelection(point.x, point.y);
+                }
+                onDoubleClicked: function (mouse) {
+                    const point = mapToItem(root, mouse.x, mouse.y);
+                    root.selectWordAt(line.index, point.x, point.y);
+                }
+                onCanceled: root.clearSelection()
             }
         }
     }

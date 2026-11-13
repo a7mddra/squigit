@@ -41,8 +41,6 @@ set(SOURCES
     src/main.cpp
     src/CaptureEngine.cpp
     src/CaptureEngine.h
-    src/CaptureCursor.cpp
-    src/CaptureCursor.h
     src/CaptureRuntime.cpp
     src/CaptureRuntime.h
     src/annotation/AnnotationDocument.cpp
