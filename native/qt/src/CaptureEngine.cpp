@@ -83,8 +83,9 @@ QString CaptureEngine::ensureBackgroundFileFallback() {
 }
 
 void CaptureEngine::cancel() {
-  if (!m_retired)
-    emit completed("cancelled", {});
+  if (m_retired) return;
+  cancelOcr();
+  emit completed("cancelled", {});
 }
 
 void CaptureEngine::beginSelection() {
@@ -100,7 +101,6 @@ void CaptureEngine::cancelOcr() {
   if (!m_ocrPending || m_ocrCancelling)
     return;
   m_ocrCancelling = true;
-  m_status = "Stopping OCR...";
   emit ocrChanged();
   sendEvent({{"type", "ocr_cancel"}, {"id", m_requestId}});
 }
@@ -203,29 +203,23 @@ bool CaptureEngine::hasOcrText() const {
   return false;
 }
 
-QString CaptureEngine::status() const {
-  if (m_ocrReady && !m_ocrVisible) return {};
-  if (m_ocrReady && !hasOcrText()) return "No text found in the selected region";
-  return m_status;
-}
-
 void CaptureEngine::recognize() {
   if (m_retired || !m_captureStarted || m_ocrPending || m_ocrReady) return;
   m_ocrFailed = false;
+  m_ocrError.clear();
   m_ocrFile = std::make_unique<QTemporaryFile>(QDir::temp().filePath("squigit-ocr-XXXXXX.png"));
   QImage image = m_backgroundImage.convertToFormat(QImage::Format_RGB888);
   image.setDevicePixelRatio(1.0);
   if (!m_ocrFile->open() || !image.save(m_ocrFile.get(), "PNG")) {
     m_ocrFile.reset();
     m_ocrFailed = true;
-    m_status = "Could not prepare the display image. Retry OCR to scan again.";
+    m_ocrError = "Could not prepare the display image.";
     emit ocrChanged();
     return;
   }
   m_ocrFile->close();
   m_requestId = QString("ocr-%1-%2").arg(m_instanceId).arg(++m_requestSequence);
   m_ocrPending = true;
-  m_status = "Recognizing display text...";
   emit ocrChanged();
   sendEvent({{"type", "ocr_request"}, {"id", m_requestId}, {"image", m_ocrFile->fileName()}});
 }
@@ -273,14 +267,14 @@ void CaptureEngine::acceptResponse(const QByteArray &line) {
   if (response["cancelled"].toBool()) {
     m_ocrFailed = false;
     m_requestId.clear();
-    m_status = "OCR cancelled. Scan OCR to start again.";
+    m_ocrError.clear();
     emit ocrChanged();
     return;
   }
   const QString error = response["error"].toString();
   if (!error.isEmpty()) {
     m_ocrFailed = true;
-    m_status = error + ". Retry OCR to scan again.";
+    m_ocrError = error;
   } else {
     m_ocrFailed = false;
     m_regions.clear();
@@ -318,7 +312,7 @@ void CaptureEngine::acceptResponse(const QByteArray &line) {
     m_ocrReady = true;
     m_ocrVisible = true;
     rebuildTextBoxes();
-    m_status = "Drag across lines to select text. Ctrl+A selects all; Ctrl+C copies the selection.";
+    m_ocrError.clear();
   }
   emit ocrChanged();
 }
@@ -358,7 +352,7 @@ bool CaptureEngine::rebuildTextBoxes() {
 }
 
 void CaptureEngine::copyText() {
-  if (!m_ocrVisible || !hasSelection())
+  if (m_retired || !m_ocrVisible || !hasSelection())
     return;
   QStringList lines;
   for (const auto &box : m_textBoxes) {
@@ -366,12 +360,16 @@ void CaptureEngine::copyText() {
     if (run["inside"].toBool())
       lines.append(run["text"].toString());
   }
-  QGuiApplication::clipboard()->setText(lines.join("\n"));
+  const auto text = lines.join("\n");
+  if (text.isEmpty()) return;
+  QGuiApplication::clipboard()->setText(text);
+  emit ocrTextCopied();
 }
 
 void CaptureEngine::copyTextSelection(const QString &text) {
-  if (!m_retired && m_ocrVisible && hasSelection() && !text.isEmpty())
-    QGuiApplication::clipboard()->setText(text);
+  if (m_retired || !m_ocrVisible || !hasSelection() || text.isEmpty()) return;
+  QGuiApplication::clipboard()->setText(text);
+  emit ocrTextCopied();
 }
 
 void CaptureEngine::openOcrText(const QString &text, bool translate) {

@@ -31,6 +31,24 @@ Item {
         ocrTextLayer.selectAll();
     }
 
+    function cropTargetAt(px, py) {
+        for (let i = cropHandles.count - 1; i >= 0; --i) {
+            const handle = cropHandles.itemAt(i);
+            if (handle && px >= handle.x && py >= handle.y && px <= handle.x + handle.width && py <= handle.y + handle.height)
+                return handle.modelData;
+        }
+        for (let i = cropBorders.count - 1; i >= 0; --i) {
+            const border = cropBorders.itemAt(i);
+            if (border && px >= border.x && py >= border.y && px <= border.x + border.width && py <= border.y + border.height)
+                return {
+                    "horizontal": 0,
+                    "vertical": 0,
+                    "cursor": Qt.SizeAllCursor
+                };
+        }
+        return null;
+    }
+
     function begin(item, mouse, horizontal, vertical, move) {
         clearTextSelection();
         cropInteractionStarted();
@@ -119,10 +137,12 @@ Item {
     }
 
     Repeater {
+        id: cropBorders
         model: 4
         delegate: MouseArea {
             id: borderMove
             required property int index
+            enabled: root.annotationMode
             x: index === 3 ? root.area.x + root.area.width - 3 : root.area.x - 3
             y: index === 2 ? root.area.y + root.area.height - 3 : root.area.y - 3
             width: index % 2 === 0 ? root.area.width + 6 : 6
@@ -146,6 +166,7 @@ Item {
     }
 
     Repeater {
+        id: cropHandles
         model: [{
                 "horizontal": -1,
                 "vertical": -1,
@@ -200,6 +221,7 @@ Item {
             MouseArea {
                 id: resizeMouse
                 anchors.fill: parent
+                enabled: root.annotationMode
                 preventStealing: true
                 hoverEnabled: true
                 cursorShape: handle.modelData.cursor
@@ -216,6 +238,78 @@ Item {
                 }
                 onCanceled: root.interacting = false
             }
+        }
+    }
+
+    MouseArea {
+        id: pointer
+        anchors.fill: parent
+        enabled: !root.annotationMode
+        acceptedButtons: Qt.LeftButton
+        hoverEnabled: true
+        preventStealing: true
+        property bool selectingText: false
+        property int pressedCursor: Qt.ArrowCursor
+        readonly property var cropTarget: enabled ? root.cropTargetAt(mouseX, mouseY) : null
+        cursorShape: {
+            if (!containsMouse && !pressed)
+                return Qt.ArrowCursor;
+            if (root.interacting)
+                return pressedCursor;
+            if (selectingText)
+                return Qt.IBeamCursor;
+            if (cropTarget)
+                return cropTarget.cursor;
+            return ocrTextLayer.lineAt(mouseX, mouseY) >= 0 ? Qt.IBeamCursor : Qt.ArrowCursor;
+        }
+
+        onPressed: function (mouse) {
+            const target = root.cropTargetAt(mouse.x, mouse.y);
+            selectingText = false;
+            if (target) {
+                pressedCursor = target.cursor;
+                root.begin(pointer, mouse, target.horizontal, target.vertical, target.horizontal === 0 && target.vertical === 0);
+                return;
+            }
+            const line = ocrTextLayer.lineAt(mouse.x, mouse.y);
+            if (line >= 0) {
+                selectingText = true;
+                ocrTextLayer.beginTextSelection(line, mouse.x, mouse.y, mouse.modifiers);
+            } else {
+                root.clearTextSelection();
+            }
+        }
+        onPositionChanged: function (mouse) {
+            if (!pressed)
+                return;
+            if (root.interacting)
+                root.dragTo(pointer, mouse);
+            else if (selectingText)
+                ocrTextLayer.dragSelection(mouse.x, mouse.y);
+        }
+        onReleased: function (mouse) {
+            if (root.interacting) {
+                root.dragTo(pointer, mouse);
+                root.interacting = false;
+            } else if (selectingText) {
+                ocrTextLayer.dragSelection(mouse.x, mouse.y);
+            }
+            selectingText = false;
+        }
+        onDoubleClicked: function (mouse) {
+            if (root.interacting || root.cropTargetAt(mouse.x, mouse.y))
+                return;
+            const line = ocrTextLayer.lineAt(mouse.x, mouse.y);
+            if (line >= 0) {
+                selectingText = true;
+                ocrTextLayer.selectWordAt(line, mouse.x, mouse.y);
+            }
+        }
+        onCanceled: {
+            root.interacting = false;
+            if (selectingText)
+                root.clearTextSelection();
+            selectingText = false;
         }
     }
 }

@@ -46,7 +46,7 @@ Window {
             selectionCrop.copyTextSelection();
         else if (action === "search" || action === "translate")
             controller.openOcrText(selectionCrop.selectedText, action === "translate");
-        else if (action === "visibility")
+        else if (action === "visibility" || action === "retry")
             controller.toggleOcr();
     }
 
@@ -100,6 +100,7 @@ Window {
         anchors.fill: parent
         focus: true
         visible: !root.controller.hasSelection
+        enabled: visible
 
         source: root.controller.captureMode === "traditional" ? "../components/TraditionalCanvas.qml" : "../components/SquiggleCanvas.qml"
 
@@ -140,65 +141,21 @@ Window {
             enabled: !root.controller.qrPending
         }
 
-        Rectangle {
-            id: toolbar
-            z: 25
-            x: Math.max(8, Math.min(parent.area.x, root.width - width - 8))
-            y: Math.max(8, Math.min(parent.area.y + parent.area.height + 10, root.height - height - 8))
-            width: visibilityButton.width + 12
-            height: 44
-            radius: 6
-            color: "#202124"
-            visible: root.controller.action === "ocr" && !root.controller.ocrReady
-            Rectangle {
-                id: visibilityButton
-                anchors.centerIn: parent
-                visible: root.controller.action === "ocr"
-                width: 132
-                height: 32
-                radius: 4
-                color: actionMouse.containsMouse ? "#505154" : "#353639"
-                opacity: root.controller.ocrCancelling ? 0.5 : 1
-                Text {
-                    anchors.centerIn: parent
-                    text: root.controller.ocrCancelling ? "Stopping OCR..." : root.controller.ocrPending ? "Cancel OCR" : root.controller.ocrFailed ? "Retry OCR" : "Scan OCR"
-                    color: "white"
-                    font.pixelSize: 14
-                }
-                MouseArea {
-                    id: actionMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    enabled: !root.controller.ocrCancelling
-                    onClicked: {
-                        if (root.controller.ocrPending)
-                            root.controller.cancelOcr();
-                        else
-                            root.controller.toggleOcr();
-                    }
-                }
-            }
-        }
-
-        Rectangle {
-            z: 40
-            visible: statusText.text.length > 0
-            anchors.left: parent.left
-            anchors.bottom: parent.bottom
-            anchors.margins: 16
-            width: Math.min(760, root.width - 32, statusText.implicitWidth + 16)
-            height: statusText.implicitHeight + 16
-            radius: 4
-            color: "#202124"
+        FloatingCapsule {
+            z: 30
+            visible: root.controller.action === "scan-qr" && root.controller.qrStatus.length > 0
+            height: Math.max(56, qrStatusText.implicitHeight + 24)
+            x: Math.max(8, (root.width - width) / 2)
+            y: Math.max(8, root.height - height - 48)
             Text {
-                id: statusText
-                anchors.fill: parent
-                anchors.margins: 8
-                text: root.controller.qrStatus.length > 0 ? root.controller.qrStatus : root.controller.status
+                id: qrStatusText
+                anchors.centerIn: parent
+                width: parent.width - 48
+                text: root.controller.qrStatus
                 wrapMode: Text.Wrap
-                font.pixelSize: 13
-                color: "white"
+                horizontalAlignment: Text.AlignHCenter
+                font.pixelSize: 14
+                color: "#1c1c1e"
             }
         }
 
@@ -207,7 +164,7 @@ Window {
             z: 30
             controller: root.controller
             hasTextSelection: selectionCrop.hasTextSelection
-            visible: root.controller.action === "ocr" && root.controller.ocrReady && root.controller.hasSelection
+            visible: root.controller.action === "ocr" && root.controller.hasSelection
             x: Math.max(8, (root.width - width) / 2)
             y: Math.max(8, root.height - height - 48)
             onActionRequested: function (action) {

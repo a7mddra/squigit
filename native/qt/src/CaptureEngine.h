@@ -25,13 +25,12 @@ class CaptureEngine : public QObject {
   Q_PROPERTY(QRectF selection READ selection NOTIFY selectionChanged)
   Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
   Q_PROPERTY(bool ocrPending READ ocrPending NOTIFY ocrChanged)
-  Q_PROPERTY(bool ocrCancelling READ ocrCancelling NOTIFY ocrChanged)
   Q_PROPERTY(bool ocrVisible READ ocrVisible NOTIFY ocrChanged)
   Q_PROPERTY(bool ocrReady READ ocrReady NOTIFY ocrChanged)
   Q_PROPERTY(bool hasOcrText READ hasOcrText NOTIFY ocrChanged)
   Q_PROPERTY(bool ocrFailed READ ocrFailed NOTIFY ocrChanged)
   Q_PROPERTY(QVariantList textBoxes READ textBoxes NOTIFY ocrChanged)
-  Q_PROPERTY(QString status READ status NOTIFY ocrChanged)
+  Q_PROPERTY(QString ocrError READ ocrError NOTIFY ocrChanged)
   Q_PROPERTY(bool qrPending READ qrPending NOTIFY qrChanged)
   Q_PROPERTY(QString qrStatus READ qrStatus NOTIFY qrChanged)
   Q_PROPERTY(qreal pixelRatio READ pixelRatio CONSTANT)
@@ -51,13 +50,12 @@ public:
   QRectF selection() const { return m_selection; }
   bool hasSelection() const { return !m_selection.isEmpty(); }
   bool ocrPending() const { return m_ocrPending; }
-  bool ocrCancelling() const { return m_ocrCancelling; }
   bool ocrVisible() const { return m_ocrVisible; }
   bool ocrReady() const { return m_ocrReady; }
   bool hasOcrText() const;
   bool ocrFailed() const { return m_ocrFailed; }
   QVariantList textBoxes() const { return m_textBoxes; }
-  QString status() const;
+  QString ocrError() const { return m_ocrError; }
   bool qrPending() const { return m_qrPending; }
   QString qrStatus() const { return m_qrStatus; }
   qreal pixelRatio() const { return m_devicePixelRatio; }
@@ -67,7 +65,6 @@ public:
   Q_INVOKABLE QString ensureBackgroundFileFallback();
   Q_INVOKABLE void cancel();
   Q_INVOKABLE void beginSelection();
-  Q_INVOKABLE void cancelOcr();
   Q_INVOKABLE void finishSquiggleCapture(const QVariantList &points);
   Q_INVOKABLE void finishTraditionalCapture(QPointF start, QPointF end);
   Q_INVOKABLE void save();
@@ -91,6 +88,7 @@ signals:
   void displayIndexChanged();
   void selectionChanged();
   void ocrChanged();
+  void ocrTextCopied();
   void qrChanged();
 
 private:
@@ -109,6 +107,7 @@ private:
   void select(const QRectF &logicalRect);
   void completeSelection();
   void recognize();
+  void cancelOcr();
   bool rebuildTextBoxes();
   QImage selectedImage(bool annotated = false) const;
   QString saveImage(const QImage &rgb, const QString &directory = {}) const;
@@ -136,7 +135,7 @@ private:
   bool m_ocrVisible = false;
   QList<TextRegion> m_regions;
   QVariantList m_textBoxes;
-  QString m_status;
+  QString m_ocrError;
   QString m_requestId;
   int m_requestSequence = 0;
   bool m_qrPending = false;

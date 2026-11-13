@@ -114,6 +114,8 @@ Item {
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.AllButtons
+        hoverEnabled: true
+        cursorShape: Qt.ArrowCursor
     }
     Item {
         id: contentHost

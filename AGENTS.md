@@ -156,13 +156,13 @@ or an `{error}` object on failure. Coordinates are physical pixels relative
 to the entire frozen image of the chosen display. Qt caches successful results
 and partitions characters by the current crop. `--auto-ocr` starts recognition
 on the first press that begins drawing a selection; subsequent OCR button clicks
-toggle visibility. Failed and cancelled scans remain retryable.
+toggle visibility. Failed scans remain retryable.
 
 Qt cancels a pending scan with `OCR_CANCEL:{"id":"..."}`. Rust terminates and
 reaps the OCR process tree before replying `{"id":"...","cancelled":true}`.
 Termination failures return `cancelled:false` and `error`. Qt ignores racing
-scan results while cancellation is pending. Cancelling OCR keeps the overlay
-open. Captures default to Traditional with Auto OCR enabled; the former capture preferences
+scan results while cancellation is pending. OCR cancellation remains internal
+to capture dismissal; there is no Cancel OCR button. Captures default to Traditional with Auto OCR enabled; the former capture preferences
 are not read. Configuration contains only OCR models and their selector. Unix process groups and
 Windows Job Objects contain each OCR job. Closing the overlay stops its jobs.
 Keep this contract in sync across both Rust crates and Qt.
@@ -213,12 +213,20 @@ from another display must restore keyboard input without toggling OCR.
 
 Other capture contracts:
 
-- OCR status messages stay at the display's bottom-left corner. Completed OCR
-  shows a bottom-centered action dock using the same capsule and opening
-  animation as Ask Google: Select all, Copy, Search, Open in Translate, and
-  Hide OCR. Copy, Search, and Translate require text selection. Hide OCR changes
-  to Show OCR while results are hidden. Search and Translate percent-encode the
-  selected text into Google URLs and finish with `capture_finished` status
+- OCR has no toast or separate scan/cancel toolbar. After crop selection, a
+  bottom-centered capsule uses the same opening animation as Ask Google and
+  shows a spinner with "Recognizing display text". Success animates its width
+  to fit Select all, Copy, Search, Open in Translate, and Hide OCR. Errors appear
+  inside the capsule with Retry. Copy, Search, and Translate require text
+  selection. Successful clipboard actions temporarily change Copy to Copied,
+  including repeated actions and shortcuts. Hide OCR changes to Show OCR while
+  results are hidden. Action buttons stay mounted across state changes to
+  preserve hover. One pointer surface controls OCR text selection, crop
+  movement, and crop resizing, using the crop handles' native cursor shapes.
+  Hidden drawing canvases and OCR line editors do not handle pointer input.
+  Holding Escape dismisses the capture and terminates its pending jobs.
+  Search and Translate percent-encode the selected text into Google URLs and
+  finish with `capture_finished` status
   `ocr_open` and a `url` field. Rust releases the capture before opening the URL
   in the default browser.
 
