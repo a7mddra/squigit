@@ -224,6 +224,18 @@ Other capture contracts:
   crop to the current display through `setSelection`. Resize handles stay
   visible within the display bounds for manual resizing afterward.
 
+- Crop gestures keep only the latest pointer position and apply it at most
+  once per 16 ms animation frame, with an immediate final update on release.
+  The dim area uses one native `CropOverlay` scene-graph mesh with fixed vertex
+  and index buffers rather than resizing separate QML rectangles.
+  Annotation brush-hover painting pauses while a crop gesture is active.
+  OCR crop partitioning runs once when the gesture ends rather than rebuilding
+  text delegates on every pointer event. Hidden OCR layers do not instantiate
+  text delegates, and clearing an empty text selection does not walk the model.
+  QR rescanning waits until the gesture ends. Its empty crop interior uses
+  native open/closed hand cursors and supports dragging the box; other scenes
+  retain their existing interior interaction.
+
 - While OCR scans, its canvas context menu offers Full screen and Cancel OCR.
   Otherwise it offers Select all, Copy, Search, Translate, Hide/Show OCR, and
   Full screen. Text actions use the floating dock's shared enablement rules.
@@ -236,6 +248,9 @@ Other capture contracts:
   or scale. Ask Google alone retains its 700 ms blur-and-scale opening.
   The OCR capsule shows a circular rotator in the text color with
   "Recognizing display text".
+  Successful recognition selects all text inside the crop once its visible
+  delegates are ready. If recognition finishes before crop selection or during
+  a crop gesture, this initial text selection waits until the crop is ready.
   Success animates its width to fit Select all, Copy, Search, Open in Translate,
   and Hide OCR. Errors appear
   inside the capsule with Retry. Copy, Search, and Translate require text

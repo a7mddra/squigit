@@ -78,6 +78,8 @@ public:
   Q_INVOKABLE void toggleOcr();
   Q_INVOKABLE void cancelOcr();
   Q_INVOKABLE void scanQr();
+  Q_INVOKABLE void beginCropInteraction();
+  Q_INVOKABLE void endCropInteraction();
   Q_INVOKABLE void setSelection(const QRectF &logicalRect);
   Q_INVOKABLE void copyText();
   Q_INVOKABLE void copyTextSelection(const QString &text);
@@ -93,6 +95,7 @@ signals:
   void displayIndexChanged();
   void selectionChanged();
   void ocrChanged();
+  void ocrRecognized();
   void qrChanged();
 
 private:
@@ -108,7 +111,7 @@ private:
     QPolygonF box;
     QList<Character> characters;
   };
-  void select(const QRectF &logicalRect);
+  bool select(const QRectF &logicalRect);
   void completeSelection();
   void recognize();
   bool rebuildTextBoxes();
@@ -122,6 +125,8 @@ private:
   std::unique_ptr<QTemporaryFile> m_qrFile;
   QUrl m_backgroundSource;
   QRectF m_selection;
+  bool m_cropInteracting = false;
+  bool m_cropChanged = false;
   qreal m_devicePixelRatio = 1.0;
   QString m_captureMode = "traditional";
   CaptureAction m_action;

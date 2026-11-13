@@ -34,6 +34,8 @@ void CaptureEngine::setAction(const CaptureAction &action) {
 
 void CaptureEngine::retire() {
   m_retired = true;
+  m_cropInteracting = false;
+  m_cropChanged = false;
   m_qrTimer.stop();
 }
 
@@ -154,31 +156,55 @@ void CaptureEngine::completeSelection() {
     m_action.selectionFinished(this);
 }
 
-void CaptureEngine::select(const QRectF &logicalRect) {
+bool CaptureEngine::select(const QRectF &logicalRect) {
   const QRectF bounds(0, 0, m_backgroundImage.width() / m_devicePixelRatio,
                       m_backgroundImage.height() / m_devicePixelRatio);
   const QRectF clipped = logicalRect.normalized().intersected(bounds);
   if (clipped.width() * m_devicePixelRatio < 1 ||
       clipped.height() * m_devicePixelRatio < 1 || clipped == m_selection)
-    return;
+    return false;
   m_selection = clipped;
+  if (m_cropInteracting)
+    m_cropChanged = true;
   if (!m_qrStatus.isEmpty() && !m_qrPending) {
     m_qrStatus.clear();
     m_qrFallbackAvailable = false;
     emit qrChanged();
   }
-  const bool textChanged = rebuildTextBoxes();
+  const bool textChanged = !m_cropInteracting && m_ocrReady && rebuildTextBoxes();
   emit selectionChanged();
   if (textChanged)
     emit ocrChanged();
+  return true;
+}
+
+void CaptureEngine::beginCropInteraction() {
+  if (m_retired || !hasSelection() || m_cropInteracting)
+    return;
+  m_cropInteracting = true;
+  m_cropChanged = false;
+  m_qrTimer.stop();
+}
+
+void CaptureEngine::endCropInteraction() {
+  if (!m_cropInteracting)
+    return;
+  m_cropInteracting = false;
+  const bool changed = m_cropChanged;
+  m_cropChanged = false;
+  if (m_retired || !changed)
+    return;
+  if (m_ocrReady && rebuildTextBoxes())
+    emit ocrChanged();
+  if (m_action.id == "scan-qr")
+    m_qrTimer.start();
 }
 
 void CaptureEngine::setSelection(const QRectF &logicalRect) {
-  if (!m_retired && hasSelection()) {
-    select(logicalRect);
-    if (m_action.id == "scan-qr")
-      m_qrTimer.start();
-  }
+  if (m_retired || !hasSelection() || !select(logicalRect))
+    return;
+  if (m_action.id == "scan-qr" && !m_cropInteracting)
+    m_qrTimer.start();
 }
 
 void CaptureEngine::toggleOcr() {
@@ -227,7 +253,7 @@ void CaptureEngine::recognize() {
 }
 
 void CaptureEngine::scanQr() {
-  if (m_retired || !hasSelection() || m_qrPending)
+  if (m_retired || !hasSelection() || m_qrPending || m_cropInteracting)
     return;
   m_qrFallbackAvailable = false;
   m_qrFile = std::make_unique<QTemporaryFile>(QDir::temp().filePath("squigit-qr-XXXXXX.png"));
@@ -319,6 +345,8 @@ void CaptureEngine::acceptResponse(const QByteArray &line) {
     m_ocrError.clear();
   }
   emit ocrChanged();
+  if (error.isEmpty())
+    emit ocrRecognized();
 }
 
 bool CaptureEngine::rebuildTextBoxes() {

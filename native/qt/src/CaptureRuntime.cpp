@@ -1,5 +1,6 @@
 #include "CaptureRuntime.h"
 #include "CaptureEngine.h"
+#include "CropOverlay.h"
 #include "annotation/AnnotationCanvas.h"
 #include "DisplayGuard.h"
 #include "Grabber.h"
@@ -141,6 +142,7 @@ CaptureRuntime::CaptureRuntime(QObject *parent)
 #else
   m_grabber = createUnixEngine(this);
 #endif
+  qmlRegisterType<CropOverlay>("SquigitCapture", 1, 0, "CropOverlay");
   qmlRegisterType<AnnotationCanvas>("SquigitAnnotation", 1, 0, "AnnotationCanvas");
   qmlRegisterUncreatableType<AnnotationDocument>("SquigitAnnotation", 1, 0, "AnnotationDocument", "Owned by the capture");
   m_backgrounds = new BackgroundImageProvider();

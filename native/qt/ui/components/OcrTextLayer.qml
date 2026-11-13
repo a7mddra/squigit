@@ -8,6 +8,8 @@ FocusScope {
 
     required property var controller
     property bool interacting: false
+    property bool autoSelectOnRecognition: false
+    property bool autoSelectPending: false
     property string selectedText: ""
     property int anchorLine: -1
     property int anchorPosition: 0
@@ -23,6 +25,11 @@ FocusScope {
 
     function clearSelection() {
         const hadSelection = hasTextSelection;
+        if (anchorLine < 0 && cursorLine < 0 && !hadSelection && !wordMode) {
+            if (visible && enabled && !activeFocus)
+                forceActiveFocus();
+            return false;
+        }
         anchorLine = -1;
         cursorLine = -1;
         wordMode = false;
@@ -30,6 +37,13 @@ FocusScope {
         if (visible && enabled)
             forceActiveFocus();
         return hadSelection;
+    }
+
+    function selectRecognizedText() {
+        if (!autoSelectPending || !controller.ocrReady || !visible || interacting)
+            return;
+        autoSelectPending = false;
+        selectAll();
     }
 
     function applySelection() {
@@ -153,13 +167,17 @@ FocusScope {
     onInteractingChanged: {
         if (interacting)
             clearSelection();
-        else if (visible)
+        else if (visible) {
             forceActiveFocus();
+            Qt.callLater(root.selectRecognizedText);
+        }
     }
 
     onVisibleChanged: {
         if (!visible)
             clearSelection();
+        else
+            Qt.callLater(root.selectRecognizedText);
     }
 
     Connections {
@@ -168,13 +186,20 @@ FocusScope {
             root.clearSelection();
         }
         function onSelectionChanged() {
-            root.clearSelection();
+            if (!root.interacting)
+                root.clearSelection();
+        }
+        function onOcrRecognized() {
+            if (root.autoSelectOnRecognition) {
+                root.autoSelectPending = true;
+                Qt.callLater(root.selectRecognizedText);
+            }
         }
     }
 
     Repeater {
         id: textLines
-        model: root.controller.ocrVisible ? root.controller.textBoxes : []
+        model: root.visible ? root.controller.textBoxes : []
 
         delegate: Item {
             id: line

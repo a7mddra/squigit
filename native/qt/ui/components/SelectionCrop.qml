@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import SquigitCapture 1.0
 
 Item {
     id: root
@@ -10,10 +11,12 @@ Item {
     property bool annotationMode: false
     signal cropInteractionStarted
     signal contextRequested(real px, real py)
-    readonly property rect area: controller.selection
+    readonly property rect area: visible ? controller.selection : Qt.rect(0, 0, 0, 0)
     property bool interacting: false
     property rect startArea
     property point pressPoint
+    property point pendingPoint
+    property bool dragPending: false
     property int horizontalEdge: 0
     property int verticalEdge: 0
     property bool moving: false
@@ -33,28 +36,40 @@ Item {
     }
 
     function expandToDisplay() {
+        cancelInteraction();
         clearTextSelection();
         cropInteractionStarted();
         controller.setSelection(Qt.rect(0, 0, width, height));
     }
 
     function begin(item, mouse, horizontal, vertical, move) {
-        clearTextSelection();
-        cropInteractionStarted();
+        cancelInteraction();
         startArea = area;
         pressPoint = item.mapToItem(root, mouse.x, mouse.y);
         horizontalEdge = horizontal;
         verticalEdge = vertical;
         moving = move;
+        controller.beginCropInteraction();
         interacting = true;
+        clearTextSelection();
+        cropInteractionStarted();
     }
 
     function dragTo(item, mouse) {
         if (!interacting)
             return;
-        const point = item.mapToItem(root, mouse.x, mouse.y);
-        const dx = point.x - pressPoint.x;
-        const dy = point.y - pressPoint.y;
+        pendingPoint = item.mapToItem(root, mouse.x, mouse.y);
+        dragPending = true;
+        if (!dragFrame.running)
+            dragFrame.start();
+    }
+
+    function flushDrag() {
+        if (!interacting || !dragPending)
+            return;
+        dragPending = false;
+        const dx = pendingPoint.x - pressPoint.x;
+        const dy = pendingPoint.y - pressPoint.y;
         let left = startArea.x;
         let top = startArea.y;
         let right = left + startArea.width;
@@ -79,33 +94,43 @@ Item {
         controller.setSelection(Qt.rect(left, top, right - left, bottom - top));
     }
 
-    Rectangle {
-        x: 0
-        y: 0
-        width: root.width
-        height: root.area.y
-        color: "#70000000"
+    function finish(item, mouse) {
+        if (!interacting)
+            return;
+        dragTo(item, mouse);
+        dragFrame.stop();
+        flushDrag();
+        controller.endCropInteraction();
+        interacting = false;
     }
-    Rectangle {
-        x: 0
-        y: root.area.y + root.area.height
-        width: root.width
-        height: root.height - y
-        color: "#70000000"
+
+    function cancelInteraction() {
+        if (!interacting)
+            return;
+        dragFrame.stop();
+        dragPending = false;
+        controller.endCropInteraction();
+        interacting = false;
     }
-    Rectangle {
-        x: 0
-        y: root.area.y
-        width: root.area.x
-        height: root.area.height
-        color: "#70000000"
+
+    onVisibleChanged: {
+        if (!visible)
+            cancelInteraction();
     }
-    Rectangle {
-        x: root.area.x + root.area.width
-        y: root.area.y
-        width: root.width - x
-        height: root.area.height
-        color: "#70000000"
+    onEnabledChanged: {
+        if (!enabled)
+            cancelInteraction();
+    }
+
+    Timer {
+        id: dragFrame
+        interval: 16
+        onTriggered: root.flushDrag()
+    }
+
+    CropOverlay {
+        anchors.fill: parent
+        selection: root.area
     }
 
     MouseArea {
@@ -127,7 +152,32 @@ Item {
         id: ocrTextLayer
         controller: root.controller
         interacting: root.interacting
+        autoSelectOnRecognition: !root.annotationMode && root.controller.action === "ocr"
         visible: !root.annotationMode && root.controller.ocrVisible
+    }
+
+    MouseArea {
+        id: qrMove
+        x: root.area.x
+        y: root.area.y
+        width: root.area.width
+        height: root.area.height
+        visible: !root.annotationMode && root.controller.action === "scan-qr"
+        acceptedButtons: Qt.LeftButton
+        hoverEnabled: true
+        preventStealing: true
+        cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+        onPressed: function (mouse) {
+            root.begin(qrMove, mouse, 0, 0, true);
+        }
+        onPositionChanged: function (mouse) {
+            if (pressed)
+                root.dragTo(qrMove, mouse);
+        }
+        onReleased: function (mouse) {
+            root.finish(qrMove, mouse);
+        }
+        onCanceled: root.cancelInteraction()
     }
 
     Rectangle {
@@ -160,10 +210,9 @@ Item {
                     root.dragTo(borderMove, mouse);
             }
             onReleased: function (mouse) {
-                root.dragTo(borderMove, mouse);
-                root.interacting = false;
+                root.finish(borderMove, mouse);
             }
-            onCanceled: root.interacting = false
+            onCanceled: root.cancelInteraction()
         }
     }
 
@@ -233,10 +282,9 @@ Item {
                         root.dragTo(resizeMouse, mouse);
                 }
                 onReleased: function (mouse) {
-                    root.dragTo(resizeMouse, mouse);
-                    root.interacting = false;
+                    root.finish(resizeMouse, mouse);
                 }
-                onCanceled: root.interacting = false
+                onCanceled: root.cancelInteraction()
             }
         }
     }

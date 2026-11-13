@@ -188,7 +188,7 @@ Item {
             id: canvasPointer
             anchors.fill: parent
             acceptedButtons: Qt.LeftButton | Qt.RightButton
-            hoverEnabled: true
+            hoverEnabled: !selectionCrop.interacting
             preventStealing: true
             cursorShape: surface.cursorShape
             onEntered: surface.hoverAt(Qt.point(mouseX, mouseY))
@@ -263,7 +263,10 @@ Item {
         z: 1
         controller: root.controller
         annotationMode: true
-        onCropInteractionStarted: root.clearSelection()
+        onCropInteractionStarted: {
+            root.clearSelection();
+            surface.leave();
+        }
     }
 
     AnnotationTextEditor {

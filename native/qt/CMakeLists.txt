@@ -43,6 +43,8 @@ set(SOURCES
     src/CaptureEngine.h
     src/CaptureRuntime.cpp
     src/CaptureRuntime.h
+    src/CropOverlay.cpp
+    src/CropOverlay.h
     src/annotation/AnnotationDocument.cpp
     src/annotation/AnnotationDocument.h
     src/annotation/AnnotationGeometry.cpp
