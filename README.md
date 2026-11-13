@@ -4,12 +4,12 @@ Squigit is a screenshot-first desktop proof of concept built with Rust, Rune, an
 
 - **Show menu** reveals the resident Qt radial menu; **Hide menu** hides it immediately. Arrow keys and Tab cycle petals, Shift+Tab reverses, and Enter or Space activates the selected action. A bundled tick plays when the highlighted petal changes.
 - **Snapshot** opens a traditional selection. After release, only the chosen display stays frozen, with a movable, resizable crop and the shared annotation dock. Export writes the annotated crop to `Pictures/squigit` and keeps the overlay open.
-- **Ask Google** uses the same selection, then shows a floating prompt composer centered at the bottom of the chosen display, layered above the crop. Sending saves the annotated final crop to app data `blob_storage`, prints the prompt, and closes the overlay.
-- **Circle to Search** uses squiggle selection and saves automatically to app data `blob_storage`, without buttons.
+- **Ask Google** uses the same selection, then shows a floating prompt composer centered at the bottom of the chosen display, layered above the crop. Sending saves the annotated final crop to app data `blob_storage` and closes the overlay. Rust uploads the image to ImgBB in the background, then opens Google AI Mode with the image and prompt in the default browser.
+- **Circle to Search** uses squiggle selection and saves automatically to app data `blob_storage`, without buttons. The overlay closes before the background ImgBB upload, then Google Lens opens in the default browser.
 - **OCR** asks Rust to run the embedded `squigit-ocr` sidecar on the whole chosen display's frozen image. Text inside the crop is highlighted blue and selectable; text outside is highlighted grey. Moving or resizing the crop updates which characters are selectable without rescanning. The first OCR click scans, or retries a failed or cancelled scan. During recognition, **Cancel OCR** stops the entire OCR process tree while keeping the overlay open. After a successful scan, the button toggles all OCR highlights and text selection. Drag within a blue text line and press Ctrl+C to copy it; Ctrl+Shift+C copies text inside the crop while OCR is visible. Tapping Escape clears selected OCR text; holding Escape for 650 ms closes the overlay. Clicking blank space or moving/resizing the crop also clears text selection. OCR text selection keeps keyboard focus in the overlay so its shortcuts stay available. Keyboard input follows the display where selection begins; the other displays return to their live contents.
-- **Scan QR** automatically scans the selected crop locally in Rust using [rqrr](https://github.com/WanzenBug/rqrr), without buttons. The first decoded HTTP or HTTPS URL closes the overlay and opens in the default browser. A missing QR code or a code containing something other than a web URL shows an error in the overlay; resize the crop to retry. QR scanning does not start OCR or use a network service.
+- **Scan QR** automatically scans the selected crop locally in Rust using [rqrr](https://github.com/WanzenBug/rqrr), without buttons. The first decoded HTTP or HTTPS URL closes the overlay and opens in the default browser. A missing QR code or a code containing something other than a web URL shows an error in the overlay; resize the crop to retry. Its **Ask Google?** fallback closes the overlay and uses the shared ImgBB and Google AI Mode flow with the prompt `scan this qr code if found`. Local QR scanning does not start OCR or use a network service.
 - **Open savepath** opens `Pictures/squigit` in the OS file manager.
-- **Configuration** opens the Rune **OCR Models** page. Its model rows match the desktop model downloader, with Download, Cancel, hold-to-Delete, actual transfer progress, and an installed-model selector. English is bundled; Latin, Cyrillic, Korean, CJK, and Devanagari can be downloaded. The selected recognition model applies to the next scan. Captures default to Traditional with Auto OCR enabled. The former settings pages and capture preferences are removed; `--squiggle` and `--no-auto-ocr` provide capture overrides.
+- **Configuration** opens the Rune **OCR Models** page. Its model rows match the desktop model downloader, with Download, Cancel, hold-to-Delete, actual transfer progress, and an installed-model selector. English is bundled; Latin, Cyrillic, Korean, CJK, and Devanagari can be downloaded. The selected recognition model applies to the next scan. **Image hosting** manages the ImgBB API key used by image search. Captures default to Traditional with Auto OCR enabled; `--squiggle` and `--no-auto-ocr` provide capture overrides.
 - **About** opens a separate Rune dialog. **Quit** stops the resident application and its active capture.
 
 Rust and Qt stay resident; the radial menu starts hidden, and actions switch UI inside the existing Qt process. Each capture briefly fades in a hint below the top edge to press and hold Esc to exit; hovering the top-center edge drops down an exit button. A short Esc tap replays the animated hint; holding Esc for 650 ms exits directly without replaying it, even if OCR text is selected. OCR runs on demand. Release builds compress the complete OCR runtime, including its default models and libraries, into the Rust executable and extract it atomically into a content-addressed cache when needed. Debug builds use the fully built runtime staged under `binaries` directly. OCR never searches PATH or uses an installed package. There is no chat, history, or persistent OCR worker.
@@ -28,12 +28,26 @@ Rune initializes the shared app data directory on launch. Settings use `config.t
 | Windows  | `%APPDATA%\Squigit`                                |
 | macOS    | `~/Library/Application Support/Squigit`            |
 
-The current configuration contains only the recognition model selection. Writes are atomic and synchronized across processes; later storage features share the same app data root.
+`config.toml` contains the recognition model selection. Writes are atomic and synchronized across processes.
 
 ```toml
 [ocr]
 selected_model = "pp-ocr-v5-en"
 ```
+
+Image hosting stores the ImgBB key in `auth.json` under the same app data root, encrypted with AES-256-GCM and a separately salted HKDF-SHA256 key. The random encryption master stays in the OS credential vault: Secret Service on Linux, Credential Manager on Windows, and Keychain on macOS. There are no accounts, profiles, SQLite databases, hosted-URL caches, or image deduplication. Each submission uploads its current capture.
+
+Enter a 32-character ImgBB key in **Configuration → Image hosting** and press Enter or leave the field to save it. The configured key stays masked; the eye button requires Polkit authentication on Linux, Windows Hello on Windows, or Touch ID/system authentication on macOS before revealing it. Leaving the field, changing pages, or hiding the window clears revealed text. The trash button removes the saved key. ImgBB provides public image links; the page includes its API dashboard link and hosting information.
+
+All three online image actions share one background upload and URL-construction path. Upload or browser-launch failures produce an OS notification. A missing key produces a persistent **Set API** notification that opens configuration directly to **Image hosting**. Google Lens receives the hosted image URL; Ask Google and the QR fallback additionally request AI Mode (`udm=50`) and include the encoded prompt.
+
+Linux key reveal needs a running desktop Secret Service and Polkit agent, plus Squigit's policy installed once:
+
+```sh
+sudo sh squigit/resources/polkit/install-policy.sh
+```
+
+Packaged Linux releases include the same installer at `polkit/install-policy.sh` beside the executable. Installation copies only Squigit's reveal policy to `/usr/share/polkit-1/actions/org.squigit.policy`.
 
 ## Layout
 
@@ -42,6 +56,8 @@ squigit/                 Rust application, tray, Rune windows, product icons
 crates/squigit-qt/        Rust Qt orchestration, local QR scanner, capture sandbox
 crates/squigit-ocr/       Rust OCR runner, embedded runtime, model downloads and selection
 squigit/src/storage.rs   App data paths and persistent TOML settings
+squigit/src/auth.rs      Encrypted ImgBB key storage and native reveal authentication
+squigit/src/image_search.rs  Background ImgBB uploads and Google image search URLs
 native/qt/               C++/QML screenshot overlay and OS grabbers
 native/ocr/              Forked Python OCR runtime, patches, models and build scripts
 xtask/                   Build, deploy, package, run, format, doctor
@@ -70,6 +86,7 @@ binaries/<host-triple>/
 ├── squigit
 ├── squigit.desktop        Linux desktop entry
 ├── squigit.png
+├── polkit/                 Linux reveal policy and installer
 └── _internal/
     └── qt/                Qt deployment output, including squigit-qt
 ```

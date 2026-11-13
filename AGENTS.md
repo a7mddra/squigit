@@ -164,7 +164,7 @@ Termination failures return `cancelled:false` and `error`. Qt ignores racing
 scan results while cancellation is pending. The OCR canvas context menu can
 cancel a pending scan without closing the overlay; the status capsule then
 offers Retry. There is no separate Cancel OCR button. Captures default to Traditional with Auto OCR enabled; the former capture preferences
-are not read. Configuration contains only OCR models and their selector. Unix process groups and
+are not read. Configuration contains OCR models, their selector, and Image hosting. Unix process groups and
 Windows Job Objects contain each OCR job. Closing the overlay stops its jobs.
 Keep this contract in sync across both Rust crates and Qt.
 
@@ -281,14 +281,19 @@ Other capture contracts:
   to `Pictures/squigit` and keeps the overlay open. Ask Google shares the dock
   and adds a floating composer centered at the
   bottom of the chosen display and layered above the crop; sending writes the
-  crop to app data `blob_storage`, prints the prompt, and closes the overlay.
+  crop to app data `blob_storage` and closes the overlay before uploading.
   Circle to Search saves automatically, and QR scans automatically with an
   Ask Google fallback after local recognition fails. The composer and QR
   fallback use `CaptureEngine::askGoogle` to save their current crop in
   `SQUIGIT_BLOB_DIR` and finish with `capture_finished` status `ask_google`,
-  including `prompt` and `path`. Rust forwards both to the single submission
-  stub in `squigit/src/ask_google.rs`. It currently prints the prompt; future
-  image hosting and online submission belong in that shared function.
+  including `prompt` and `path`. Rust forwards both to the shared background
+  submission in `squigit/src/image_search.rs`. Circle to Search also uses this
+  submission after saving and closing the overlay. Upload each capture to
+  ImgBB, then open Google Lens for Circle to Search, or AI Mode (`udm=50`)
+  with the encoded prompt for Ask Google and the QR fallback. Do not cache
+  hosted URLs or deduplicate images. Upload and browser errors use OS
+  notifications. A missing key produces a persistent Set API action that
+  opens Rune configuration directly to Image hosting.
 
 - Each successful dock export emits
   `{"type":"image_exported","session":"...","path":"..."}` on Qt stdout.
@@ -351,8 +356,17 @@ The application's `squigit/src/storage.rs` owns app data paths and atomic, proce
 exist on launch and settings focus; model access also recreates missing data.
 Use `~/.config/squigit` (or `$XDG_CONFIG_HOME/squigit`) on Linux,
 `%APPDATA%\Squigit` on Windows, and `~/Library/Application Support/Squigit` on macOS.
-`SQUIGIT_CONFIG_DIR` overrides that root. The only current setting is
+`SQUIGIT_CONFIG_DIR` overrides that root. `config.toml` contains
 `[ocr].selected_model`; do not restore the removed capture or demo preferences.
+The Image hosting page manages only ImgBB. `squigit/src/auth.rs` stores its key
+as an AES-256-GCM record in atomic, process-locked `auth.json`, with HKDF-SHA256
+and a random encryption master in the OS credential vault. There are no
+accounts, profiles, OAuth, or SQLite stores. Never fall back to plaintext or
+replace a missing encryption master while encrypted keys exist. Native reveal
+authentication uses Polkit on Linux, Windows Hello on Windows, and Local
+Authentication on macOS. Clear plaintext UI buffers on field/window blur,
+page changes, and close. Linux releases include `squigit/resources/polkit`;
+the installer copies the reveal policy to the system policy directory.
 
 ## 6. Writing Rules (Comments & Emojis)
 

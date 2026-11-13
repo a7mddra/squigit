@@ -1,6 +1,9 @@
 use anyhow::Result;
 use notify_rust::{Notification, NotificationResponse};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static MISSING_KEY_NOTICE: AtomicBool = AtomicBool::new(false);
 
 #[cfg(any(windows, target_os = "macos"))]
 const APP_ID: &str = "io.github.a7mddra.squigit";
@@ -34,6 +37,66 @@ pub fn saved(path: PathBuf) {
             eprintln!("[squigit] Image saved, but its notification failed: {error:#}");
         }
     });
+}
+
+pub fn image_search_error(
+    message: String,
+    missing_key: bool,
+    settings: rune::AppHandle<crate::settings::App>,
+) {
+    if missing_key && MISSING_KEY_NOTICE.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    std::thread::spawn(move || {
+        if let Err(error) = show_image_search_error(&message, missing_key, settings) {
+            eprintln!("[squigit] {message}; notification failed: {error:#}");
+        }
+        if missing_key {
+            MISSING_KEY_NOTICE.store(false, Ordering::Release);
+        }
+    });
+}
+
+fn show_image_search_error(
+    message: &str,
+    missing_key: bool,
+    settings: rune::AppHandle<crate::settings::App>,
+) -> Result<()> {
+    let mut notification = Notification::new();
+    notification
+        .summary(if missing_key {
+            "Set up image hosting"
+        } else {
+            "Image search failed"
+        })
+        .body(message);
+    #[cfg(all(unix, not(target_os = "macos")))]
+    notification
+        .appname("Squigit")
+        .hint(notify_rust::Hint::DesktopEntry("squigit".into()));
+    #[cfg(windows)]
+    notification.app_id(APP_ID);
+    if missing_key {
+        notification
+            .timeout(notify_rust::Timeout::Never)
+            .action("set-api", "Set API");
+        #[cfg(all(unix, not(target_os = "macos")))]
+        notification
+            .hint(notify_rust::Hint::Resident(true))
+            .action("default", "Set API");
+        let handle = notification.show()?;
+        handle.wait_for_response(|response: &NotificationResponse| {
+            if matches!(response, NotificationResponse::Default)
+                || matches!(response, NotificationResponse::Action(action) if action == "set-api")
+            {
+                settings.update(|state, _| state.open_image_hosting());
+                settings.open();
+            }
+        })?;
+    } else {
+        notification.show()?;
+    }
+    Ok(())
 }
 
 fn show_saved(path: &Path) -> Result<()> {

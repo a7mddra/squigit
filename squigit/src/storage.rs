@@ -55,6 +55,10 @@ impl AppData {
         self.root.join("config.toml")
     }
 
+    pub fn auth_path(&self) -> PathBuf {
+        self.root.join("auth.json")
+    }
+
     pub fn models_dir(&self) -> PathBuf {
         self.root.join("models")
     }

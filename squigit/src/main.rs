@@ -1,7 +1,8 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod about;
-mod ask_google;
+mod auth;
+mod image_search;
 mod notifications;
 mod settings;
 mod storage;
@@ -72,6 +73,12 @@ fn run() -> Result<ExitCode> {
         .context("Squigit is already running")?;
 
     let models = squigit_ocr::models::ModelManager::new(data.clone());
+    let mut app = settings::app()
+        .args(Vec::new())
+        .windowless()
+        .release_gpu_when_closed();
+    let settings = app.handle();
+    let search_settings = settings.clone();
     let tick = tick::Player::start();
     let mut qt = squigit_qt::Runtime::start(
         models,
@@ -82,20 +89,30 @@ fn run() -> Result<ExitCode> {
             squigit_qt::RuntimeEvent::Saved { action, path } if action == "snapshot" => {
                 notifications::saved(path);
             }
+            squigit_qt::RuntimeEvent::Saved { action, path } if action == "circle-to-search" => {
+                image_search::submit(
+                    data.clone(),
+                    path,
+                    image_search::Target::Lens,
+                    search_settings.clone(),
+                );
+            }
             squigit_qt::RuntimeEvent::Saved { .. } => {}
             squigit_qt::RuntimeEvent::Exported { path } => notifications::saved(path),
-            squigit_qt::RuntimeEvent::Asked { prompt, path } => ask_google::submit(&prompt, &path),
+            squigit_qt::RuntimeEvent::Asked { prompt, path } => {
+                image_search::submit(
+                    data.clone(),
+                    path,
+                    image_search::Target::Ai(prompt),
+                    search_settings.clone(),
+                );
+            }
             squigit_qt::RuntimeEvent::Failed(error) => eprintln!("[squigit] {error}"),
             squigit_qt::RuntimeEvent::Stopped => {
                 eprintln!("[squigit] The Qt runtime stopped unexpectedly");
             }
         },
     )?;
-    let mut app = settings::app()
-        .args(Vec::new())
-        .windowless()
-        .release_gpu_when_closed();
-    let settings = app.handle();
     let (about, _) = app.window(WindowSpec::from_app(
         "about",
         about::app().windowless().release_gpu_when_closed(),

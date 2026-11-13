@@ -1,3 +1,4 @@
+mod hosting;
 mod pages;
 pub(crate) mod ui;
 
@@ -14,6 +15,12 @@ const DELETE_HOLD: Duration = Duration::from_secs(2);
 const DELETE_ARM: Duration = Duration::from_secs(3);
 
 type JobUpdates = Arc<Mutex<Option<Vec<ModelDownloadJobSnapshot>>>>;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Page {
+    Models,
+    ImageHosting,
+}
 
 enum Action {
     Engine,
@@ -32,6 +39,8 @@ struct DeleteGesture {
 }
 
 pub struct App {
+    page: Page,
+    hosting: hosting::Hosting,
     models: Option<ModelManager>,
     runtime: Option<tokio::runtime::Runtime>,
     jobs: Vec<ModelDownloadJobSnapshot>,
@@ -51,6 +60,25 @@ pub struct App {
 }
 
 impl App {
+    fn show_page(&mut self, page: Page) {
+        if self.page != page {
+            let focused = self.hosting.focused;
+            self.hosting.blur();
+            self.hosting.clear();
+            self.hosting.focused = focused;
+            self.page = page;
+        }
+        self.open = false;
+        self.delete = None;
+        if page == Page::ImageHosting {
+            self.hosting.refresh();
+        }
+    }
+
+    pub fn open_image_hosting(&mut self) {
+        self.show_page(Page::ImageHosting);
+    }
+
     fn refresh(&mut self) {
         let Some(models) = &self.models else { return };
         match models
@@ -145,6 +173,8 @@ impl App {
 fn init() -> App {
     let (finished_tx, finished_rx) = mpsc::channel();
     let mut s = App {
+        page: Page::Models,
+        hosting: hosting::Hosting::new(),
         models: None,
         runtime: None,
         jobs: Vec::new(),
@@ -180,6 +210,7 @@ fn init() -> App {
 
 fn setup(s: &mut App, waker: Waker) {
     s.waker = Some(waker.clone());
+    s.hosting.setup(waker.clone());
     if let (Some(models), Some(runtime)) = (&s.models, &s.runtime) {
         let mut changes = models.subscribe_downloads();
         let slot = s.updates.clone();
@@ -203,8 +234,12 @@ fn setup(s: &mut App, waker: Waker) {
 fn view(s: &App, cx: &mut Cx<App>) -> El {
     let k = ui::kit(true);
     let mut layer = Vec::new();
-    let body = pages::page(s, &k, &mut layer, 1.0 / cx.env().scale);
-    rune_kit::root(ui::chrome(&k, body), layer)
+    let hair = 1.0 / cx.env().scale;
+    let body = match s.page {
+        Page::Models => pages::page(s, &k, &mut layer, hair),
+        Page::ImageHosting => hosting::page(s, &k, hair),
+    };
+    rune_kit::root(ui::chrome(s, &k, body), layer)
 }
 
 fn poll(s: &mut App, _now: f64, tx: &mut Tx) -> bool {
@@ -270,25 +305,37 @@ fn poll(s: &mut App, _now: f64, tx: &mut Tx) -> bool {
             tx.wake_after(DELETE_ARM - gesture.armed.elapsed());
         }
     }
-    changed
+    changed | s.hosting.poll(tx, s.page == Page::ImageHosting)
 }
 
 pub fn app() -> rune::App<App> {
-    rune::App::new(AppSpec::<App> {
+    let app = rune::App::new(AppSpec::<App> {
         min_size: Some((640.0, 480.0)),
         setup: Some(setup),
         poll: Some(poll),
         ..AppSpec::new("Squigit Configuration", (760.0, 560.0), init, view)
     })
-    .on_focus(|s, focused, _| {
+    .on_focus(|s, focused, tx| {
+        s.hosting.focused = focused;
         if focused {
             s.refresh();
+            s.hosting.refresh();
+            tx.wake_after(Duration::ZERO);
         } else {
             s.delete = None;
+            s.hosting.blur();
         }
     })
     .on_close(|s, _| {
         s.open = false;
         s.delete = None;
+        s.hosting.blur();
+        s.hosting.clear();
+        s.hosting.window = None;
+    });
+    let handle = app.handle();
+    app.on_window(move |window| {
+        let window = window.clone();
+        handle.update(move |s, _| s.hosting.window = Some(window));
     })
 }

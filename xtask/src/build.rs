@@ -95,10 +95,20 @@ fn copy_app_files(repo_root: &Path, destination: &Path) -> Result<()> {
         destination.join("squigit.png"),
     )?;
     #[cfg(target_os = "linux")]
-    fs::copy(
-        repo_root.join("squigit/squigit.desktop"),
-        destination.join("squigit.desktop"),
-    )?;
+    {
+        fs::copy(
+            repo_root.join("squigit/squigit.desktop"),
+            destination.join("squigit.desktop"),
+        )?;
+        let policy = destination.join("polkit");
+        fs::create_dir_all(&policy)?;
+        for name in ["org.squigit.policy", "install-policy.sh"] {
+            fs::copy(
+                repo_root.join("squigit/resources/polkit").join(name),
+                policy.join(name),
+            )?;
+        }
+    }
     Ok(())
 }
 

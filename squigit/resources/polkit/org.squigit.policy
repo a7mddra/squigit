@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD polkit Policy Configuration 1.0//EN" "http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">
+<policyconfig>
+  <vendor>Squigit</vendor>
+  <vendor_url>https://squigit.org</vendor_url>
+  <icon_name>squigit</icon_name>
+  <action id="org.squigit.api-keys.reveal">
+    <description>Reveal a Squigit API key</description>
+    <message>Authentication is required to reveal your Squigit API key</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_self</allow_active>
+    </defaults>
+  </action>
+</policyconfig>
