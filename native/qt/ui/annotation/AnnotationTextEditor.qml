@@ -69,6 +69,8 @@ Item {
             anchors.fill: parent
             acceptedButtons: Qt.RightButton
             onPressed: function (mouse) {
+                if (input.selectedText.length === 0)
+                    input.cursorPosition = input.positionAt(mouse.x, mouse.y);
                 const point = mapToItem(root.parent, mouse.x, mouse.y);
                 root.contextRequested(input, point.x, point.y);
             }

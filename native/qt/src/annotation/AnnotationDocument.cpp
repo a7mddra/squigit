@@ -452,8 +452,9 @@ int AnnotationDocument::hitTest(QPointF point, qreal tolerance) const {
 QString AnnotationDocument::contextAt(QPointF point, qreal tolerance) {
   finishTextEditing();
   cancelStroke();
-  if (m_tool != "select") return "format";
   const int index = hitTest(point, tolerance);
+  if (m_tool != "select")
+    return m_selected.size() > 1 && m_selected.contains(index) ? "object" : "format";
   if (index < 0) { m_selected.clear(); notifySelection(); return "canvas"; }
   if (!m_selected.contains(index)) { m_selected = {index}; notifySelection(); }
   return "object";
@@ -711,7 +712,13 @@ void AnnotationDocument::finish(QPointF point, Qt::KeyboardModifiers modifiers) 
     if (point != m_points.last()) m_points.append(point);
     updateActivePath(true);
     if (m_active.tool == "blur") cropBlur();
-  } else if (QLineF(m_start, point).length() < 1) { emit changed(); return; }
+  } else if (QLineF(m_start, point).length() < 1
+      || ((m_active.tool != "line" && m_active.tool != "arrow")
+          && (m_active.rect.width() < 1 || m_active.rect.height() < 1))) {
+    m_active = Annotation{};
+    emit changed();
+    return;
+  }
   m_items.append(m_active);
   m_active = Annotation{};
   m_points.clear();

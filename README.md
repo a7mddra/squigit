@@ -76,6 +76,12 @@ binaries/<host-triple>/
 
 Keep the entire directory together. Qt is resolved relative to the application executable. Release executables contain OCR; no installed OCR package or `_internal/ocr` directory is used. The release extraction cache is `squigit/ocr/<runtime-hash>` under the OS cache directory.
 
+Ubuntu and Debian system Qt installs also need the QML controls, templates, and native file-dialog modules for the annotation editor:
+
+```sh
+sudo apt install qml6-module-qtquick-controls qml6-module-qtquick-templates qml6-module-qtquick-dialogs
+```
+
 For iteration, run `cargo xtask build --debug`, then `cargo xtask run`. This builds Qt and Rust incrementally, then runs `target/debug/squigit` with the `development` feature. Rust reads CMake's `native/qt/build-debug/runtime-Debug.txt` to locate the Qt executable and the matching installed Qt kit's libraries, plugins, and QML modules. It runs the helper directly from the CMake build folder, including its app bundle on macOS and Debug configuration on Windows. Debug mode performs no deployment, packaging, executable copying, or library copying.
 
 The complete prebuilt OCR tree is still required at `binaries/paddle-ocr-<host-triple>`; build it once with `cargo xtask build --ocr` if missing. Debug mode uses that tree directly, avoiding Python rebuilding, compression, embedding, and extraction. It never uses an installed OCR package. Release builds still deploy Qt and embed the full OCR runtime; use `cargo xtask run --release` to launch the packaged application.

@@ -655,7 +655,7 @@ mod windows {
             }
         }
         anyhow::bail!(
-            "Qt6 with required modules not found. Checked: {}. Install Qt Declarative (Qt Quick/QML) and Qt5Compat.GraphicalEffects for this kit, or set Qt6_DIR to a full Qt kit root.",
+            "Qt6 with required modules not found. Checked: {}. Install Qt Declarative (Qt Quick/QML and Controls/Dialogs) and Qt5Compat.GraphicalEffects for this kit, or set Qt6_DIR to a full Qt kit root.",
             attempted.join(", ")
         )
     }
@@ -689,6 +689,9 @@ mod windows {
             prefix.join(r"lib\cmake\Qt6\Qt6Config.cmake"),
             prefix.join(r"lib\cmake\Qt6Quick\Qt6QuickConfig.cmake"),
             prefix.join(r"lib\cmake\Qt6Qml\Qt6QmlConfig.cmake"),
+            prefix.join(r"qml\QtQuick\Controls\qmldir"),
+            prefix.join(r"qml\QtQuick\Templates\qmldir"),
+            prefix.join(r"qml\QtQuick\Dialogs\qmldir"),
             prefix.join(r"qml\Qt5Compat\GraphicalEffects\qmldir"),
         ]
         .iter()

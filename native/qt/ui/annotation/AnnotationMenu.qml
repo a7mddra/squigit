@@ -7,6 +7,7 @@ import Qt5Compat.GraphicalEffects
 Popup {
     id: root
     property var entries: []
+    property bool aboveAnchor: false
     signal triggered(string action)
     width: 234
     padding: 6
@@ -20,7 +21,8 @@ Popup {
         const menuHeight = items.reduce(function (total, entry) {
                 return total + (entry.separator ? 11 : 34);
             }, 10);
-        y = Math.max(8, Math.min(py, parent.height - menuHeight - 8));
+        const top = aboveAnchor ? py - menuHeight : py;
+        y = Math.max(8, Math.min(top, parent.height - menuHeight - 8));
         open();
     }
 

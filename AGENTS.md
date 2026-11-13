@@ -243,7 +243,8 @@ Other capture contracts:
 
 - C++17, CMake ≥ 3.16, Qt ≥ 6.4 modules: `Core`, `Gui`, `Quick`, `Qml`, and
   `DBus` on Linux. The QML canvases
-  require `Qt5Compat.GraphicalEffects`.
+  require `Qt5Compat.GraphicalEffects`. The annotation editor also requires the
+  `QtQuick.Controls`, `QtQuick.Templates`, and `QtQuick.Dialogs` QML modules.
 - `native/qt/backends/` holds the per-OS grabbers behind the `Grabber`
   interface; each platform module exposes `createUnixEngine` /
   `createWindowsEngine`.

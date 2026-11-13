@@ -218,6 +218,8 @@ Item {
                     anchors.fill: parent
                     acceptedButtons: Qt.RightButton
                     onPressed: function (mouse) {
+                        if (textArea.selectedText.length === 0)
+                            textArea.cursorPosition = textArea.positionAt(mouse.x, mouse.y);
                         const point = mapToItem(root.parent, mouse.x, mouse.y);
                         composerMenu.showFor(textArea, point.x, point.y, false);
                     }

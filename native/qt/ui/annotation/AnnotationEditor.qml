@@ -50,7 +50,8 @@ Item {
         surface.forceActiveFocus();
     }
     function formatAt(px, py) {
-        colorPicker.showAt(px, py, document.selectionCount > 1);
+        const nearDock = py >= dock.y - 10 && py <= dock.y + dock.height;
+        colorPicker.showAt(px, nearDock ? dock.y - colorPicker.height - 10 : py, document.selectionCount > 1);
     }
     function showOptions(tool, px, py) {
         contextX = px;
@@ -301,6 +302,7 @@ Item {
     AnnotationMenu {
         id: toolMenu
         parent: root
+        aboveAnchor: true
         onTriggered: function (action) {
             root.run(action);
         }
