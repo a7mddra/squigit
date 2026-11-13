@@ -1,7 +1,7 @@
 use std::time::Instant;
 
-use rune::{col, el, icon, row, text, Drag, El, Phase, ScrollSpec, TextStyle};
-use rune_kit::{Button, ButtonVariant, ControlSize, Kit, Loader, Menu, MenuItem, ProgressCircle};
+use rune::{col, el, row, text, Drag, El, Phase, ScrollSpec, TextStyle};
+use rune_kit::{Button, ButtonVariant, ControlSize, Kit, Loader, ProgressCircle};
 use squigit_ocr::models::{OcrModelDefinition, DEFAULT_OCR_MODEL_ID, OCR_MODELS};
 
 use super::{ui, App, DeleteGesture, DELETE_ARM, DELETE_HOLD, SPINNER_GRACE};
@@ -20,7 +20,7 @@ pub fn active(status: &str) -> bool {
         )
 }
 
-pub fn page(s: &App, k: &Kit, layer: &mut Vec<El>, hair: f32) -> El {
+pub fn page(s: &App, k: &Kit, hair: f32) -> El {
     let mut rows = Vec::new();
     for model in OCR_MODELS
         .iter()
@@ -34,19 +34,13 @@ pub fn page(s: &App, k: &Kit, layer: &mut Vec<El>, hair: f32) -> El {
         .max_w(660.0)
         .gap(40.0)
         .child(
-            row()
-                .key("header")
-                .w_full()
-                .gap(16.0)
-                .center_y()
-                .child(
-                    text("OCR Models")
-                        .key("title")
-                        .font(TextStyle::new(28.0, 450.0))
-                        .color(k.c.text_base)
-                        .grow(1.0),
-                )
-                .child(switcher(s, k, layer)),
+            row().key("header").w_full().gap(16.0).center_y().child(
+                text("OCR Models")
+                    .key("title")
+                    .font(TextStyle::new(28.0, 450.0))
+                    .color(k.c.text_base)
+                    .grow(1.0),
+            ),
         )
         .child(
             ui::section(k, hair, "Get more models", rows)
@@ -80,73 +74,6 @@ pub fn page(s: &App, k: &Kit, layer: &mut Vec<El>, hair: f32) -> El {
         .pt(24.0)
         .pb(24.0)
         .child(inner)
-}
-
-fn switcher(s: &App, k: &Kit, layer: &mut Vec<El>) -> El {
-    let current = OCR_MODELS
-        .iter()
-        .find(|model| model.id == s.selected)
-        .unwrap_or(&OCR_MODELS[0]);
-    let trigger = row()
-        .key("model-trigger-label")
-        .h(28.0)
-        .px(8.0)
-        .gap(6.0)
-        .center_y()
-        .role("button")
-        .label("Select OCR model")
-        .a11y_value(current.name)
-        .focusable(true)
-        .disabled(!s.engine_ready || s.pending.contains("selection"))
-        .radius(6.0)
-        .hover(k.c.hover)
-        .on_press(|s: &mut App| s.open = !s.open)
-        .child(
-            text(current.lang.to_uppercase())
-                .font(k.ty.ui_medium)
-                .color(k.c.text_base),
-        )
-        .child(
-            icon(
-                if s.open {
-                    k.glyph.chevron_up
-                } else {
-                    k.glyph.chevron_down
-                },
-                14.0,
-            )
-            .color(k.c.icon_muted),
-        );
-    let mut menu = Menu::new("ocr-model")
-        .trigger(trigger)
-        .open(s.open)
-        .min_width(220.0)
-        .gutter(18.0)
-        .on_close(|s: &mut App| s.open = false)
-        .group_label("OCR Model");
-    for model in OCR_MODELS
-        .iter()
-        .filter(|model| s.installed.contains(model.id))
-    {
-        let id = model.id;
-        menu = menu.item(
-            MenuItem::new(model.name)
-                .checked(id == s.selected)
-                .disabled(s.pending.contains("selection"))
-                .on_select(move |s: &mut App| s.select(id)),
-        );
-    }
-    menu.separator()
-        .item(
-            MenuItem::new("Get more models")
-                .icon(&ui::PACKAGE_PLUS)
-                .on_select_tx(|s: &mut App, tx| {
-                    s.open = false;
-                    tx.focus("model-downloads", true);
-                    tx.scroll_into_view("model-downloads");
-                }),
-        )
-        .build(k, layer)
 }
 
 fn model_row(s: &App, k: &Kit, model: &OcrModelDefinition) -> El {

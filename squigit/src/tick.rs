@@ -3,6 +3,8 @@ use rodio::{OutputStream, OutputStreamHandle, Source};
 use std::sync::mpsc::{sync_channel, SyncSender};
 use std::thread;
 
+use crate::storage::AppData;
+
 const TICK: &[u8] = include_bytes!("../assets/tick.wav");
 const HEADER_LENGTH: usize = 44;
 const SAMPLE_RATE: u32 = 44_100;
@@ -15,7 +17,7 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn start() -> Self {
+    pub fn start(data: AppData) -> Self {
         let samples = TICK[HEADER_LENGTH..]
             .chunks_exact(2)
             .map(|sample| i16::from_le_bytes([sample[0], sample[1]]) as f32 / 32_768.0)
@@ -24,9 +26,11 @@ impl Player {
         let _ = thread::Builder::new()
             .name("squigit-tick".to_string())
             .spawn(move || {
-                let mut output = OutputStream::try_default().ok();
+                let mut output = None;
                 while receiver.recv().is_ok() {
-                    play(&mut output, &samples);
+                    if data.load().is_ok_and(|config| config.general.play_sounds) {
+                        play(&mut output, &samples);
+                    }
                 }
             });
         Self { sender }

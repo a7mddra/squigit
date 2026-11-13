@@ -1,3 +1,4 @@
+mod general;
 mod hosting;
 mod pages;
 pub(crate) mod ui;
@@ -18,6 +19,7 @@ type JobUpdates = Arc<Mutex<Option<Vec<ModelDownloadJobSnapshot>>>>;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
+    General,
     Models,
     ImageHosting,
 }
@@ -40,6 +42,7 @@ struct DeleteGesture {
 
 pub struct App {
     page: Page,
+    general: general::General,
     hosting: hosting::Hosting,
     models: Option<ModelManager>,
     runtime: Option<tokio::runtime::Runtime>,
@@ -72,6 +75,8 @@ impl App {
         self.delete = None;
         if page == Page::ImageHosting {
             self.hosting.refresh();
+        } else if page == Page::General {
+            self.general.refresh();
         }
     }
 
@@ -173,7 +178,8 @@ impl App {
 fn init() -> App {
     let (finished_tx, finished_rx) = mpsc::channel();
     let mut s = App {
-        page: Page::Models,
+        page: Page::General,
+        general: general::General::new(),
         hosting: hosting::Hosting::new(),
         models: None,
         runtime: None,
@@ -210,6 +216,7 @@ fn init() -> App {
 
 fn setup(s: &mut App, waker: Waker) {
     s.waker = Some(waker.clone());
+    s.general.setup(waker.clone());
     s.hosting.setup(waker.clone());
     if let (Some(models), Some(runtime)) = (&s.models, &s.runtime) {
         let mut changes = models.subscribe_downloads();
@@ -236,7 +243,8 @@ fn view(s: &App, cx: &mut Cx<App>) -> El {
     let mut layer = Vec::new();
     let hair = 1.0 / cx.env().scale;
     let body = match s.page {
-        Page::Models => pages::page(s, &k, &mut layer, hair),
+        Page::General => general::page(s, &k, &mut layer, hair),
+        Page::Models => pages::page(s, &k, hair),
         Page::ImageHosting => hosting::page(s, &k, hair),
     };
     rune_kit::root(ui::chrome(s, &k, body), layer)
@@ -260,7 +268,10 @@ fn poll(s: &mut App, _now: f64, tx: &mut Tx) -> bool {
     while let Ok(finished) = s.finished_rx.try_recv() {
         s.pending.remove(&finished.key);
         match finished.result {
-            Ok(Action::Engine) => s.engine_ready = true,
+            Ok(Action::Engine) => {
+                s.engine_ready = true;
+                s.general.refresh();
+            }
             Ok(Action::Models) => s.error = None,
             Err(error) => s.error = Some(error),
         }
@@ -305,7 +316,7 @@ fn poll(s: &mut App, _now: f64, tx: &mut Tx) -> bool {
             tx.wake_after(DELETE_ARM - gesture.armed.elapsed());
         }
     }
-    changed | s.hosting.poll(tx, s.page == Page::ImageHosting)
+    changed | s.general.poll() | s.hosting.poll(tx, s.page == Page::ImageHosting)
 }
 
 pub fn app() -> rune::App<App> {
@@ -319,6 +330,9 @@ pub fn app() -> rune::App<App> {
         s.hosting.focused = focused;
         if focused {
             s.refresh();
+            if s.page == Page::General {
+                s.general.refresh();
+            }
             s.hosting.refresh();
             tx.wake_after(Duration::ZERO);
         } else {

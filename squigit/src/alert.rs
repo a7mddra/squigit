@@ -3,6 +3,8 @@ use std::io::Cursor;
 use std::sync::mpsc::{sync_channel, SyncSender};
 use std::thread;
 
+use crate::storage::AppData;
+
 const ALERT: &[u8] = include_bytes!("../assets/alert.mp3");
 const VOLUME: f32 = 0.5;
 
@@ -12,14 +14,16 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn start() -> Self {
+    pub fn start(data: AppData) -> Self {
         let (sender, receiver) = sync_channel(64);
         let _ = thread::Builder::new()
             .name("squigit-alert".to_string())
             .spawn(move || {
-                let mut output = OutputStream::try_default().ok();
+                let mut output = None;
                 while receiver.recv().is_ok() {
-                    play(&mut output);
+                    if data.load().is_ok_and(|config| config.general.play_sounds) {
+                        play(&mut output);
+                    }
                 }
             });
         Self { sender }

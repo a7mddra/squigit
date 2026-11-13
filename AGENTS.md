@@ -164,7 +164,9 @@ Termination failures return `cancelled:false` and `error`. Qt ignores racing
 scan results while cancellation is pending. The OCR canvas context menu can
 cancel a pending scan without closing the overlay; the status capsule then
 offers Retry. There is no separate Cancel OCR button. Captures default to Traditional with Auto OCR enabled; the former capture preferences
-are not read. Configuration contains OCR models, their selector, and Image hosting. Unix process groups and
+are not read. Configuration opens General, which contains sounds, the OCR model
+selector, startup registration, and storage cleanup. OCR Models manages model
+downloads; Image hosting manages upload providers. Unix process groups and
 Windows Job Objects contain each OCR job. Closing the overlay stops its jobs.
 Keep this contract in sync across both Rust crates and Qt.
 
@@ -364,8 +366,28 @@ exist on launch and settings focus; model access also recreates missing data.
 Use `~/.config/squigit` (or `$XDG_CONFIG_HOME/squigit`) on Linux,
 `%APPDATA%\Squigit` on Windows, and `~/Library/Application Support/Squigit` on macOS.
 `SQUIGIT_CONFIG_DIR` overrides that root. `config.toml` contains
-`[ocr].selected_model` and `[hosting]` with `provider` and `chevereto_url`;
+`[general].play_sounds`, `[ocr].selected_model`, and `[hosting]` with `provider` and `chevereto_url`;
 do not restore the removed capture or demo preferences.
+The General page is the initial settings page. Its OCR selector lists installed
+models and links to the OCR Models download page; do not duplicate the selector
+on OCR Models. The sound preference defaults to enabled and controls both tick
+and alert players, read on their worker threads so separate settings processes
+take effect without restarting. Linux notifications suppress their system sound
+because Squigit plays its own alert.
+Open on startup reads and updates the current user's OS registration rather
+than a separate boolean: XDG `autostart/squigit.desktop`, macOS
+`LaunchAgents/io.github.a7mddra.squigit.plist`, or the Windows HKCU Run value.
+Register the current executable without UI-opening arguments. Leave startup
+disabled until the user enables it.
+Clear storage measures and deletes Qt's `Squigit/Squigit` cache (with `/cache`
+on Windows), the extracted `squigit/ocr` runtime cache, and app data
+`blob_storage`. Perform size scans and deletion on a background thread and
+show the reclaimable size. Preserve models, settings, credentials, saved
+screenshots, staged runtimes, and the OCR cache lock files. Recognition holds
+a shared `usage.lock` lease for the lifetime of its process; uploads hold
+the app data `.blobs.lock` lease. Cleanup requires both exclusive leases and
+reports active jobs rather than deleting files they use. Re-extract release
+OCR on demand after clearing its cache.
 The Image hosting page has exactly three rows: ImgBB first and selected by
 default, ImageKit second, and Custom / Chevereto third. Each has a two-line
 info tooltip, a setup link, and its own key field; Chevereto also needs an

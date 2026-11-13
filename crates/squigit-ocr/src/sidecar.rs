@@ -1,9 +1,7 @@
-use anyhow::{Result};
+use anyhow::{Context, Result};
 #[cfg(not(feature = "staged-runtime"))]
 use flate2::read::GzDecoder;
-#[cfg(not(feature = "staged-runtime"))]
 use fs2::FileExt;
-#[cfg(not(feature = "staged-runtime"))]
 use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
 
@@ -11,8 +9,36 @@ include!(concat!(env!("OUT_DIR"), "/runtime.rs"));
 
 pub const VERSION: &str = include_str!("../../../native/ocr/VERSION");
 
-#[cfg(feature = "staged-runtime")]
+pub fn runtime_cache_dir() -> Result<PathBuf> {
+    dirs::cache_dir()
+        .context("Could not resolve the OCR cache directory")
+        .map(|directory| directory.join("squigit/ocr"))
+}
+
+pub fn runtime_cache_lock() -> Result<fs::File> {
+    let directory = runtime_cache_dir()?;
+    fs::create_dir_all(&directory)?;
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(directory.join("usage.lock"))
+        .context("Could not lock the OCR cache")
+}
+
 pub fn resolve_sidecar_path() -> Result<PathBuf> {
+    acquire_runtime().map(|(path, _)| path)
+}
+
+pub fn acquire_runtime() -> Result<(PathBuf, fs::File)> {
+    let lease = runtime_cache_lock()?;
+    FileExt::lock_shared(&lease)?;
+    Ok((resolve_runtime()?, lease))
+}
+
+#[cfg(feature = "staged-runtime")]
+fn resolve_runtime() -> Result<PathBuf> {
     let executable = PathBuf::from(STAGED_RUNTIME).join(if cfg!(windows) {
         "squigit-ocr.exe"
     } else {
@@ -27,14 +53,12 @@ pub fn resolve_sidecar_path() -> Result<PathBuf> {
 }
 
 #[cfg(not(feature = "staged-runtime"))]
-pub fn resolve_sidecar_path() -> Result<PathBuf> {
+fn resolve_runtime() -> Result<PathBuf> {
     anyhow::ensure!(
         !RUNTIME.is_empty(),
         "The embedded OCR runtime is missing; build it with cargo xtask build --ocr and rebuild Squigit"
     );
-    let cache = dirs::cache_dir()
-        .context("Could not resolve the OCR cache directory")?
-        .join("squigit/ocr");
+    let cache = runtime_cache_dir()?;
     fs::create_dir_all(&cache)?;
     let lock = OpenOptions::new()
         .read(true)

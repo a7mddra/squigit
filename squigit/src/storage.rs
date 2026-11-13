@@ -11,8 +11,21 @@ use crate::image_hosting::Provider;
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Config {
+    pub general: GeneralConfig,
     pub ocr: OcrConfig,
     pub hosting: HostingConfig,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default)]
+pub struct GeneralConfig {
+    pub play_sounds: bool,
+}
+
+impl Default for GeneralConfig {
+    fn default() -> Self {
+        Self { play_sounds: true }
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -75,6 +88,16 @@ impl AppData {
 
     pub fn blobs_dir(&self) -> PathBuf {
         self.root.join("blob_storage")
+    }
+
+    pub fn blob_lock(&self) -> Result<fs::File> {
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(self.root.join(".blobs.lock"))
+            .context("Could not lock image storage")
     }
 
     pub fn ensure(&self) -> Result<()> {

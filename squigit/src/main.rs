@@ -3,10 +3,12 @@
 mod about;
 mod alert;
 mod auth;
+mod cache;
 mod image_hosting;
 mod image_search;
 mod notifications;
 mod settings;
+mod startup;
 mod storage;
 mod tick;
 
@@ -82,8 +84,8 @@ fn run() -> Result<ExitCode> {
     let settings = app.handle();
     let search_settings = settings.clone();
     let search_data = data.clone();
-    let tick = tick::Player::start();
-    let alert = alert::Player::start();
+    let tick = tick::Player::start(data.clone());
+    let alert = alert::Player::start(data.clone());
     let event_alert = alert.clone();
     let mut qt = squigit_qt::Runtime::start(
         models,

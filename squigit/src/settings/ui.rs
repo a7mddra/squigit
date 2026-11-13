@@ -4,6 +4,12 @@ use rune_kit::{Kit, PaletteFocus, PaletteSeed};
 
 use super::{App, Page};
 
+pub static GENERAL: rune::Icon = rune::Icon {
+    name: "general-settings",
+    view: 24.0,
+    body: r#"<path d="M4 7h9m4 0h3M4 17h3m4 0h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="15" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="2"/>"#,
+};
+
 pub static IMAGE: rune::Icon = rune::Icon {
     name: "image-hosting",
     view: 24.0,
@@ -95,6 +101,7 @@ pub(super) fn chrome(s: &App, k: &Kit, content: El) -> El {
                 .child(
                     col()
                         .gap(4.0)
+                        .child(nav(s, k, Page::General, "general", "General", &GENERAL))
                         .child(nav(s, k, Page::Models, "models", "OCR Models", &PACKAGE))
                         .child(nav(
                             s,
@@ -134,7 +141,6 @@ fn nav(s: &App, k: &Kit, page: Page, key: &str, label: &str, glyph: &'static run
 }
 
 pub fn section(k: &Kit, hair: f32, title: &str, rows: Vec<El>) -> El {
-    let count = rows.len();
     let mut card = col()
         .key("card")
         .w_full()
@@ -164,5 +170,5 @@ pub fn section(k: &Kit, hair: f32, title: &str, rows: Vec<El>) -> El {
                 .font(rune::TextStyle::new(14.0, 450.0))
                 .color(k.c.text_base),
         )
-        .child(card.label(format!("{title}, {count} models")))
+        .child(card.label(title))
 }

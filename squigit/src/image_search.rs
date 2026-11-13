@@ -36,6 +36,8 @@ pub fn submit(
 ) {
     std::thread::spawn(move || {
         let result = (|| {
+            let lease = data.blob_lock()?;
+            fs2::FileExt::lock_shared(&lease)?;
             let config = data.load()?.hosting;
             if !image_hosting::configured(&data, &config)? {
                 notifications::missing_image_hosting_key(settings.clone(), alert.clone());

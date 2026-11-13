@@ -9,7 +9,7 @@ Squigit is a screenshot-first desktop proof of concept built with Rust, Rune, an
 - **OCR** asks Rust to run the embedded `squigit-ocr` sidecar on the whole chosen display's frozen image. Text inside the crop is highlighted blue and selectable; text outside is highlighted grey. Moving or resizing the crop updates which characters are selectable without rescanning. The first OCR click scans, or retries a failed or cancelled scan. During recognition, **Cancel OCR** stops the entire OCR process tree while keeping the overlay open. After a successful scan, the button toggles all OCR highlights and text selection. Drag within a blue text line and press Ctrl+C to copy it; Ctrl+Shift+C copies text inside the crop while OCR is visible. Tapping Escape clears selected OCR text; holding Escape for 650 ms closes the overlay. Clicking blank space or moving/resizing the crop also clears text selection. OCR text selection keeps keyboard focus in the overlay so its shortcuts stay available. Keyboard input follows the display where selection begins; the other displays return to their live contents.
 - **Scan QR** automatically scans the selected crop locally in Rust using [rqrr](https://github.com/WanzenBug/rqrr), without buttons. The first decoded HTTP or HTTPS URL closes the overlay and opens in the default browser. A missing QR code or a code containing something other than a web URL shows an error in the overlay; resize the crop to retry. Its **Ask Google?** fallback closes the overlay and uses the shared image upload and Google AI Mode flow with the prompt `scan this qr code if found`. Local QR scanning does not start OCR or use a network service.
 - **Open savepath** opens `Pictures/squigit` in the OS file manager.
-- **Configuration** opens the Rune **OCR Models** page. Its model rows match the desktop model downloader, with Download, Cancel, hold-to-Delete, actual transfer progress, and an installed-model selector. English is bundled; Latin, Cyrillic, Korean, CJK, and Devanagari can be downloaded. The selected recognition model applies to the next scan. **Image hosting** selects the provider and manages API keys for image search. Captures default to Traditional with Auto OCR enabled; `--squiggle` and `--no-auto-ocr` provide capture overrides.
+- **Configuration** opens the Rune **General** page, with Play sounds, the installed OCR model selector, Open on startup, and Clear storage with its reclaimable size. **OCR Models** manages downloads with Download, Cancel, hold-to-Delete, and actual transfer progress. English is bundled; Latin, Cyrillic, Korean, CJK, and Devanagari can be downloaded. The selected recognition model applies to the next scan. **Image hosting** selects the provider and manages API keys for image search. Captures default to Traditional with Auto OCR enabled; `--squiggle` and `--no-auto-ocr` provide capture overrides.
 - **About** opens a separate Rune dialog. **Quit** stops the resident application and its active capture.
 
 Rust and Qt stay resident; the radial menu starts hidden, and actions switch UI inside the existing Qt process. Each capture briefly fades in a hint below the top edge to press and hold Esc to exit; hovering the top-center edge drops down an exit button. A short Esc tap replays the animated hint; holding Esc for 650 ms exits directly without replaying it, even if OCR text is selected. OCR runs on demand. Release builds compress the complete OCR runtime, including its default models and libraries, into the Rust executable and extract it atomically into a content-addressed cache when needed. Debug builds use the fully built runtime staged under `binaries` directly. OCR never searches PATH or uses an installed package. There is no chat, history, or persistent OCR worker.
@@ -28,9 +28,12 @@ Rune initializes the shared app data directory on launch. Settings use `config.t
 | Windows  | `%APPDATA%\Squigit`                                |
 | macOS    | `~/Library/Application Support/Squigit`            |
 
-`config.toml` contains the recognition model, hosting provider, and custom instance URL. Writes are atomic and synchronized across processes.
+`config.toml` contains the sound preference, recognition model, hosting provider, and custom instance URL. Writes are atomic and synchronized across processes.
 
 ```toml
+[general]
+play_sounds = true
+
 [ocr]
 selected_model = "pp-ocr-v5-en"
 
@@ -38,6 +41,12 @@ selected_model = "pp-ocr-v5-en"
 provider = "imgbb"
 chevereto_url = ""
 ```
+
+**Play sounds** controls both menu ticks and notification alerts, and takes effect on the next sound without restarting. Sound preferences are read on the audio worker threads, including when a separate configuration window changes them.
+
+**Open on startup** registers the current executable for the current user's OS login: an XDG autostart entry on Linux, a LaunchAgent on macOS, or a Run registry value on Windows. It starts Squigit in the tray with its windows and radial menu hidden. The switch reads the OS registration directly; it is off until enabled.
+
+**Clear storage** measures and removes the app's Qt disk cache, extracted Rust OCR runtime cache, and local `blob_storage` contents on a background thread. The button shows the reclaimable size and refreshes it after cleanup. Saved screenshots, downloaded OCR models, configuration, and encrypted API keys are preserved. Active OCR and image uploads hold shared storage leases; cleanup reports an active operation instead of deleting its files. Deleted runtime caches are recreated on demand. Debug builds keep the staged OCR runtime under `binaries` intact.
 
 Image hosting stores each provider's key in `auth.json` under the same app data root, encrypted with AES-256-GCM and a separately salted, provider-specific HKDF-SHA256 key. The random encryption master stays in the OS credential vault: Secret Service on Linux, Credential Manager on Windows, and Keychain on macOS. There are no accounts, profiles, SQLite databases, hosted-URL caches, or image deduplication. Each submission uploads its current capture.
 

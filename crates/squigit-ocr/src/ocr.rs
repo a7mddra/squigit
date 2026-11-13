@@ -15,7 +15,7 @@ pub fn recognize(
     if cancelled.load(Ordering::Acquire) {
         return Ok(Recognition::Cancelled);
     }
-    let binary = crate::sidecar::resolve_sidecar_path()?;
+    let (binary, _lease) = crate::sidecar::acquire_runtime()?;
     let selected = models.selected_model()?;
     let mut command = Command::new(&binary);
     if selected != crate::models::DEFAULT_OCR_MODEL_ID {

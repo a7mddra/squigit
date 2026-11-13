@@ -79,6 +79,7 @@ fn show_image_search_error(
     #[cfg(all(unix, not(target_os = "macos")))]
     notification
         .appname("Squigit")
+        .hint(notify_rust::Hint::SuppressSound(true))
         .hint(notify_rust::Hint::DesktopEntry("squigit".into()))
         .hint(notify_rust::Hint::Custom(
             "x-squigit-event-id".into(),
@@ -128,6 +129,7 @@ fn show_saved(path: &Path, alert: &Player) -> Result<()> {
         let icon = std::env::current_exe()?.with_file_name("squigit.png");
         notification
             .appname("Squigit")
+            .hint(notify_rust::Hint::SuppressSound(true))
             .icon(&icon.to_string_lossy())
             .hint(notify_rust::Hint::DesktopEntry("squigit".into()))
             .action("default", "Open in folder");
