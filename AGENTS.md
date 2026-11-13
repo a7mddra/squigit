@@ -295,8 +295,11 @@ Other capture contracts:
   notifications. On every app launch, check for a configured ImgBB key in the
   background without decrypting it or prompting for vault access. A missing
   key produces a persistent Set API action that opens Rune configuration
-  directly to Image hosting. Keep the same notification on missing-key image
-  action failures, suppressing duplicates while a notice is already active.
+  directly to Image hosting. Every missing-key image action failure must send
+  a fresh notification even when an earlier notice remains uncleared. Use a
+  random hidden action identifier and Linux event metadata to distinguish
+  occurrences; keep the visible text unchanged without counters. Each Set API
+  action must still open Image hosting.
 
 - Each successful dock export emits
   `{"type":"image_exported","session":"...","path":"..."}` on Qt stdout.

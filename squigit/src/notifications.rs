@@ -1,9 +1,6 @@
 use anyhow::Result;
 use notify_rust::{Notification, NotificationResponse};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-
-static MISSING_KEY_NOTICE: AtomicBool = AtomicBool::new(false);
 
 #[cfg(any(windows, target_os = "macos"))]
 const APP_ID: &str = "io.github.a7mddra.squigit";
@@ -52,15 +49,9 @@ pub fn image_search_error(
     missing_key: bool,
     settings: rune::AppHandle<crate::settings::App>,
 ) {
-    if missing_key && MISSING_KEY_NOTICE.swap(true, Ordering::AcqRel) {
-        return;
-    }
     std::thread::spawn(move || {
         if let Err(error) = show_image_search_error(&message, missing_key, settings) {
             eprintln!("[squigit] {message}; notification failed: {error:#}");
-        }
-        if missing_key {
-            MISSING_KEY_NOTICE.store(false, Ordering::Release);
         }
     });
 }
@@ -70,6 +61,7 @@ fn show_image_search_error(
     missing_key: bool,
     settings: rune::AppHandle<crate::settings::App>,
 ) -> Result<()> {
+    let event_id = format!("{:032x}", rand::random::<u128>());
     let mut notification = Notification::new();
     notification
         .summary(if missing_key {
@@ -81,13 +73,18 @@ fn show_image_search_error(
     #[cfg(all(unix, not(target_os = "macos")))]
     notification
         .appname("Squigit")
-        .hint(notify_rust::Hint::DesktopEntry("squigit".into()));
+        .hint(notify_rust::Hint::DesktopEntry("squigit".into()))
+        .hint(notify_rust::Hint::Custom(
+            "x-squigit-event-id".into(),
+            event_id.clone(),
+        ));
     #[cfg(windows)]
     notification.app_id(APP_ID);
     if missing_key {
+        let settings_action = format!("set-api-{event_id}");
         notification
             .timeout(notify_rust::Timeout::Never)
-            .action("set-api", "Set API");
+            .action(&settings_action, "Set API");
         #[cfg(all(unix, not(target_os = "macos")))]
         notification
             .hint(notify_rust::Hint::Resident(true))
@@ -95,7 +92,7 @@ fn show_image_search_error(
         let handle = notification.show()?;
         handle.wait_for_response(|response: &NotificationResponse| {
             if matches!(response, NotificationResponse::Default)
-                || matches!(response, NotificationResponse::Action(action) if action == "set-api")
+                || matches!(response, NotificationResponse::Action(action) if action == &settings_action)
             {
                 settings.update(|state, _| state.open_image_hosting());
                 settings.open();
