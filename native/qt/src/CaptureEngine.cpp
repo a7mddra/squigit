@@ -269,9 +269,9 @@ void CaptureEngine::acceptResponse(const QByteArray &line) {
   m_ocrCancelling = false;
   m_ocrFile.reset();
   if (response["cancelled"].toBool()) {
-    m_ocrFailed = false;
+    m_ocrFailed = true;
     m_requestId.clear();
-    m_ocrError.clear();
+    m_ocrError = "OCR cancelled";
     emit ocrChanged();
     return;
   }

@@ -13,6 +13,16 @@ FloatingCapsule {
     width: Math.min(availableWidth, controller.ocrReady ? actions.width + 16 : statusContent.implicitWidth + 48)
     height: controller.ocrReady ? 56 : Math.max(56, statusContent.implicitHeight + 24)
 
+    function actionEnabled(action) {
+        if (!controller.ocrReady)
+            return false;
+        if (action === "selectAll")
+            return controller.ocrVisible && controller.hasOcrText;
+        if (action === "visibility")
+            return true;
+        return (action === "copy" || action === "search" || action === "translate") && hasTextSelection;
+    }
+
     Behavior on width  {
         enabled: root.visible
         NumberAnimation {
@@ -81,7 +91,7 @@ FloatingCapsule {
         Text {
             id: statusLabel
             anchors.verticalCenter: parent.verticalCenter
-            text: root.controller.ocrFailed ? root.controller.ocrError : "Recognizing display text"
+            text: root.controller.ocrCancelling ? "Cancelling OCR" : root.controller.ocrFailed ? root.controller.ocrError : "Recognizing display text"
             width: Math.min(implicitWidth, Math.max(1, Math.min(720, root.availableWidth) - 48 - (root.controller.ocrFailed ? retryButton.width + statusContent.spacing : 22 + statusContent.spacing)))
             wrapMode: Text.Wrap
             color: "#1c1c1e"
@@ -144,7 +154,7 @@ FloatingCapsule {
                     id: button
                     required property string modelData
                     required property int index
-                    readonly property bool active: modelData === "selectAll" ? root.controller.ocrVisible && root.controller.hasOcrText : modelData === "visibility" || root.hasTextSelection
+                    readonly property bool active: root.actionEnabled(modelData)
                     width: Math.max(label.implicitWidth, reservedLabel.width) + 28
                     height: viewport.height
 

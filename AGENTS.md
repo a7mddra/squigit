@@ -156,13 +156,14 @@ or an `{error}` object on failure. Coordinates are physical pixels relative
 to the entire frozen image of the chosen display. Qt caches successful results
 and partitions characters by the current crop. `--auto-ocr` starts recognition
 on the first press that begins drawing a selection; subsequent OCR button clicks
-toggle visibility. Failed scans remain retryable.
+toggle visibility. Failed and cancelled scans remain retryable.
 
 Qt cancels a pending scan with `OCR_CANCEL:{"id":"..."}`. Rust terminates and
 reaps the OCR process tree before replying `{"id":"...","cancelled":true}`.
 Termination failures return `cancelled:false` and `error`. Qt ignores racing
-scan results while cancellation is pending. OCR cancellation remains internal
-to capture dismissal; there is no Cancel OCR button. Captures default to Traditional with Auto OCR enabled; the former capture preferences
+scan results while cancellation is pending. The OCR canvas context menu can
+cancel a pending scan without closing the overlay; the status capsule then
+offers Retry. There is no separate Cancel OCR button. Captures default to Traditional with Auto OCR enabled; the former capture preferences
 are not read. Configuration contains only OCR models and their selector. Unix process groups and
 Windows Job Objects contain each OCR job. Closing the overlay stops its jobs.
 Keep this contract in sync across both Rust crates and Qt.
@@ -218,11 +219,17 @@ from another display must restore keyboard input without toggling OCR.
 
 Other capture contracts:
 
-- Every scene uses the shared crop's icon-only Full screen action beside its
-  top-right handle. It sits outside on the dim overlay when space permits and
-  moves inside near the display edge. It expands the crop to the current
-  display through `setSelection`; resize handles stay visible within the
-  display bounds and remain available for manual resizing afterward.
+- Full screen lives in the annotation canvas context menus and the OCR/QR
+  canvas context menu; there is no visible crop button. It expands the shared
+  crop to the current display through `setSelection`. Resize handles stay
+  visible within the display bounds for manual resizing afterward.
+
+- While OCR scans, its canvas context menu offers Full screen and Cancel OCR.
+  Otherwise it offers Select all, Copy, Search, Translate, Hide/Show OCR, and
+  Full screen. Text actions use the floating dock's shared enablement rules.
+  Opening the menu preserves text selection, and its entries stay current as
+  recognition or selection state changes. It uses the shared annotation menu
+  style and closes on a tap of Escape.
 
 - OCR has no toast or separate scan/cancel toolbar. After crop selection, a
   bottom-centered capsule uses a 180 ms fade-in shared with QR, without blur

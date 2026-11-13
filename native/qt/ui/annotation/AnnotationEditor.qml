@@ -166,6 +166,8 @@ Item {
             document.paste();
         else if (action === "format")
             formatAt(contextX, contextY);
+        else if (action === "fullScreen")
+            selectionCrop.expandToDisplay();
         else {
             if (["rectangle", "arrow", "line", "ellipse", "fillRectangle", "fillEllipse"].indexOf(action) >= 0)
                 dock.shapeTool = action;
@@ -230,6 +232,11 @@ Item {
                         }, {
                             "label": "Format",
                             "action": "format"
+                        }, {
+                            "separator": true
+                        }, {
+                            "label": "Full screen",
+                            "action": "fullScreen"
                         }]);
             else
                 objectMenu.showAt(px, py, [{
@@ -242,11 +249,17 @@ Item {
                             "label": "Select all",
                             "shortcut": "Ctrl A",
                             "action": "selectAll"
+                        }, {
+                            "separator": true
+                        }, {
+                            "label": "Full screen",
+                            "action": "fullScreen"
                         }]);
         }
     }
 
     SelectionCrop {
+        id: selectionCrop
         z: 1
         controller: root.controller
         annotationMode: true

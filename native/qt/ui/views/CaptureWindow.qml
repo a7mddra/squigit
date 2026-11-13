@@ -25,6 +25,46 @@ Window {
     required property var controller
     property bool ownsInput: false
     readonly property bool annotationMode: controller.action === "snapshot" || controller.action === "ask-google"
+    readonly property var canvasMenuEntries: {
+        const fullScreen = {
+            "label": "Full screen",
+            "action": "fullScreen",
+            "enabled": !controller.qrPending
+        };
+        if (controller.action !== "ocr")
+            return [fullScreen];
+        if (controller.ocrPending)
+            return [fullScreen, {
+                    "label": "Cancel OCR",
+                    "action": "cancelOcr",
+                    "enabled": !controller.ocrCancelling
+                }];
+        return [{
+                "label": "Select all",
+                "shortcut": "Ctrl A",
+                "action": "selectAll",
+                "enabled": ocrDock.actionEnabled("selectAll")
+            }, {
+                "label": "Copy",
+                "shortcut": "Ctrl C",
+                "action": "copy",
+                "enabled": ocrDock.actionEnabled("copy")
+            }, {
+                "label": "Search",
+                "action": "search",
+                "enabled": ocrDock.actionEnabled("search")
+            }, {
+                "label": "Translate",
+                "action": "translate",
+                "enabled": ocrDock.actionEnabled("translate")
+            }, {
+                "label": controller.ocrVisible ? "Hide OCR" : "Show OCR",
+                "action": "visibility",
+                "enabled": ocrDock.actionEnabled("visibility")
+            }, {
+                "separator": true
+            }, fullScreen];
+    }
 
     function escapePressed() {
         exitHint.beginEscape();
@@ -34,19 +74,37 @@ Window {
         exitHint.replayHint();
         if (askComposer.dismissContextMenu())
             return;
+        if (canvasMenu.visible) {
+            canvasMenu.close();
+            return;
+        }
         if (annotationMode && annotationEditor.handleEscape())
             return;
         selectionCrop.clearTextSelection();
     }
 
-    function runOcrAction(action) {
+    function runCanvasAction(action) {
+        if (action === "fullScreen") {
+            selectionCrop.expandToDisplay();
+            return;
+        }
+        if (action === "cancelOcr") {
+            controller.cancelOcr();
+            return;
+        }
+        if (action === "retry") {
+            controller.toggleOcr();
+            return;
+        }
+        if (!ocrDock.actionEnabled(action))
+            return;
         if (action === "selectAll")
             selectionCrop.selectAllText();
         else if (action === "copy")
             selectionCrop.copyTextSelection();
         else if (action === "search" || action === "translate")
             controller.openOcrText(selectionCrop.selectedText, action === "translate");
-        else if (action === "visibility" || action === "retry")
+        else if (action === "visibility")
             controller.toggleOcr();
     }
 
@@ -139,6 +197,31 @@ Window {
             controller: root.controller
             visible: root.controller.hasSelection && !root.annotationMode
             enabled: !root.controller.qrPending
+            onCropInteractionStarted: canvasMenu.close()
+            onContextRequested: function (px, py) {
+                canvasMenu.showFor(px, py);
+            }
+        }
+
+        AnnotationMenu {
+            id: canvasMenu
+            property real anchorX: 0
+            property real anchorY: 0
+            entries: root.canvasMenuEntries
+            x: Math.max(8, Math.min(anchorX, parent.width - width - 8))
+            y: Math.max(8, Math.min(anchorY, parent.height - height - 8))
+
+            function showFor(px, py) {
+                if (visible)
+                    close();
+                anchorX = px;
+                anchorY = py;
+                open();
+            }
+
+            onTriggered: function (action) {
+                root.runCanvasAction(action);
+            }
         }
 
         QrStatusDock {
@@ -159,7 +242,7 @@ Window {
             x: Math.max(8, (root.width - width) / 2)
             y: Math.max(8, root.height - height - 48)
             onActionRequested: function (action) {
-                root.runOcrAction(action);
+                root.runCanvasAction(action);
             }
         }
 

@@ -25,6 +25,7 @@ class CaptureEngine : public QObject {
   Q_PROPERTY(QRectF selection READ selection NOTIFY selectionChanged)
   Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
   Q_PROPERTY(bool ocrPending READ ocrPending NOTIFY ocrChanged)
+  Q_PROPERTY(bool ocrCancelling READ ocrCancelling NOTIFY ocrChanged)
   Q_PROPERTY(bool ocrVisible READ ocrVisible NOTIFY ocrChanged)
   Q_PROPERTY(bool ocrReady READ ocrReady NOTIFY ocrChanged)
   Q_PROPERTY(bool hasOcrText READ hasOcrText NOTIFY ocrChanged)
@@ -51,6 +52,7 @@ public:
   QRectF selection() const { return m_selection; }
   bool hasSelection() const { return !m_selection.isEmpty(); }
   bool ocrPending() const { return m_ocrPending; }
+  bool ocrCancelling() const { return m_ocrCancelling; }
   bool ocrVisible() const { return m_ocrVisible; }
   bool ocrReady() const { return m_ocrReady; }
   bool hasOcrText() const;
@@ -74,6 +76,7 @@ public:
   Q_INVOKABLE bool copyImage(bool annotated = true);
   Q_INVOKABLE void askGoogle(const QString &prompt);
   Q_INVOKABLE void toggleOcr();
+  Q_INVOKABLE void cancelOcr();
   Q_INVOKABLE void scanQr();
   Q_INVOKABLE void setSelection(const QRectF &logicalRect);
   Q_INVOKABLE void copyText();
@@ -109,7 +112,6 @@ private:
   void select(const QRectF &logicalRect);
   void completeSelection();
   void recognize();
-  void cancelOcr();
   bool rebuildTextBoxes();
   QImage selectedImage(bool annotated = false) const;
   QString saveImage(const QImage &rgb, const QString &directory = {}) const;
