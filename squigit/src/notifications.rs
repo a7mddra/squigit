@@ -38,7 +38,7 @@ pub fn saved(path: PathBuf) {
 
 pub fn missing_image_hosting_key(settings: rune::AppHandle<crate::settings::App>) {
     image_search_error(
-        "Add your ImgBB API key in Image hosting to use Circle to Search, Ask Google, and online QR scanning.".into(),
+        "Set up your selected provider in Image hosting to use Circle to Search, Ask Google, and online QR scanning.".into(),
         true,
         settings,
     );

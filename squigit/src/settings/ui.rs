@@ -35,7 +35,7 @@ pub static INFO: rune::Icon = rune::Icon {
 };
 
 pub static EXTERNAL: rune::Icon = rune::Icon {
-    name: "open-imgbb-dashboard",
+    name: "open-provider-dashboard",
     view: 24.0,
     body: r#"<path d="M14 3h7v7m0-7L10 14m-1-9H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>"#,
 };

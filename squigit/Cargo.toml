@@ -13,6 +13,7 @@ base64 = "0.22"
 dirs = "5"
 fs2 = "0.4"
 hkdf = "0.12"
+hmac = "0.12"
 image = { version = "0.25", default-features = false, features = ["png"] }
 notify-rust = "4.19"
 keyring = "4.2"
@@ -24,6 +25,7 @@ rune = { git = "https://github.com/anomalyco/rune", rev = "2259d0c82af372dbb4d43
 rune-kit = { git = "https://github.com/anomalyco/rune", rev = "2259d0c82af372dbb4d43dfd5989f72c44d152be" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha1 = "0.10"
 sha2 = "0.10"
 squigit-ocr = { path = "../crates/squigit-ocr" }
 squigit-qt = { path = "../crates/squigit-qt" }

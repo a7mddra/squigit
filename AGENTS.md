@@ -288,13 +288,14 @@ Other capture contracts:
   `SQUIGIT_BLOB_DIR` and finish with `capture_finished` status `ask_google`,
   including `prompt` and `path`. Rust forwards both to the shared background
   submission in `squigit/src/image_search.rs`. Circle to Search also uses this
-  submission after saving and closing the overlay. Upload each capture to
-  ImgBB, then open Google Lens for Circle to Search, or AI Mode (`udm=50`)
+  submission after saving and closing the overlay. Upload each capture through
+  the selected provider in `squigit/src/image_hosting.rs`, then open Google Lens
+  for Circle to Search, or AI Mode (`udm=50`)
   with the encoded prompt for Ask Google and the QR fallback. Do not cache
   hosted URLs or deduplicate images. Upload and browser errors use OS
-  notifications. On every app launch, check for a configured ImgBB key in the
-  background without decrypting it or prompting for vault access. A missing
-  key produces a persistent Set API action that opens Rune configuration
+  notifications. On every app launch, check the selected provider's key and
+  custom endpoint in the background without decrypting keys or prompting for
+  vault access. Missing setup produces a persistent Set API action that opens Rune configuration
   directly to Image hosting. Every missing-key image action failure must send
   a fresh notification even when an earlier notice remains uncleared. Use a
   random hidden action identifier and Linux event metadata to distinguish
@@ -363,9 +364,24 @@ exist on launch and settings focus; model access also recreates missing data.
 Use `~/.config/squigit` (or `$XDG_CONFIG_HOME/squigit`) on Linux,
 `%APPDATA%\Squigit` on Windows, and `~/Library/Application Support/Squigit` on macOS.
 `SQUIGIT_CONFIG_DIR` overrides that root. `config.toml` contains
-`[ocr].selected_model`; do not restore the removed capture or demo preferences.
-The Image hosting page manages only ImgBB. `squigit/src/auth.rs` stores its key
-as an AES-256-GCM record in atomic, process-locked `auth.json`, with HKDF-SHA256
+`[ocr].selected_model` and `[hosting]` with `provider` and `chevereto_url`;
+do not restore the removed capture or demo preferences.
+The Image hosting page has exactly three rows: ImgBB first and selected by
+default, ImageKit second, and Custom / Chevereto third. Each has a two-line
+info tooltip, a setup link, and its own key field; Chevereto also needs an
+HTTPS instance URL. Row selection persists the active provider. Saving a key
+activates its provider. Never silently fall back to another provider.
+Bind Chevereto credentials to their normalized upload endpoint in the encrypted
+record's authenticated data. Changing the instance URL clears that key. Load
+credentials against the upload job's captured endpoint so concurrent settings
+changes cannot send a key to another host.
+`squigit/src/image_hosting.rs` uploads through each provider's HTTP API:
+ImgBB requests `expiration=600`, ImageKit requests private files and locally
+signs ten-minute delivery URLs with HMAC-SHA1, and Chevereto sends `X-API-Key`
+with `expiration=PT10M`. ImageKit originals remain in the account until deleted;
+URL expiry does not delete files. Do not claim zero retention.
+`squigit/src/auth.rs` stores the keys
+as AES-256-GCM records in atomic, process-locked `auth.json`, with provider-specific HKDF-SHA256
 and a random encryption master in the OS credential vault. There are no
 accounts, profiles, OAuth, or SQLite stores. Never fall back to plaintext or
 replace a missing encryption master while encrypted keys exist. Native reveal

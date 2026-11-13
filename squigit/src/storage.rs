@@ -6,10 +6,20 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 
+use crate::image_hosting::Provider;
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Config {
     pub ocr: OcrConfig,
+    pub hosting: HostingConfig,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
+pub struct HostingConfig {
+    pub provider: Provider,
+    pub chevereto_url: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

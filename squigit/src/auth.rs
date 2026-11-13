@@ -26,12 +26,11 @@ use std::{
 };
 use zeroize::{Zeroize, Zeroizing};
 
+use crate::image_hosting::Provider;
 use crate::storage::AppData;
 
 static REVEAL: Mutex<Option<RevealGrant>> = Mutex::new(None);
 const REVEAL_GRACE_PERIOD: Duration = Duration::from_secs(600);
-const KEY_DOMAIN: &[u8] = b"squigit/image-hosting/v1/imgbb/key";
-const AAD: &[u8] = b"squigit/image-hosting/v1/imgbb/aes-256-gcm/hkdf-sha256";
 
 struct RevealGrant {
     auth_path: PathBuf,
@@ -59,6 +58,32 @@ impl std::fmt::Debug for SecretString {
 #[serde(deny_unknown_fields)]
 struct AuthFile {
     imgbb: Option<Record>,
+    imagekit: Option<Record>,
+    chevereto: Option<Record>,
+}
+
+impl AuthFile {
+    fn record(&self, provider: Provider) -> &Option<Record> {
+        match provider {
+            Provider::Imgbb => &self.imgbb,
+            Provider::Imagekit => &self.imagekit,
+            Provider::Chevereto => &self.chevereto,
+        }
+    }
+
+    fn record_mut(&mut self, provider: Provider) -> &mut Option<Record> {
+        match provider {
+            Provider::Imgbb => &mut self.imgbb,
+            Provider::Imagekit => &mut self.imagekit,
+            Provider::Chevereto => &mut self.chevereto,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        Provider::ALL
+            .iter()
+            .all(|provider| self.record(*provider).is_none())
+    }
 }
 
 #[derive(Deserialize, Serialize)]
@@ -69,6 +94,7 @@ struct Record {
     salt: String,
     nonce: String,
     ciphertext: String,
+    endpoint: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -80,11 +106,6 @@ enum Cipher {
 enum Kdf {
     #[serde(rename = "hkdf-sha256")]
     HkdfSha256,
-}
-
-pub fn valid_key(value: &str) -> bool {
-    let value = value.trim();
-    value.len() == 32 && value.bytes().all(|byte| byte.is_ascii_alphanumeric())
 }
 
 fn access<T>(data: &AppData, action: impl FnOnce(&mut AuthFile) -> Result<T>) -> Result<T> {
@@ -119,12 +140,27 @@ fn persist(data: &AppData, auth: &AuthFile) -> Result<()> {
     Ok(())
 }
 
-fn derive(master: &[u8; 32], salt: &[u8]) -> Result<Zeroizing<[u8; 32]>> {
+fn derive(master: &[u8; 32], salt: &[u8], provider: Provider) -> Result<Zeroizing<[u8; 32]>> {
     let mut key = Zeroizing::new([0; 32]);
     Hkdf::<Sha256>::new(Some(salt), master)
-        .expand(KEY_DOMAIN, &mut *key)
+        .expand(
+            format!("squigit/image-hosting/v1/{}/key", provider.id()).as_bytes(),
+            &mut *key,
+        )
         .map_err(|_| anyhow::anyhow!("Could not derive the image-hosting encryption key"))?;
     Ok(key)
+}
+
+fn aad(provider: Provider, endpoint: Option<&str>) -> String {
+    let mut value = format!(
+        "squigit/image-hosting/v1/{}/aes-256-gcm/hkdf-sha256",
+        provider.id()
+    );
+    if let Some(endpoint) = endpoint {
+        value.push('\0');
+        value.push_str(endpoint);
+    }
+    value
 }
 
 fn decode(value: &str, length: Option<usize>) -> Result<Vec<u8>> {
@@ -139,27 +175,44 @@ fn decode(value: &str, length: Option<usize>) -> Result<Vec<u8>> {
     Ok(decoded)
 }
 
-pub fn configured(data: &AppData) -> Result<bool> {
-    access(data, |auth| Ok(auth.imgbb.is_some()))
+pub fn configured(data: &AppData, provider: Provider) -> Result<bool> {
+    access(data, |auth| Ok(auth.record(provider).is_some()))
 }
 
-pub fn save(data: &AppData, secret: &SecretString) -> Result<()> {
+pub fn status(data: &AppData) -> Result<[bool; 3]> {
+    access(data, |auth| {
+        Ok(Provider::ALL.map(|provider| auth.record(provider).is_some()))
+    })
+}
+
+pub fn save(
+    data: &AppData,
+    provider: Provider,
+    secret: &SecretString,
+    endpoint: &str,
+) -> Result<()> {
     let plaintext = secret.expose().trim();
     anyhow::ensure!(
-        valid_key(plaintext),
-        "Expected a 32-character ImgBB API key"
+        provider.valid_key(plaintext),
+        "Enter a valid {} API key",
+        provider.name()
     );
+    let endpoint = if provider == Provider::Chevereto {
+        Some(crate::image_hosting::custom_endpoint(endpoint)?.to_string())
+    } else {
+        None
+    };
     access(data, |auth| {
         let master = match vault::get()? {
             Some(master) => master,
-            None if auth.imgbb.is_none() => vault::create()?,
+            None if auth.is_empty() => vault::create()?,
             None => anyhow::bail!("The encryption master is missing from the OS vault. Your saved key was not changed."),
         };
         let mut salt = [0; 32];
         let mut nonce = [0; 12];
         OsRng.fill_bytes(&mut salt);
         OsRng.fill_bytes(&mut nonce);
-        let key = derive(&master, &salt)?;
+        let key = derive(&master, &salt, provider)?;
         let cipher = Aes256Gcm::new_from_slice(&key[..])
             .map_err(|_| anyhow::anyhow!("Could not initialize image-hosting encryption"))?;
         let ciphertext = cipher
@@ -167,33 +220,43 @@ pub fn save(data: &AppData, secret: &SecretString) -> Result<()> {
                 &Nonce::from(nonce),
                 Payload {
                     msg: plaintext.as_bytes(),
-                    aad: AAD,
+                    aad: aad(provider, endpoint.as_deref()).as_bytes(),
                 },
             )
             .map_err(|_| anyhow::anyhow!("Could not encrypt the image-hosting key"))?;
-        auth.imgbb = Some(Record {
+        *auth.record_mut(provider) = Some(Record {
             cipher: Cipher::Aes256Gcm,
             kdf: Kdf::HkdfSha256,
             salt: URL_SAFE_NO_PAD.encode(salt),
             nonce: URL_SAFE_NO_PAD.encode(nonce),
             ciphertext: URL_SAFE_NO_PAD.encode(ciphertext),
+            endpoint,
         });
         persist(data, auth)
     })
 }
 
-pub fn delete(data: &AppData) -> Result<()> {
+pub fn delete(data: &AppData, provider: Provider) -> Result<()> {
     access(data, |auth| {
-        auth.imgbb = None;
+        *auth.record_mut(provider) = None;
         persist(data, auth)
     })
 }
 
-pub fn load(data: &AppData) -> Result<Option<SecretString>> {
+pub fn load(data: &AppData, provider: Provider, endpoint: &str) -> Result<Option<SecretString>> {
+    let endpoint = if provider == Provider::Chevereto {
+        Some(crate::image_hosting::custom_endpoint(endpoint)?.to_string())
+    } else {
+        None
+    };
     access(data, |auth| {
-        let Some(record) = &auth.imgbb else {
+        let Some(record) = auth.record(provider) else {
             return Ok(None);
         };
+        anyhow::ensure!(
+            record.endpoint == endpoint,
+            "The image host changed. Save its API key again."
+        );
         let master = vault::get()?.context("The encryption master is missing from the OS vault")?;
         let salt = decode(&record.salt, Some(32))?;
         let nonce: [u8; 12] = decode(&record.nonce, Some(12))?
@@ -204,7 +267,7 @@ pub fn load(data: &AppData) -> Result<Option<SecretString>> {
             ciphertext.len() >= 16,
             "Invalid encrypted authentication tag"
         );
-        let key = derive(&master, &salt)?;
+        let key = derive(&master, &salt, provider)?;
         let cipher = Aes256Gcm::new_from_slice(&key[..])
             .map_err(|_| anyhow::anyhow!("Could not initialize image-hosting encryption"))?;
         let plaintext = cipher
@@ -212,7 +275,7 @@ pub fn load(data: &AppData) -> Result<Option<SecretString>> {
                 &Nonce::from(nonce),
                 Payload {
                     msg: &ciphertext,
-                    aad: AAD,
+                    aad: aad(provider, endpoint.as_deref()).as_bytes(),
                 },
             )
             .map_err(|_| {
@@ -225,25 +288,29 @@ pub fn load(data: &AppData) -> Result<Option<SecretString>> {
         })?;
         let secret = SecretString::new(value);
         anyhow::ensure!(
-            valid_key(secret.expose()),
+            provider.valid_key(secret.expose()),
             "The encrypted image-hosting key is invalid"
         );
         Ok(Some(secret))
     })
 }
 
-pub fn reveal(data: &AppData, window: Option<rune::WindowHandle>) -> Result<Option<SecretString>> {
+pub fn reveal(
+    data: &AppData,
+    provider: Provider,
+    window: Option<rune::WindowHandle>,
+) -> Result<Option<SecretString>> {
     let mut grant = REVEAL
         .try_lock()
         .map_err(|_| anyhow::anyhow!("API key authentication is already in progress"))?;
-    if !configured(data)? {
+    if !configured(data, provider)? {
         *grant = None;
         return Ok(None);
     }
     if grant.as_ref().is_some_and(|grant| {
         grant.auth_path == data.auth_path() && grant.verified_at.elapsed() < REVEAL_GRACE_PERIOD
     }) {
-        return load(data);
+        return load(data, provider, &data.load()?.hosting.chevereto_url);
     }
     *grant = None;
     #[cfg(target_os = "linux")]
@@ -254,7 +321,8 @@ pub fn reveal(data: &AppData, window: Option<rune::WindowHandle>) -> Result<Opti
     #[cfg(target_os = "macos")]
     let authorized = {
         let _ = window;
-        macos::authenticate("reveal your ImgBB API key").map_err(anyhow::Error::msg)?
+        macos::authenticate(&format!("reveal your {} API key", provider.name()))
+            .map_err(anyhow::Error::msg)?
     };
     #[cfg(target_os = "windows")]
     let authorized = window
@@ -262,7 +330,7 @@ pub fn reveal(data: &AppData, window: Option<rune::WindowHandle>) -> Result<Opti
         .with_raw_handle(|handle| match handle.as_raw() {
             rune::raw_window_handle::RawWindowHandle::Win32(handle) => windows::authenticate(
                 &(handle.hwnd.get() as usize).to_le_bytes(),
-                "reveal your ImgBB API key",
+                &format!("reveal your {} API key", provider.name()),
             ),
             _ => Err("Windows Hello requires a native Squigit window".to_owned()),
         })
@@ -277,7 +345,7 @@ pub fn reveal(data: &AppData, window: Option<rune::WindowHandle>) -> Result<Opti
         return Ok(None);
     }
     let verified_at = Instant::now();
-    let secret = load(data)?;
+    let secret = load(data, provider, &data.load()?.hosting.chevereto_url)?;
     if secret.is_some() {
         *grant = Some(RevealGrant {
             auth_path: data.auth_path(),

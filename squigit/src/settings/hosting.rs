@@ -4,32 +4,87 @@ use std::{
 };
 
 use rune::{col, el, icon, row, text, El, TextEdit, TextStyle, Tx, Waker, WindowHandle};
-use rune_kit::{Kit, TextInput};
+use rune_kit::{Kit, RadioItem, TextInput};
 
 use super::{ui, App};
-use crate::auth::{self, SecretString};
-use crate::storage::AppData;
+use crate::{
+    auth::{self, SecretString},
+    image_hosting::{self, Provider},
+    storage::{AppData, HostingConfig},
+};
 
 enum Outcome {
-    Status(bool),
-    Saved,
-    Deleted,
-    Revealed(u64, Option<SecretString>),
+    Status([bool; 3], HostingConfig),
+    Saved(Provider, HostingConfig),
+    Deleted(Provider),
+    Revealed(Provider, u64, Option<SecretString>),
+    Settings(HostingConfig),
 }
 
-pub(super) struct Hosting {
+struct KeyInput {
     edit: TextEdit,
     configured: bool,
     show: bool,
     revealed: bool,
     dirty: bool,
+    save_pending: bool,
     was_focused: bool,
+    generation: u64,
+    pending_reveal: Option<(SecretString, Instant)>,
+}
+
+impl KeyInput {
+    fn new() -> Self {
+        Self {
+            edit: TextEdit::new("").secure(),
+            configured: false,
+            show: false,
+            revealed: false,
+            dirty: false,
+            save_pending: false,
+            was_focused: false,
+            generation: 0,
+            pending_reveal: None,
+        }
+    }
+
+    fn clear(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.edit.replace_text("");
+        self.edit.set_revealed(false);
+        self.edit.focused = false;
+        self.show = false;
+        self.revealed = false;
+        self.dirty = false;
+        self.save_pending = false;
+        self.was_focused = false;
+        self.pending_reveal = None;
+    }
+
+    fn edit_changed(&mut self) {
+        if self.configured && !self.show && !self.revealed && !self.dirty {
+            self.edit.replace_text("");
+            return;
+        }
+        self.generation = self.generation.wrapping_add(1);
+        self.revealed = false;
+        self.dirty = true;
+        self.pending_reveal = None;
+    }
+}
+
+pub(super) struct Hosting {
+    keys: [KeyInput; 3],
+    config: HostingConfig,
+    endpoint: TextEdit,
+    endpoint_dirty: bool,
+    endpoint_was_focused: bool,
+    endpoint_pending: bool,
+    pending_provider: Option<Provider>,
     busy: bool,
     error: Option<String>,
-    generation: u64,
     pub(super) focused: bool,
     pub(super) window: Option<WindowHandle>,
-    pending_reveal: Option<(SecretString, Instant)>,
     sender: mpsc::Sender<Result<Outcome, String>>,
     receiver: mpsc::Receiver<Result<Outcome, String>>,
     waker: Option<Waker>,
@@ -39,18 +94,17 @@ impl Hosting {
     pub(super) fn new() -> Self {
         let (sender, receiver) = mpsc::channel();
         Self {
-            edit: TextEdit::new("").secure(),
-            configured: false,
-            show: false,
-            revealed: false,
-            dirty: false,
-            was_focused: false,
+            keys: std::array::from_fn(|_| KeyInput::new()),
+            config: HostingConfig::default(),
+            endpoint: TextEdit::new(""),
+            endpoint_dirty: false,
+            endpoint_was_focused: false,
+            endpoint_pending: false,
+            pending_provider: None,
             busy: false,
             error: None,
-            generation: 0,
             focused: false,
             window: None,
-            pending_reveal: None,
             sender,
             receiver,
             waker: None,
@@ -79,108 +133,189 @@ impl Hosting {
     }
 
     pub(super) fn refresh(&mut self) {
-        if !self.dirty && !self.revealed && self.pending_reveal.is_none() {
+        if !self.endpoint_dirty
+            && self
+                .keys
+                .iter()
+                .all(|key| !key.dirty && !key.revealed && key.pending_reveal.is_none())
+        {
             let error = self.error.take();
-            self.work(|| Ok(Outcome::Status(auth::configured(&AppData::open()?)?)));
+            self.work(|| {
+                let data = AppData::open()?;
+                Ok(Outcome::Status(auth::status(&data)?, data.load()?.hosting))
+            });
             self.error = error;
         }
     }
 
     pub(super) fn clear(&mut self) {
-        self.generation = self.generation.wrapping_add(1);
-        self.edit.replace_text("");
-        self.edit.set_revealed(false);
-        self.edit.focused = false;
-        self.show = false;
-        self.revealed = false;
-        self.dirty = false;
-        self.was_focused = false;
-        self.pending_reveal = None;
+        for key in &mut self.keys {
+            key.clear();
+        }
     }
 
     pub(super) fn blur(&mut self) {
         self.focused = false;
-        self.save();
-        self.edit.focused = false;
-        if self.show
-            || self.revealed
-            || self.dirty
-            || !self.edit.text.is_empty()
-            || self.pending_reveal.is_some()
-        {
-            self.clear();
+        for provider in Provider::ALL {
+            self.save(provider);
         }
-    }
-
-    fn edit_changed(&mut self) {
-        if self.configured && !self.show && !self.revealed && !self.dirty {
-            self.edit.replace_text("");
-            return;
-        }
-        self.generation = self.generation.wrapping_add(1);
-        self.revealed = false;
-        self.dirty = true;
-        self.error = None;
-        self.pending_reveal = None;
-    }
-
-    fn save(&mut self) {
-        if self.busy || !self.dirty || self.revealed {
-            return;
-        }
-        if !auth::valid_key(&self.edit.text) {
-            if !self.edit.focused {
-                self.clear();
+        self.save_endpoint();
+        for key in &mut self.keys {
+            key.edit.focused = false;
+            if key.show
+                || key.revealed
+                || key.dirty
+                || !key.edit.text.is_empty()
+                || key.pending_reveal.is_some()
+            {
+                key.clear();
             }
+        }
+        self.endpoint.focused = false;
+    }
+
+    fn apply_config(&mut self, config: HostingConfig) {
+        if !self.endpoint_dirty {
+            self.endpoint.replace_text(config.chevereto_url.clone());
+        }
+        if image_hosting::custom_endpoint(&config.chevereto_url).is_ok() {
+            let key = &mut self.keys[Provider::Chevereto.index()];
+            key.save_pending = key.dirty && !key.edit.focused;
+        }
+        self.config = config;
+    }
+
+    fn select(&mut self, provider: Provider) {
+        if self.busy || self.config.provider == provider {
             return;
         }
-        let secret = SecretString::new(self.edit.text.trim().to_owned());
-        self.dirty = false;
+        for current in Provider::ALL {
+            self.save(current);
+            if self.busy {
+                self.pending_provider = Some(provider);
+                return;
+            }
+        }
+        self.save_endpoint();
+        if self.busy {
+            self.pending_provider = Some(provider);
+            return;
+        }
+        self.clear();
         self.work(move || {
-            auth::save(&AppData::open()?, &secret)?;
-            Ok(Outcome::Saved)
+            let data = AppData::open()?;
+            data.update(|config| config.hosting.provider = provider)?;
+            Ok(Outcome::Settings(data.load()?.hosting))
         });
     }
 
-    fn reveal(&mut self) {
-        if self.busy {
+    fn save(&mut self, provider: Provider) {
+        let key = &mut self.keys[provider.index()];
+        if !key.dirty || key.revealed {
+            key.save_pending = false;
             return;
         }
-        if self.show {
-            if self.revealed {
-                self.clear();
-            } else {
-                self.show = false;
-                self.edit.set_revealed(false);
+        if self.busy {
+            key.save_pending = true;
+            return;
+        }
+        key.save_pending = false;
+        if !provider.valid_key(&key.edit.text) {
+            if !key.edit.focused {
+                key.clear();
             }
             return;
         }
-        if !self.edit.text.is_empty() {
-            self.show = true;
-            self.edit.set_revealed(true);
+        if provider == Provider::Chevereto
+            && image_hosting::custom_endpoint(&self.endpoint.text).is_err()
+        {
+            self.error =
+                Some("Enter your Chevereto HTTPS instance URL before saving its key.".into());
             return;
         }
-        if self.configured {
-            self.generation = self.generation.wrapping_add(1);
-            let generation = self.generation;
+        let secret = SecretString::new(key.edit.text.trim().to_owned());
+        let endpoint = self.endpoint.text.trim().to_owned();
+        key.dirty = false;
+        self.work(move || {
+            let data = AppData::open()?;
+            auth::save(&data, provider, &secret, &endpoint)?;
+            data.update(|config| {
+                config.hosting.provider = provider;
+                if provider == Provider::Chevereto {
+                    config.hosting.chevereto_url = endpoint;
+                }
+            })?;
+            Ok(Outcome::Saved(provider, data.load()?.hosting))
+        });
+    }
+
+    fn save_endpoint(&mut self) {
+        if !self.endpoint_dirty {
+            self.endpoint_pending = false;
+            return;
+        }
+        if self.busy {
+            self.endpoint_pending = true;
+            return;
+        }
+        self.endpoint_pending = false;
+        let endpoint = self.endpoint.text.trim().to_owned();
+        if !endpoint.is_empty() && image_hosting::custom_endpoint(&endpoint).is_err() {
+            self.error =
+                Some("Enter an HTTPS instance URL without credentials or query parameters.".into());
+            return;
+        }
+        self.endpoint_dirty = false;
+        self.work(move || {
+            let data = AppData::open()?;
+            let previous = data.load()?.hosting.chevereto_url;
+            if image_hosting::custom_endpoint(&previous).ok()
+                != image_hosting::custom_endpoint(&endpoint).ok()
+            {
+                auth::delete(&data, Provider::Chevereto)?;
+            }
+            data.update(|config| config.hosting.chevereto_url = endpoint)?;
+            Ok(Outcome::Status(auth::status(&data)?, data.load()?.hosting))
+        });
+    }
+
+    fn reveal(&mut self, provider: Provider) {
+        if self.busy {
+            return;
+        }
+        let key = &mut self.keys[provider.index()];
+        if key.show {
+            if key.revealed {
+                key.clear();
+            } else {
+                key.show = false;
+                key.edit.set_revealed(false);
+            }
+        } else if !key.edit.text.is_empty() {
+            key.show = true;
+            key.edit.set_revealed(true);
+        } else if key.configured {
+            key.generation = key.generation.wrapping_add(1);
+            let generation = key.generation;
             let window = self.window.clone();
             self.work(move || {
                 Ok(Outcome::Revealed(
+                    provider,
                     generation,
-                    auth::reveal(&AppData::open()?, window)?,
+                    auth::reveal(&AppData::open()?, provider, window)?,
                 ))
             });
         }
     }
 
-    fn delete(&mut self) {
+    fn delete(&mut self, provider: Provider) {
         if self.busy {
             return;
         }
-        self.clear();
-        self.work(|| {
-            auth::delete(&AppData::open()?)?;
-            Ok(Outcome::Deleted)
+        self.keys[provider.index()].clear();
+        self.work(move || {
+            auth::delete(&AppData::open()?, provider)?;
+            Ok(Outcome::Deleted(provider))
         });
     }
 
@@ -189,60 +324,98 @@ impl Hosting {
         while let Ok(outcome) = self.receiver.try_recv() {
             self.busy = false;
             match outcome {
-                Ok(Outcome::Status(configured)) => self.configured = configured,
-                Ok(Outcome::Saved) => {
-                    self.configured = true;
-                    self.clear();
+                Ok(Outcome::Status(status, config)) => {
+                    for provider in Provider::ALL {
+                        self.keys[provider.index()].configured = status[provider.index()];
+                    }
+                    self.apply_config(config);
                 }
-                Ok(Outcome::Deleted) => {
-                    self.configured = false;
-                    self.clear();
+                Ok(Outcome::Saved(provider, config)) => {
+                    let key = &mut self.keys[provider.index()];
+                    key.configured = true;
+                    key.clear();
+                    self.apply_config(config);
                 }
-                Ok(Outcome::Revealed(generation, secret))
-                    if generation == self.generation && active =>
-                {
-                    self.pending_reveal = secret.map(|secret| (secret, Instant::now()));
+                Ok(Outcome::Deleted(provider)) => {
+                    let key = &mut self.keys[provider.index()];
+                    key.configured = false;
+                    key.clear();
                 }
-                Ok(Outcome::Revealed(_, _)) => {}
+                Ok(Outcome::Revealed(provider, generation, secret)) => {
+                    let key = &mut self.keys[provider.index()];
+                    if key.generation == generation && active {
+                        key.pending_reveal = secret.map(|secret| (secret, Instant::now()));
+                    }
+                }
+                Ok(Outcome::Settings(config)) => self.apply_config(config),
                 Err(error) => {
                     self.error = Some(error);
-                    if !self.focused {
-                        self.clear();
-                    } else if !self.revealed && !self.edit.text.is_empty() {
-                        self.dirty = true;
+                    self.pending_provider = None;
+                    for key in &mut self.keys {
+                        if !self.focused {
+                            key.clear();
+                        } else if !key.revealed && !key.edit.text.is_empty() {
+                            key.dirty = true;
+                        }
                     }
                 }
             }
             changed = true;
         }
-        if let Some((_, since)) = &self.pending_reveal {
-            if since.elapsed() >= Duration::from_secs(5) || !active {
-                self.pending_reveal = None;
-            } else if self.focused {
-                if let Some((secret, _)) = self.pending_reveal.take() {
-                    self.edit.replace_text(secret.expose());
-                    self.edit.set_revealed(true);
-                    self.edit.focused = true;
-                    self.show = true;
-                    self.revealed = true;
-                    tx.focus("input", false);
+        for provider in Provider::ALL {
+            let key = &mut self.keys[provider.index()];
+            if let Some((_, since)) = &key.pending_reveal {
+                if since.elapsed() >= Duration::from_secs(5) || !active {
+                    key.pending_reveal = None;
+                } else if self.focused {
+                    if let Some((secret, _)) = key.pending_reveal.take() {
+                        key.edit.replace_text(secret.expose());
+                        key.edit.set_revealed(true);
+                        key.edit.focused = true;
+                        key.show = true;
+                        key.revealed = true;
+                        tx.focus(provider.field_key(), false);
+                    }
+                } else {
+                    tx.wake_after(Duration::from_millis(50));
                 }
-            } else {
+                changed = true;
+            }
+            if active && key.was_focused && !key.edit.focused {
+                if key.revealed {
+                    key.clear();
+                } else {
+                    key.show = false;
+                    key.edit.set_revealed(false);
+                    key.save_pending = key.dirty;
+                }
+                changed = true;
+            }
+            key.was_focused = key.edit.focused;
+            if active && key.edit.focused {
                 tx.wake_after(Duration::from_millis(50));
             }
-            changed = true;
-        }
-        if active && self.was_focused && !self.edit.focused {
-            if self.revealed {
-                self.clear();
-            } else {
-                self.save();
+            if key.save_pending && !self.busy {
+                self.save(provider);
+                changed = true;
             }
+        }
+        if active && self.endpoint.focused {
+            tx.wake_after(Duration::from_millis(50));
+        }
+        if active && self.endpoint_was_focused && !self.endpoint.focused {
+            self.endpoint_pending = self.endpoint_dirty;
+        }
+        self.endpoint_was_focused = self.endpoint.focused;
+        if self.endpoint_pending && !self.busy {
+            self.save_endpoint();
             changed = true;
         }
-        self.was_focused = self.edit.focused;
-        if active && self.edit.focused {
-            tx.wake_after(Duration::from_millis(50));
+        if !self.busy {
+            if let Some(provider) = self.pending_provider.take() {
+                self.select(provider);
+                changed = true;
+            }
         }
         changed
     }
@@ -271,56 +444,61 @@ fn action(
         .on_press_tx(press)
 }
 
-pub(super) fn page(s: &App, k: &Kit, hair: f32) -> El {
+fn key_field(s: &App, k: &Kit, provider: Provider) -> El {
     let h = &s.hosting;
+    let index = provider.index();
+    let key = &h.keys[index];
     let mut actions = row().gap(2.0).center_y().child(action(
         k,
         "reveal",
-        if h.show { &ui::EYE } else { &ui::EYE_OFF },
+        if key.show { &ui::EYE } else { &ui::EYE_OFF },
         if h.busy {
             "Please wait"
-        } else if h.show {
+        } else if key.show {
             "Hide key"
         } else {
             "Show key"
         },
         h.busy,
-        |s, tx| {
-            s.hosting.reveal();
-            s.hosting.edit.focused = true;
-            tx.focus("input", false);
+        move |s, tx| {
+            s.hosting.reveal(provider);
+            s.hosting.keys[index].edit.focused = true;
+            tx.focus(provider.field_key(), false);
         },
     ));
-    if h.configured {
+    if key.configured {
         actions = actions.child(action(
             k,
             "delete",
             &ui::TRASH,
             "Delete key",
             h.busy,
-            |s, _| s.hosting.delete(),
+            move |s, _| s.hosting.delete(provider),
         ));
     }
-    let field = TextInput::new(&h.edit)
+    TextInput::new(&key.edit)
         .secure()
-        .revealed(h.show)
-        .label("ImgBB API key")
-        .placeholder(if h.configured {
-            "•".repeat(32)
+        .revealed(key.show)
+        .label(format!("{} API key", provider.name()))
+        .placeholder(if key.configured {
+            "•".repeat(if provider == Provider::Imgbb { 32 } else { 24 })
+        } else if provider == Provider::Imagekit {
+            "Private API key".into()
         } else {
-            "Enter your API key".into()
+            "API key".into()
         })
         .width(Some(255.0))
         .large()
         .trailing(actions)
         .disabled(h.busy)
-        .invalid(h.dirty && !h.edit.text.is_empty() && !auth::valid_key(&h.edit.text))
-        .on_edit(|s: &mut App| &mut s.hosting.edit)
-        .on_key(|s: &mut App, event, _| {
-            s.hosting.configured
-                && !s.hosting.show
-                && !s.hosting.revealed
-                && !s.hosting.dirty
+        .invalid(key.dirty && !key.edit.text.is_empty() && !provider.valid_key(&key.edit.text))
+        .on_edit(move |s: &mut App| &mut s.hosting.keys[index].edit)
+        .on_key(move |s: &mut App, event, _| {
+            let key = &s.hosting.keys[index];
+            key.configured
+                && !key.show
+                && !key.revealed
+                && !key.dirty
                 && matches!(
                     event.key,
                     rune::Key::Text(_)
@@ -329,24 +507,124 @@ pub(super) fn page(s: &App, k: &Kit, hair: f32) -> El {
                         | rune::Key::Command('v' | 'x' | 'z')
                 )
         })
-        .on_change(|s: &mut App, tx| {
-            s.hosting.edit_changed();
+        .on_change(move |s: &mut App, tx| {
+            s.hosting.keys[index].edit_changed();
+            s.hosting.error = None;
             tx.wake_after(Duration::from_millis(50));
         })
-        .on_submit(|s: &mut App, _| s.hosting.save())
+        .on_submit(move |s: &mut App, _| s.hosting.save(provider))
         .build(k)
-        .key("imgbb-key");
-    let provider = row().w_full().min_h(76.0).gap(16.0).center_y()
-        .child(col().grow(1.0).shrink().gap(6.0)
-            .child(row().gap(6.0).center_y().child(text("ImgBB").font(k.ty.ui_medium).color(k.c.text_base))
-                .child(icon(&ui::INFO, 14.0).color(k.c.icon_muted).help("ImgBB creates public image URLs for Google Lens and AI Mode. Avoid uploading sensitive images.")))
-            .child(text("Use your ImgBB key to get a free public image link.").font(k.ty.small).color(k.c.text_muted)))
-        .child(field);
+        .key(provider.field_key())
+        .shrink()
+        .min_w(168.0)
+}
+
+fn provider_row(s: &App, k: &Kit, provider: Provider) -> El {
+    let h = &s.hosting;
+    let info = el()
+        .size(20.0, 20.0)
+        .center()
+        .focusable(true)
+        .label(format!("About {}", provider.name()))
+        .help(provider.help())
+        .child(icon(&ui::INFO, 14.0).color(k.c.icon_muted));
+    let mut detail = col().grow(1.0).shrink().gap(6.0).child(
+        row()
+            .gap(2.0)
+            .center_y()
+            .child(
+                RadioItem::new(provider.name(), h.config.provider == provider)
+                    .disabled(h.busy)
+                    .on_select(move |s: &mut App| s.hosting.select(provider))
+                    .build(k),
+            )
+            .child(info),
+    );
+    let link_label = match provider {
+        Provider::Imgbb => "Get a free API key",
+        Provider::Imagekit => "Get your private key",
+        Provider::Chevereto => "API setup guide",
+    };
+    detail = detail.child(
+        row()
+            .gap(4.0)
+            .center_y()
+            .pl(24.0)
+            .role("link")
+            .label(link_label)
+            .focusable(true)
+            .help(provider.dashboard())
+            .child(text(link_label).font(k.ty.small).color(k.c.text_muted))
+            .child(icon(&ui::EXTERNAL, 12.0).color(k.c.icon_muted))
+            .on_press(move |s: &mut App| {
+                if let Err(error) = opener::open_browser(provider.dashboard()) {
+                    s.hosting.error = Some(error.to_string());
+                }
+            }),
+    );
+    let mut fields = col()
+        .shrink()
+        .min_w(168.0)
+        .gap(8.0)
+        .child(key_field(s, k, provider));
+    if provider == Provider::Chevereto {
+        fields = fields.child(
+            TextInput::new(&h.endpoint)
+                .label("Chevereto instance URL")
+                .placeholder("https://images.example.com")
+                .width(Some(255.0))
+                .large()
+                .disabled(h.busy)
+                .invalid(
+                    h.endpoint_dirty
+                        && !h.endpoint.text.is_empty()
+                        && image_hosting::custom_endpoint(&h.endpoint.text).is_err(),
+                )
+                .on_edit(|s: &mut App| &mut s.hosting.endpoint)
+                .on_change(|s: &mut App, tx| {
+                    s.hosting.endpoint_dirty = true;
+                    s.hosting.error = None;
+                    tx.wake_after(Duration::from_millis(50));
+                })
+                .on_submit(|s: &mut App, _| s.hosting.save_endpoint())
+                .build(k)
+                .key("chevereto-url")
+                .help("Changing the instance URL clears its saved API key.")
+                .shrink()
+                .min_w(168.0),
+        );
+    }
+    row()
+        .key(provider.id())
+        .w_full()
+        .min_h(76.0)
+        .py(14.0)
+        .gap(12.0)
+        .center_y()
+        .child(detail)
+        .child(fields)
+}
+
+pub(super) fn page(s: &App, k: &Kit, hair: f32) -> El {
+    let mut card = col()
+        .w_full()
+        .px(16.0)
+        .fill(k.c.layer_01)
+        .radius(16.0)
+        .border(hair, k.c.border_muted)
+        .role("radiogroup")
+        .label("Image hosting provider");
+    for provider in Provider::ALL {
+        if provider != Provider::Imgbb {
+            card = card.child(el().h(hair).fill(k.c.border_muted).a11y_hidden());
+        }
+        card = card.child(provider_row(s, k, provider));
+    }
     let mut body = col()
         .key("image-hosting")
         .w_full()
         .max_w(660.0)
-        .gap(32.0)
+        .gap(24.0)
         .child(
             text("Image hosting")
                 .font(TextStyle::new(28.0, 450.0))
@@ -355,41 +633,14 @@ pub(super) fn page(s: &App, k: &Kit, hair: f32) -> El {
         .child(
             col()
                 .gap(8.0)
-                .child(text("API key").font(k.ty.ui_medium).color(k.c.text_base))
                 .child(
-                    text("Bring your own key for image hosting.")
+                    text("Choose a provider and add your API key.")
                         .font(k.ty.small)
                         .color(k.c.text_muted),
                 )
-                .child(
-                    el().px(16.0)
-                        .fill(k.c.layer_01)
-                        .radius(16.0)
-                        .border(hair, k.c.border_muted)
-                        .child(provider),
-                ),
-        )
-        .child(
-            row()
-                .role("link")
-                .label("Get a free ImgBB API key")
-                .focusable(true)
-                .help("https://api.imgbb.com/")
-                .gap(6.0)
-                .center_y()
-                .child(
-                    text("Get a free ImgBB API key")
-                        .font(k.ty.ui_medium)
-                        .color(k.c.text_base),
-                )
-                .child(icon(&ui::EXTERNAL, 14.0).color(k.c.icon_muted))
-                .on_press(|s: &mut App| {
-                    if let Err(error) = opener::open_browser("https://api.imgbb.com/") {
-                        s.hosting.error = Some(error.to_string());
-                    }
-                }),
+                .child(card),
         );
-    if let Some(error) = &h.error {
+    if let Some(error) = &s.hosting.error {
         body = body.child(
             text(error.clone())
                 .role("alert")

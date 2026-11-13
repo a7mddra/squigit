@@ -2,6 +2,7 @@
 
 mod about;
 mod auth;
+mod image_hosting;
 mod image_search;
 mod notifications;
 mod settings;
