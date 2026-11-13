@@ -364,7 +364,12 @@ and a random encryption master in the OS credential vault. There are no
 accounts, profiles, OAuth, or SQLite stores. Never fall back to plaintext or
 replace a missing encryption master while encrypted keys exist. Native reveal
 authentication uses Polkit on Linux, Windows Hello on Windows, and Local
-Authentication on macOS. Clear plaintext UI buffers on field/window blur,
+Authentication on macOS. A successful authenticated reveal grants 600 seconds
+of repeat reveals for the same app data store without another prompt. Keep
+this grant only in memory, start its monotonic timer after native authentication,
+and do not extend it on repeat reveals or reset it when hiding settings.
+Failed or cancelled authentication does not grant a grace period.
+Clear plaintext UI buffers on field/window blur,
 page changes, and close. Linux releases include `squigit/resources/polkit`;
 the installer copies the reveal policy to the system policy directory.
 

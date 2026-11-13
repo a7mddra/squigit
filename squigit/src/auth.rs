@@ -17,14 +17,26 @@ use hkdf::Hkdf;
 use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use std::{fs, io::Write, sync::Mutex};
+use std::{
+    fs,
+    io::Write,
+    path::PathBuf,
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::storage::AppData;
 
-static REVEAL: Mutex<()> = Mutex::new(());
+static REVEAL: Mutex<Option<RevealGrant>> = Mutex::new(None);
+const REVEAL_GRACE_PERIOD: Duration = Duration::from_secs(600);
 const KEY_DOMAIN: &[u8] = b"squigit/image-hosting/v1/imgbb/key";
 const AAD: &[u8] = b"squigit/image-hosting/v1/imgbb/aes-256-gcm/hkdf-sha256";
+
+struct RevealGrant {
+    auth_path: PathBuf,
+    verified_at: Instant,
+}
 
 pub struct SecretString(Zeroizing<String>);
 
@@ -221,12 +233,19 @@ pub fn load(data: &AppData) -> Result<Option<SecretString>> {
 }
 
 pub fn reveal(data: &AppData, window: Option<rune::WindowHandle>) -> Result<Option<SecretString>> {
-    let _guard = REVEAL
+    let mut grant = REVEAL
         .try_lock()
         .map_err(|_| anyhow::anyhow!("API key authentication is already in progress"))?;
     if !configured(data)? {
+        *grant = None;
         return Ok(None);
     }
+    if grant.as_ref().is_some_and(|grant| {
+        grant.auth_path == data.auth_path() && grant.verified_at.elapsed() < REVEAL_GRACE_PERIOD
+    }) {
+        return load(data);
+    }
+    *grant = None;
     #[cfg(target_os = "linux")]
     let authorized = {
         let _ = window;
@@ -257,5 +276,13 @@ pub fn reveal(data: &AppData, window: Option<rune::WindowHandle>) -> Result<Opti
     if !authorized {
         return Ok(None);
     }
-    load(data)
+    let verified_at = Instant::now();
+    let secret = load(data)?;
+    if secret.is_some() {
+        *grant = Some(RevealGrant {
+            auth_path: data.auth_path(),
+            verified_at,
+        });
+    }
+    Ok(secret)
 }
