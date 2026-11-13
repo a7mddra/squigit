@@ -239,8 +239,9 @@ Other capture contracts:
   Success animates its width to fit Select all, Copy, Search, Open in Translate,
   and Hide OCR. Errors appear
   inside the capsule with Retry. Copy, Search, and Translate require text
-  selection. Successful clipboard actions temporarily change Copy to Copied,
-  including repeated actions and shortcuts. Hide OCR changes to Show OCR while
+  selection. Clicking the dock's Copy button temporarily changes Copy to
+  Copied; repeated dock clicks restart the feedback. Context-menu and keyboard
+  copies are silent. Hide OCR changes to Show OCR while
   results are hidden. Action buttons stay mounted across state changes to
   preserve hover. OCR, Snapshot, and Ask Google use the same active crop-border
   and crop-handle MouseAreas, with fixed native cursor shapes. OCR text hit

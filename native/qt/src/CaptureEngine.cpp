@@ -367,13 +367,11 @@ void CaptureEngine::copyText() {
   const auto text = lines.join("\n");
   if (text.isEmpty()) return;
   QGuiApplication::clipboard()->setText(text);
-  emit ocrTextCopied();
 }
 
 void CaptureEngine::copyTextSelection(const QString &text) {
   if (m_retired || !m_ocrVisible || !hasSelection() || text.isEmpty()) return;
   QGuiApplication::clipboard()->setText(text);
-  emit ocrTextCopied();
 }
 
 void CaptureEngine::openOcrText(const QString &text, bool translate) {

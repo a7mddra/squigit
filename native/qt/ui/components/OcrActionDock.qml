@@ -45,13 +45,6 @@ FloatingCapsule {
         }
     }
 
-    Connections {
-        target: root.controller
-        function onOcrTextCopied() {
-            root.copied = true;
-            copyFeedback.restart();
-        }
-    }
     Timer {
         id: copyFeedback
         interval: 1600
@@ -192,7 +185,13 @@ FloatingCapsule {
                         enabled: button.active
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.actionRequested(button.modelData)
+                        onClicked: {
+                            root.actionRequested(button.modelData);
+                            if (button.modelData === "copy") {
+                                root.copied = true;
+                                copyFeedback.restart();
+                            }
+                        }
                     }
                 }
             }

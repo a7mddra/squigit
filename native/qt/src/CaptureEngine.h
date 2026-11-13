@@ -93,7 +93,6 @@ signals:
   void displayIndexChanged();
   void selectionChanged();
   void ocrChanged();
-  void ocrTextCopied();
   void qrChanged();
 
 private:
