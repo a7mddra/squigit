@@ -11,11 +11,13 @@
 #include <QtQml/qqml.h>
 #include <memory>
 #include "actions/Actions.h"
+#include "annotation/AnnotationDocument.h"
 
 class CaptureEngine : public QObject {
   Q_OBJECT
   QML_ELEMENT
   QML_SINGLETON
+  Q_PROPERTY(AnnotationDocument *annotations READ annotations CONSTANT)
   Q_PROPERTY(QUrl backgroundSource READ backgroundSource NOTIFY backgroundSourceChanged)
   Q_PROPERTY(QString captureMode READ captureMode WRITE setCaptureMode NOTIFY captureModeChanged)
   Q_PROPERTY(QString action READ action CONSTANT)
@@ -58,6 +60,7 @@ public:
   QString qrStatus() const { return m_qrStatus; }
   qreal pixelRatio() const { return m_devicePixelRatio; }
   void acceptResponse(const QByteArray &line);
+  AnnotationDocument *annotations() { return &m_annotations; }
 
   Q_INVOKABLE QString ensureBackgroundFileFallback();
   Q_INVOKABLE void cancel();
@@ -66,6 +69,8 @@ public:
   Q_INVOKABLE void finishSquiggleCapture(const QVariantList &points);
   Q_INVOKABLE void finishTraditionalCapture(QPointF start, QPointF end);
   Q_INVOKABLE void save();
+  Q_INVOKABLE void exportImage(bool annotated = true);
+  Q_INVOKABLE void copyImage(bool annotated = true);
   Q_INVOKABLE void askGoogle(const QString &prompt);
   Q_INVOKABLE void toggleOcr();
   Q_INVOKABLE void scanQr();
@@ -100,9 +105,10 @@ private:
   void completeSelection();
   void recognize();
   bool rebuildTextBoxes();
-  QImage selectedImage() const;
-  QString saveImage(const QImage &rgb) const;
+  QImage selectedImage(bool annotated = false) const;
+  QString saveImage(const QImage &rgb, const QString &directory = {}) const;
   void fail();
+  AnnotationDocument m_annotations;
   QImage m_backgroundImage;
   std::unique_ptr<QTemporaryFile> m_backgroundFile;
   std::unique_ptr<QTemporaryFile> m_ocrFile;

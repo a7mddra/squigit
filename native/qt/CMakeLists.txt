@@ -21,7 +21,7 @@ endif()
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui)
 find_package(Qt6 6.4 REQUIRED COMPONENTS Quick)
-find_package(Qt6 6.4 REQUIRED COMPONENTS Qml)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Qml Svg)
 if(UNIX AND NOT APPLE)
     find_package(Qt6 6.4 REQUIRED COMPONENTS DBus)
 endif()
@@ -43,6 +43,12 @@ set(SOURCES
     src/CaptureEngine.h
     src/CaptureRuntime.cpp
     src/CaptureRuntime.h
+    src/annotation/AnnotationDocument.cpp
+    src/annotation/AnnotationDocument.h
+    src/annotation/AnnotationCanvas.cpp
+    src/annotation/AnnotationCanvas.h
+    src/annotation/StrokeSmoother.cpp
+    src/annotation/StrokeSmoother.h
     src/Protocol.h
     src/DisplayGuard.cpp
     src/DisplayGuard.h
@@ -110,7 +116,7 @@ target_include_directories(squigit-qt PRIVATE
 
 target_link_libraries(squigit-qt PRIVATE
     Qt6::Core Qt6::Gui
-    Qt6::Quick Qt6::Qml
+    Qt6::Quick Qt6::Qml Qt6::Svg
     ${PLATFORM_LIBS}
 )
 

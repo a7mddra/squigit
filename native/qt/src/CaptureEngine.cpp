@@ -14,6 +14,7 @@
 #include <QLineF>
 #include <QTextBoundaryFinder>
 #include <QTimer>
+#include <QStandardPaths>
 #include <QUuid>
 #include <cmath>
 #include <iostream>
@@ -39,6 +40,8 @@ void CaptureEngine::retire() {
 void CaptureEngine::setBackgroundImage(const QImage &image,
                                        qreal devicePixelRatio) {
   m_backgroundImage = image;
+  if (m_action.id == "snapshot" || m_action.id == "ask-google")
+    m_annotations.setImage(image);
   m_devicePixelRatio = devicePixelRatio > 0 ? devicePixelRatio : 1.0;
   m_backgroundSource =
       QUrl(QString("image://backgrounds/%1").arg(m_displayIndex));
@@ -352,10 +355,11 @@ void CaptureEngine::copyText() {
   QGuiApplication::clipboard()->setText(lines.join("\n"));
 }
 
-QString CaptureEngine::saveImage(const QImage &rgb) const {
-  if (m_action.outputDirectory.isEmpty())
+QString CaptureEngine::saveImage(const QImage &rgb, const QString &directory) const {
+  const QString outputDirectory = directory.isEmpty() ? m_action.outputDirectory : directory;
+  if (outputDirectory.isEmpty())
     return {};
-  const QDir base(m_action.outputDirectory);
+  const QDir base(outputDirectory);
   if (!base.exists() && !base.mkpath(".")) {
     return QString();
   }
@@ -375,15 +379,16 @@ QString CaptureEngine::saveImage(const QImage &rgb) const {
   return path;
 }
 
-QImage CaptureEngine::selectedImage() const {
+QImage CaptureEngine::selectedImage(bool annotated) const {
   if (!hasSelection())
     return QImage();
   const int left = qFloor(m_selection.left() * m_devicePixelRatio);
   const int top = qFloor(m_selection.top() * m_devicePixelRatio);
   const int right = qCeil(m_selection.right() * m_devicePixelRatio);
   const int bottom = qCeil(m_selection.bottom() * m_devicePixelRatio);
-  QImage image = m_backgroundImage.copy(QRect(left, top, right - left, bottom - top)
-                                           .intersected(m_backgroundImage.rect()))
+  const QImage source = annotated ? m_annotations.flattened() : m_backgroundImage;
+  QImage image = source.copy(QRect(left, top, right - left, bottom - top)
+                                           .intersected(source.rect()))
                      .convertToFormat(QImage::Format_RGB888);
   image.setDevicePixelRatio(1.0);
   return image;
@@ -391,7 +396,10 @@ QImage CaptureEngine::selectedImage() const {
 
 void CaptureEngine::save() {
   if (!hasSelection()) return;
-  const QString savedPath = saveImage(selectedImage());
+  m_annotations.finishTextEditing();
+  m_annotations.cancelStroke();
+  const bool annotated = m_action.id == "snapshot" || m_action.id == "ask-google";
+  const QString savedPath = saveImage(selectedImage(annotated));
   if (savedPath.isEmpty()) {
     std::cerr << "CAPTURE_NATIVE_ERROR: could not write the captured image"
               << std::endl;
@@ -402,10 +410,30 @@ void CaptureEngine::save() {
   emit completed("saved", savedPath);
 }
 
+void CaptureEngine::copyImage(bool annotated) {
+  if (m_retired || !hasSelection()) return;
+  m_annotations.finishTextEditing();
+  m_annotations.cancelStroke();
+  QGuiApplication::clipboard()->setImage(selectedImage(annotated));
+  m_annotations.setStatus(annotated ? "Annotated image copied" : "Original image copied");
+}
+
+void CaptureEngine::exportImage(bool annotated) {
+  if (m_retired || !hasSelection()) return;
+  m_annotations.finishTextEditing();
+  m_annotations.cancelStroke();
+  const auto directory = QDir(QStandardPaths::writableLocation(QStandardPaths::PicturesLocation)).filePath("squigit");
+  const auto path = saveImage(selectedImage(annotated), directory);
+  m_annotations.setStatus(path.isEmpty() ? "Could not export the image" : "Exported " + path);
+}
+
 void CaptureEngine::askGoogle(const QString &prompt) {
   if (m_retired || !hasSelection() || prompt.trimmed().isEmpty())
     return;
-  const QString savedPath = saveImage(selectedImage());
+  m_annotations.finishTextEditing();
+  m_annotations.cancelStroke();
+  const bool annotated = m_action.id == "snapshot" || m_action.id == "ask-google";
+  const QString savedPath = saveImage(selectedImage(annotated));
   if (savedPath.isEmpty()) {
     std::cerr << "CAPTURE_NATIVE_ERROR: could not write the captured image"
               << std::endl;
