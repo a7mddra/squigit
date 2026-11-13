@@ -372,6 +372,24 @@ fn read_events(
                             )));
                         }
                     }
+                    Some("ocr_open") => {
+                        let url =
+                            url::Url::parse(event["url"].as_str().context("Missing OCR URL")?)
+                                .context("Invalid OCR action URL")?;
+                        anyhow::ensure!(
+                            url.scheme() == "https"
+                                && matches!(
+                                    url.host_str(),
+                                    Some("www.google.com" | "translate.google.com")
+                                ),
+                            "Invalid OCR action URL"
+                        );
+                        if let Err(error) = opener::open_browser(url.as_str()) {
+                            on_event(RuntimeEvent::Failed(format!(
+                                "Could not open the OCR action: {error}"
+                            )));
+                        }
+                    }
                     Some("failed") => on_event(RuntimeEvent::Failed(
                         event["error"]
                             .as_str()

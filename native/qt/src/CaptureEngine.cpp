@@ -195,6 +195,20 @@ void CaptureEngine::toggleOcr() {
   emit ocrChanged();
 }
 
+bool CaptureEngine::hasOcrText() const {
+  for (const auto &box : m_textBoxes) {
+    const auto region = box.toMap();
+    if (region["inside"].toBool() && !region["text"].toString().isEmpty()) return true;
+  }
+  return false;
+}
+
+QString CaptureEngine::status() const {
+  if (m_ocrReady && !m_ocrVisible) return {};
+  if (m_ocrReady && !hasOcrText()) return "No text found in the selected region";
+  return m_status;
+}
+
 void CaptureEngine::recognize() {
   if (m_retired || !m_captureStarted || m_ocrPending || m_ocrReady) return;
   m_ocrFailed = false;
@@ -304,15 +318,15 @@ void CaptureEngine::acceptResponse(const QByteArray &line) {
     m_ocrReady = true;
     m_ocrVisible = true;
     rebuildTextBoxes();
-    m_status = m_textBoxes.isEmpty() ? "No text found" :
-        "Drag to select blue text. Ctrl+C copies the selection; Ctrl+Shift+C copies text inside the crop.";
+    m_status = "Drag across lines to select text. Ctrl+A selects all; Ctrl+C copies the selection.";
   }
   emit ocrChanged();
 }
 
 bool CaptureEngine::rebuildTextBoxes() {
   QVariantList textBoxes;
-  for (const auto &region : m_regions) {
+  for (int regionIndex = 0; regionIndex < m_regions.size(); ++regionIndex) {
+    const auto &region = m_regions[regionIndex];
     int start = 0;
     while (start < region.characters.size()) {
       const bool inside = m_selection.contains(region.characters[start].center);
@@ -333,7 +347,7 @@ bool CaptureEngine::rebuildTextBoxes() {
         points.append(QVariant(QVariantList{point.x(), point.y()}));
       textBoxes.append(QVariantMap{
           {"text", region.text.mid(first.begin, last.end - first.begin)},
-          {"box", points}, {"inside", inside}});
+          {"box", points}, {"inside", inside}, {"region", regionIndex}});
       start = end;
     }
   }
@@ -353,6 +367,20 @@ void CaptureEngine::copyText() {
       lines.append(run["text"].toString());
   }
   QGuiApplication::clipboard()->setText(lines.join("\n"));
+}
+
+void CaptureEngine::copyTextSelection(const QString &text) {
+  if (!m_retired && m_ocrVisible && hasSelection() && !text.isEmpty())
+    QGuiApplication::clipboard()->setText(text);
+}
+
+void CaptureEngine::openOcrText(const QString &text, bool translate) {
+  if (m_retired || !m_ocrVisible || !hasSelection() || text.trimmed().isEmpty()) return;
+  const auto encoded = QString::fromLatin1(QUrl::toPercentEncoding(text));
+  const auto url = translate
+      ? QString("https://translate.google.com/?sl=auto&text=%1&op=translate").arg(encoded)
+      : QString("https://www.google.com/search?q=%1").arg(encoded);
+  emit completed("ocr_open", url);
 }
 
 QString CaptureEngine::saveImage(const QImage &rgb, const QString &directory) const {

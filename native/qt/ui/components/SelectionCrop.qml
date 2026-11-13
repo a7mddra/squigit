@@ -16,6 +16,8 @@ Item {
     property int horizontalEdge: 0
     property int verticalEdge: 0
     property bool moving: false
+    readonly property string selectedText: ocrTextLayer.selectedText
+    readonly property bool hasTextSelection: ocrTextLayer.hasTextSelection
 
     function clearTextSelection() {
         return ocrTextLayer.clearSelection();
@@ -23,6 +25,10 @@ Item {
 
     function copyTextSelection() {
         ocrTextLayer.copySelection();
+    }
+
+    function selectAllText() {
+        ocrTextLayer.selectAll();
     }
 
     function begin(item, mouse, horizontal, vertical, move) {
@@ -99,7 +105,7 @@ Item {
         id: ocrTextLayer
         controller: root.controller
         interacting: root.interacting
-        visible: !root.annotationMode
+        visible: !root.annotationMode && root.controller.ocrVisible
     }
 
     Rectangle {

@@ -190,8 +190,11 @@ must not draw on hover. Escape is handled by the chosen overlay's native event
 filter; copy and copy-all use application shortcuts enabled only for that
 overlay. OCR text editors never take keyboard focus
 on a press: use `activeFocusOnPress: false` and `persistentSelection: true`.
-The overlay copies the selected editor through its `copy()` method. Selecting
-another text line clears previous selections without focusing an editor.
+OCR text selection uses one anchor and cursor range across recognized lines,
+including reverse dragging, word selection, and Shift-click extension. The
+overlay copies the combined plain text with line breaks. Ctrl+A and the OCR
+dock's Select all select recognized text inside the current crop. Editors
+remain unfocused while the overlay owns keyboard shortcuts.
 Tapping Escape clears text or annotation selection and closes open menus without
 dismissing the capture and replays the exit hint. Holding Escape for 650 ms cancels the active capture directly,
 including pending OCR or QR work. Each capture briefly fades in a hint below the
@@ -209,6 +212,15 @@ space. The window event filter must not consume the input event. Clicking back
 from another display must restore keyboard input without toggling OCR.
 
 Other capture contracts:
+
+- OCR status messages stay at the display's bottom-left corner. Completed OCR
+  shows a bottom-centered action dock using the same capsule and opening
+  animation as Ask Google: Select all, Copy, Search, Open in Translate, and
+  Hide OCR. Copy, Search, and Translate require text selection. Hide OCR changes
+  to Show OCR while results are hidden. Search and Translate percent-encode the
+  selected text into Google URLs and finish with `capture_finished` status
+  `ocr_open` and a `url` field. Rust releases the capture before opening the URL
+  in the default browser.
 
 - Snapshot keeps only the chosen display's overlay after selection, with a
   movable, resizable crop and a shared annotation dock. Its Export action saves

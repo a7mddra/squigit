@@ -39,6 +39,17 @@ Window {
         selectionCrop.clearTextSelection();
     }
 
+    function runOcrAction(action) {
+        if (action === "selectAll")
+            selectionCrop.selectAllText();
+        else if (action === "copy")
+            selectionCrop.copyTextSelection();
+        else if (action === "search" || action === "translate")
+            controller.openOcrText(selectionCrop.selectedText, action === "translate");
+        else if (action === "visibility")
+            controller.toggleOcr();
+    }
+
     Image {
         id: background
         anchors.fill: parent
@@ -138,7 +149,7 @@ Window {
             height: 44
             radius: 6
             color: "#202124"
-            visible: root.controller.action === "ocr"
+            visible: root.controller.action === "ocr" && !root.controller.ocrReady
             Rectangle {
                 id: visibilityButton
                 anchors.centerIn: parent
@@ -150,7 +161,7 @@ Window {
                 opacity: root.controller.ocrCancelling ? 0.5 : 1
                 Text {
                     anchors.centerIn: parent
-                    text: root.controller.ocrCancelling ? "Stopping OCR..." : root.controller.ocrPending ? "Cancel OCR" : !root.controller.ocrReady ? (root.controller.ocrFailed ? "Retry OCR" : "Scan OCR") : root.controller.ocrVisible ? "Hide OCR" : "Show OCR"
+                    text: root.controller.ocrCancelling ? "Stopping OCR..." : root.controller.ocrPending ? "Cancel OCR" : root.controller.ocrFailed ? "Retry OCR" : "Scan OCR"
                     color: "white"
                     font.pixelSize: 14
                 }
@@ -171,10 +182,12 @@ Window {
         }
 
         Rectangle {
+            z: 40
             visible: statusText.text.length > 0
-            x: Math.max(8, Math.min(toolbar.x, root.width - width - 8))
-            y: toolbar.y >= height + 18 ? toolbar.y - height - 8 : toolbar.y + toolbar.height + 8
-            width: Math.min(760, root.width - 16)
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            anchors.margins: 16
+            width: Math.min(760, root.width - 32, statusText.implicitWidth + 16)
             height: statusText.implicitHeight + 16
             radius: 4
             color: "#202124"
@@ -186,6 +199,19 @@ Window {
                 wrapMode: Text.Wrap
                 font.pixelSize: 13
                 color: "white"
+            }
+        }
+
+        OcrActionDock {
+            id: ocrDock
+            z: 30
+            controller: root.controller
+            hasTextSelection: selectionCrop.hasTextSelection
+            visible: root.controller.action === "ocr" && root.controller.ocrReady && root.controller.hasSelection
+            x: Math.max(8, (root.width - width) / 2)
+            y: Math.max(8, root.height - height - 48)
+            onActionRequested: function (action) {
+                root.runOcrAction(action);
             }
         }
 
@@ -214,6 +240,13 @@ Window {
         context: Qt.ApplicationShortcut
         enabled: root.ownsInput && root.visible && !root.annotationMode && !askComposer.visible
         onActivated: root.controller.cancel()
+    }
+
+    Shortcut {
+        sequences: ["Ctrl+A", "Meta+A"]
+        context: Qt.ApplicationShortcut
+        enabled: root.ownsInput && root.visible && !root.annotationMode && root.controller.ocrVisible
+        onActivated: selectionCrop.selectAllText()
     }
 
     Shortcut {

@@ -6,6 +6,8 @@
         <file>components/OcrTextLayer.qml</file>
         <file>components/CaptureExitHint.qml</file>
         <file>components/AskGoogleComposer.qml</file>
+        <file>components/FloatingCapsule.qml</file>
+        <file>components/OcrActionDock.qml</file>
         <file>annotation/AnnotationColorPicker.qml</file>
         <file>annotation/AnnotationSizeControl.qml</file>
         <file>annotation/AnnotationDock.qml</file>

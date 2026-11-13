@@ -1,49 +1,24 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import Qt5Compat.GraphicalEffects
 import "../annotation"
 
-Item {
+FloatingCapsule {
     id: root
 
     readonly property bool textFocused: textArea.activeFocus
     readonly property int composerWidth: 560
     readonly property int composerHeight: 56
-    readonly property real capRadius: composerHeight / 2
     readonly property int maxBodyHeight: 200
     readonly property bool hasText: textArea.text.trim().length > 0
-    readonly property real startBlurRadius: 24
 
     signal sent(string text)
 
     width: Math.min(composerWidth, parent ? parent.width - 24 : composerWidth)
-    height: body.height
+    height: Math.min(root.maxBodyHeight, Math.max(root.composerHeight, textArea.contentHeight + root.capRadius * 2 - textArea.font.pixelSize))
     z: 10
-    scale: openScale
-    opacity: openOpacity
-    transformOrigin: Item.Center
-
-    layer.enabled: root.visible && openBlur > 0
-    layer.effect: GaussianBlur {
-        radius: root.openBlur
-        deviation: (root.startBlurRadius + 1) / 3.3333
-        samples: 49
-        transparentBorder: true
-        cached: false
-    }
-
-    property real openScale: 1.15
-    property real openOpacity: 0
-    property real openBlur: startBlurRadius
-
     onVisibleChanged: {
-        openAnimation.stop();
-        openScale = 1.15;
-        openOpacity = 0;
-        openBlur = startBlurRadius;
         if (visible) {
-            openAnimation.start();
             Qt.callLater(function () {
                     textArea.forceActiveFocus();
                 });
@@ -52,35 +27,11 @@ Item {
         }
     }
 
-    ParallelAnimation {
-        id: openAnimation
-
+    Behavior on height  {
         NumberAnimation {
-            target: root
-            property: "openScale"
-            from: 1.15
-            to: 1.0
-            duration: 700
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: [0.16, 1, 0.3, 1, 1, 1]
-        }
-        NumberAnimation {
-            target: root
-            property: "openOpacity"
-            from: 0
-            to: 1
-            duration: 700
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: [0.16, 1, 0.3, 1, 1, 1]
-        }
-        NumberAnimation {
-            target: root
-            property: "openBlur"
-            from: root.startBlurRadius
-            to: 0
-            duration: 700
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: [0.16, 1, 0.3, 1, 1, 1]
+            id: heightAnim
+            duration: 180
+            easing.type: Easing.OutCubic
         }
     }
 
@@ -103,60 +54,9 @@ Item {
         textArea.text = "";
     }
 
-    Rectangle {
+    Item {
         id: body
-
-        anchors.bottom: root.bottom
-        width: root.width
-        height: Math.min(root.maxBodyHeight, Math.max(root.composerHeight, textArea.contentHeight + root.capRadius * 2 - textArea.font.pixelSize))
-        radius: root.capRadius
-        color: Qt.rgba(0.96, 0.96, 0.98, 0.95)
-        border.width: 1.0
-        border.color: Qt.rgba(1, 1, 1, 0.6)
-        antialiasing: true
-
-        Behavior on height  {
-            NumberAnimation {
-                id: heightAnim
-                duration: 180
-                easing.type: Easing.OutCubic
-            }
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: 1
-            radius: parent.radius - 1
-            color: "transparent"
-            border.width: 1.0
-            border.color: Qt.rgba(1, 1, 1, 0.35)
-            antialiasing: true
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            radius: parent.radius
-            gradient: Gradient {
-                GradientStop {
-                    position: 0.0
-                    color: Qt.rgba(1, 1, 1, 0.18)
-                }
-                GradientStop {
-                    position: 0.45
-                    color: Qt.rgba(1, 1, 1, 0.0)
-                }
-                GradientStop {
-                    position: 1.0
-                    color: Qt.rgba(0, 0, 0, 0.06)
-                }
-            }
-            antialiasing: true
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            acceptedButtons: Qt.AllButtons
-        }
+        anchors.fill: parent
 
         Flickable {
             id: flickable
@@ -388,27 +288,5 @@ Item {
                 }
             }
         }
-    }
-
-    Rectangle {
-        anchors.fill: body
-        anchors.margins: -2
-        radius: root.capRadius + 2
-        z: -1
-        color: "transparent"
-        border.width: 12
-        border.color: Qt.rgba(0, 0, 0, 0.08)
-        antialiasing: true
-    }
-
-    Rectangle {
-        anchors.fill: body
-        anchors.margins: -6
-        radius: root.capRadius + 6
-        z: -2
-        color: "transparent"
-        border.width: 8
-        border.color: Qt.rgba(0, 0, 0, 0.03)
-        antialiasing: true
     }
 }

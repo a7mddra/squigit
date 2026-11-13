@@ -346,7 +346,7 @@ void CaptureRuntime::finishCapture(const QString &status, const QString &detail,
                     {"action", m_action.id}, {"status", status}};
   if (status == "saved")
     event.insert("path", detail);
-  else if (status == "qr_open")
+  else if (status == "qr_open" || status == "ocr_open")
     event.insert("url", detail);
   else if (status == "ask_google")
     event.insert("prompt", prompt);

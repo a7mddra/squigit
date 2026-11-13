@@ -28,6 +28,7 @@ class CaptureEngine : public QObject {
   Q_PROPERTY(bool ocrCancelling READ ocrCancelling NOTIFY ocrChanged)
   Q_PROPERTY(bool ocrVisible READ ocrVisible NOTIFY ocrChanged)
   Q_PROPERTY(bool ocrReady READ ocrReady NOTIFY ocrChanged)
+  Q_PROPERTY(bool hasOcrText READ hasOcrText NOTIFY ocrChanged)
   Q_PROPERTY(bool ocrFailed READ ocrFailed NOTIFY ocrChanged)
   Q_PROPERTY(QVariantList textBoxes READ textBoxes NOTIFY ocrChanged)
   Q_PROPERTY(QString status READ status NOTIFY ocrChanged)
@@ -53,9 +54,10 @@ public:
   bool ocrCancelling() const { return m_ocrCancelling; }
   bool ocrVisible() const { return m_ocrVisible; }
   bool ocrReady() const { return m_ocrReady; }
+  bool hasOcrText() const;
   bool ocrFailed() const { return m_ocrFailed; }
   QVariantList textBoxes() const { return m_textBoxes; }
-  QString status() const { return m_ocrReady && !m_ocrVisible ? QString() : m_status; }
+  QString status() const;
   bool qrPending() const { return m_qrPending; }
   QString qrStatus() const { return m_qrStatus; }
   qreal pixelRatio() const { return m_devicePixelRatio; }
@@ -76,6 +78,8 @@ public:
   Q_INVOKABLE void scanQr();
   Q_INVOKABLE void setSelection(const QRectF &logicalRect);
   Q_INVOKABLE void copyText();
+  Q_INVOKABLE void copyTextSelection(const QString &text);
+  Q_INVOKABLE void openOcrText(const QString &text, bool translate);
 
 signals:
   void completed(const QString &status, const QString &detail);
