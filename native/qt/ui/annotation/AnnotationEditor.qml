@@ -64,8 +64,6 @@ Item {
         contextX = px;
         contextY = py;
         if (tool === "eraser") {
-            if (document.tool !== dock.eraseTool)
-                choose(dock.eraseTool);
             toolMenu.showAt(px, py, [{
                         "label": "Brush eraser",
                         "action": "eraser",
@@ -79,7 +77,7 @@ Item {
                     }, {
                         "label": "Clear all",
                         "action": "clear"
-                    }], document);
+                    }]);
         } else if (tool === "shapes") {
             toolMenu.showAt(px, py, [{
                         "label": "Rectangle",
@@ -134,16 +132,6 @@ Item {
                         "label": "Export normal image",
                         "action": "exportNormal"
                     }]);
-        } else if (tool === "select") {
-            toolMenu.showAt(px, py, [{
-                        "label": "Select all",
-                        "shortcut": "Ctrl A",
-                        "action": "selectAll"
-                    }, {
-                        "label": "Format",
-                        "action": "format",
-                        "enabled": document.hasSelection
-                    }]);
         } else {
             if (document.tool !== tool)
                 choose(tool);
@@ -153,15 +141,13 @@ Item {
     function run(action) {
         if (action === "focus")
             surface.forceActiveFocus();
-        else if (action === "copyImage")
-            controller.copyImage(true);
-        else if (action === "copyNormal")
-            controller.copyImage(false);
-        else if (action === "exportImage")
-            controller.exportImage(true);
-        else if (action === "exportNormal")
-            controller.exportImage(false);
-        else if (action === "undo")
+        else if (action === "copyImage" || action === "copyNormal") {
+            if (controller.copyImage(action === "copyImage"))
+                dock.confirmCopy();
+        } else if (action === "exportImage" || action === "exportNormal") {
+            if (controller.exportImage(action === "exportImage"))
+                dock.confirmExport();
+        } else if (action === "undo")
             document.undo();
         else if (action === "redo")
             document.redo();
@@ -293,38 +279,6 @@ Item {
         }
     }
 
-    Rectangle {
-        id: notice
-        z: 100
-        x: Math.max(12, Math.min((root.width - width) / 2, root.width - width - 12))
-        y: Math.max(12, dock.y - height - 76)
-        width: Math.min(root.width - 24, noticeText.implicitWidth + 24)
-        height: noticeText.implicitHeight + 16
-        radius: 7
-        color: "#292929"
-        border.color: "#484848"
-        visible: noticeTimer.running
-        Text {
-            id: noticeText
-            anchors.fill: parent
-            anchors.margins: 8
-            text: root.document.status
-            color: "#f5f5f5"
-            font.pixelSize: 12
-            horizontalAlignment: Text.AlignHCenter
-            elide: Text.ElideMiddle
-        }
-    }
-    Timer {
-        id: noticeTimer
-        interval: 4000
-    }
-    Connections {
-        target: root.document
-        function onStatusChanged() {
-            noticeTimer.restart();
-        }
-    }
     AnnotationColorPicker {
         id: colorPicker
         parent: root

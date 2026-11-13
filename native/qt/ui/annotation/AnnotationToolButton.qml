@@ -11,12 +11,20 @@ Item {
     required property var tooltipHost
     property bool selected: false
     property bool chevron: false
+    property bool alternateEnabled: false
     signal clicked
     signal alternateRequested
     width: 38
     height: 38
     opacity: enabled ? 1 : 0.35
 
+    function showConfirmation() {
+        confirmation.restart();
+    }
+    Timer {
+        id: confirmation
+        interval: 1600
+    }
     Rectangle {
         anchors.fill: parent
         radius: 7
@@ -27,7 +35,7 @@ Item {
         anchors.centerIn: parent
         width: 20
         height: 20
-        source: root.numberLabel.length === 0 ? "icons/" + root.iconName + ".svg" : ""
+        source: root.numberLabel.length === 0 ? "icons/" + (confirmation.running ? "check" : root.iconName) + ".svg" : ""
         sourceSize: Qt.size(40, 40)
         visible: false
     }
@@ -86,10 +94,14 @@ Item {
         onEntered: root.tooltipHost.showTip(root)
         onExited: root.tooltipHost.leaveTip(root)
         onPressed: root.tooltipHost.dismissTips()
+        onDoubleClicked: function (mouse) {
+            mouse.accepted = false;
+        }
         onClicked: function (mouse) {
-            if (mouse.button === Qt.RightButton)
-                root.alternateRequested();
-            else
+            if (mouse.button === Qt.RightButton) {
+                if (root.alternateEnabled)
+                    root.alternateRequested();
+            } else
                 root.clicked();
         }
     }

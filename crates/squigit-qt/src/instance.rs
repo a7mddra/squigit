@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 pub enum RuntimeEvent {
     MenuTick,
     Saved { action: String, path: PathBuf },
+    Exported { path: PathBuf },
     Asked { prompt: String },
     Failed(String),
     Stopped,
@@ -337,6 +338,12 @@ fn read_events(
                 };
                 handle.write(&response)?;
             }
+            "image_exported" => on_event(RuntimeEvent::Exported {
+                path: event["path"]
+                    .as_str()
+                    .context("Missing exported path")?
+                    .into(),
+            }),
             "capture_finished" => {
                 jobs.cancel_all();
                 let session = event["session"]

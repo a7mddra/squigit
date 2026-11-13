@@ -53,7 +53,6 @@ class AnnotationDocument : public QObject {
   Q_PROPERTY(bool solidTool READ solidTool NOTIFY styleChanged)
   Q_PROPERTY(bool colorTool READ colorTool NOTIFY styleChanged)
   Q_PROPERTY(bool mixedColors READ mixedColors NOTIFY selectionChanged)
-  Q_PROPERTY(QString status READ status NOTIFY statusChanged)
 
 public:
   explicit AnnotationDocument(QObject *parent = nullptr);
@@ -74,7 +73,6 @@ public:
   bool solidTool() const;
   bool colorTool() const;
   bool mixedColors() const;
-  QString status() const { return m_status; }
   void setInkColor(const QColor &color);
   void setToolSize(qreal size);
   void paint(QPainter &painter, bool interactive = true) const;
@@ -88,7 +86,6 @@ public:
   QVector<QPolygonF> selectedPolygons() const;
   QVector<QPointF> selectionHandles(qreal pixelSize) const;
   int selectionHandleAt(QPointF point, qreal tolerance) const;
-  void setStatus(const QString &status);
 
   Q_INVOKABLE void beginFormatting();
   Q_INVOKABLE void finishFormatting();
@@ -114,7 +111,6 @@ signals:
   void selectionChanged();
   void styleChanged();
   void textBoxChanged();
-  void statusChanged();
   void changed();
 
 private:
@@ -165,6 +161,5 @@ private:
   QColor m_color = QColor("#f04438");
   qreal m_size = 5;
   QHash<QString, qreal> m_sizes;
-  QString m_status;
   quint64 m_counterSerial = 0;
 };

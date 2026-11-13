@@ -8,7 +8,6 @@ Popup {
     id: root
     property var entries: []
     property bool aboveAnchor: false
-    property var sizeDocument: null
     signal triggered(string action)
     width: 234
     z: 200
@@ -17,26 +16,17 @@ Popup {
     modal: false
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-    function showAt(px, py, items, sizingDocument) {
+    function showAt(px, py, items) {
         if (visible)
             close();
-        sizeDocument = sizingDocument || null;
         entries = items;
         x = Math.max(8, Math.min(px, parent.width - width - 8));
         const menuHeight = items.reduce(function (total, entry) {
                 return total + (entry.separator ? 11 : 34);
-            }, 10) + (sizeDocument ? 40 : 0);
+            }, 10);
         const top = aboveAnchor ? py - menuHeight : py;
         y = Math.max(8, Math.min(top, parent.height - menuHeight - 8));
         open();
-    }
-    onOpened: {
-        if (sizeDocument)
-            sizeDocument.beginFormatting();
-    }
-    onClosed: {
-        if (sizeDocument)
-            sizeDocument.finishFormatting();
     }
 
     background: Rectangle {
@@ -113,13 +103,6 @@ Popup {
                     }
                 }
             }
-        }
-        AnnotationSizeControl {
-            document: root.sizeDocument
-            width: root.availableWidth - 12
-            x: 6
-            height: visible ? 38 : 0
-            visible: root.sizeDocument !== null
         }
     }
 }

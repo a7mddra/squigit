@@ -264,6 +264,11 @@ void CaptureRuntime::beginCapture(const CaptureAction &action, quint64 generatio
             [this](const QString &status, const QString &detail) { finishCapture(status, detail); });
     connect(controller, &CaptureEngine::askGoogleSubmitted, this,
             [this](const QString &prompt, const QString &path) { finishCapture("ask_google", path, prompt); });
+    connect(controller, &CaptureEngine::imageExported, this,
+            [this, generation](const QString &path) {
+              if (generation == m_generation && !m_session.isEmpty())
+                sendEvent({{"type", "image_exported"}, {"session", m_session}, {"path", path}});
+            });
     connect(controller, &CaptureEngine::selectionStarted, this, [this, controller]() {
       for (int index = 0; index < m_controllers.size(); ++index) {
         const bool chosen = m_controllers[index] == controller;

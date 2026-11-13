@@ -410,21 +410,28 @@ void CaptureEngine::save() {
   emit completed("saved", savedPath);
 }
 
-void CaptureEngine::copyImage(bool annotated) {
-  if (m_retired || !hasSelection()) return;
+bool CaptureEngine::copyImage(bool annotated) {
+  if (m_retired || !hasSelection()) return false;
   m_annotations.finishTextEditing();
   m_annotations.cancelStroke();
-  QGuiApplication::clipboard()->setImage(selectedImage(annotated));
-  m_annotations.setStatus(annotated ? "Annotated image copied" : "Original image copied");
+  const auto image = selectedImage(annotated);
+  if (image.isNull()) return false;
+  QGuiApplication::clipboard()->setImage(image);
+  return true;
 }
 
-void CaptureEngine::exportImage(bool annotated) {
-  if (m_retired || !hasSelection()) return;
+bool CaptureEngine::exportImage(bool annotated) {
+  if (m_retired || !hasSelection()) return false;
   m_annotations.finishTextEditing();
   m_annotations.cancelStroke();
   const auto directory = QDir(QStandardPaths::writableLocation(QStandardPaths::PicturesLocation)).filePath("squigit");
   const auto path = saveImage(selectedImage(annotated), directory);
-  m_annotations.setStatus(path.isEmpty() ? "Could not export the image" : "Exported " + path);
+  if (path.isEmpty()) {
+    std::cerr << "CAPTURE_NATIVE_ERROR: could not export the image" << std::endl;
+    return false;
+  }
+  emit imageExported(path);
+  return true;
 }
 
 void CaptureEngine::askGoogle(const QString &prompt) {

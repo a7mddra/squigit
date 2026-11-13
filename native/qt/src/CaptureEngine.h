@@ -69,8 +69,8 @@ public:
   Q_INVOKABLE void finishSquiggleCapture(const QVariantList &points);
   Q_INVOKABLE void finishTraditionalCapture(QPointF start, QPointF end);
   Q_INVOKABLE void save();
-  Q_INVOKABLE void exportImage(bool annotated = true);
-  Q_INVOKABLE void copyImage(bool annotated = true);
+  Q_INVOKABLE bool exportImage(bool annotated = true);
+  Q_INVOKABLE bool copyImage(bool annotated = true);
   Q_INVOKABLE void askGoogle(const QString &prompt);
   Q_INVOKABLE void toggleOcr();
   Q_INVOKABLE void scanQr();
@@ -80,6 +80,7 @@ public:
 signals:
   void completed(const QString &status, const QString &detail);
   void askGoogleSubmitted(const QString &prompt, const QString &path);
+  void imageExported(const QString &path);
   void selectionStarted();
   void backgroundSourceChanged();
   void captureModeChanged();

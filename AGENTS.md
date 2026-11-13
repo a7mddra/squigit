@@ -219,6 +219,13 @@ Other capture contracts:
   Circle to Search saves automatically, and QR scans automatically; neither has
   buttons.
 
+- Each successful dock export emits
+  `{"type":"image_exported","session":"...","path":"..."}` on Qt stdout.
+  Rust forwards it to the existing saved-image OS notification without releasing
+  the capture or cancelling its workers. Copy and Export confirm each successful
+  action with a temporary check icon, including repeated clicks and shortcuts.
+  Annotation operations do not show toasts.
+
 - Hide the radial window and its center label immediately, with zero hide
   animation. Disable native transitions where supported and allow 350 ms for
   compositor transitions to finish before grabbing a new frame.

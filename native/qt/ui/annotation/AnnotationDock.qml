@@ -12,6 +12,7 @@ Item {
     property bool menusOpen: false
     property var tipButton: null
     property var suppressedTipButton: null
+    readonly property real popupOverlap: 4
     signal actionRequested(string action)
     signal optionsRequested(string tool, real px, real py)
     width: Math.min(tools.width + 16, parent.width - 24)
@@ -42,8 +43,16 @@ Item {
         actionRequested("focus");
     }
     function options(button, tool) {
-        const point = button.mapToItem(root.parent, button.width, -8);
-        optionsRequested(tool, point.x, point.y);
+        const point = button.mapToItem(root.parent, button.width, 0);
+        optionsRequested(tool, point.x, root.y + popupOverlap);
+    }
+    function confirmCopy() {
+        dismissTips();
+        copyButton.showConfirmation();
+    }
+    function confirmExport() {
+        dismissTips();
+        exportButton.showConfirmation();
     }
     AnnotationToolTip {
         id: toolTip
@@ -54,7 +63,7 @@ Item {
             const center = root.tipButton ? root.tipButton.mapToItem(root, root.tipButton.width / 2, 0).x : root.width / 2;
             return Math.max(8 - root.x, Math.min(center - width / 2, root.parent.width - root.x - width - 8));
         }
-        y: -height - 12
+        y: root.popupOverlap - height
     }
 
     Rectangle {
@@ -94,10 +103,10 @@ Item {
                 tip: "Select · V"
                 selected: root.document.tool === "select"
                 onClicked: root.choose("select")
-                onAlternateRequested: root.options(selectButton, "select")
             }
             AnnotationToolButton {
                 id: brushButton
+                alternateEnabled: true
                 tooltipHost: root
                 iconName: "brush"
                 tip: "Brush · B"
@@ -107,6 +116,7 @@ Item {
             }
             AnnotationToolButton {
                 id: eraseButton
+                alternateEnabled: true
                 tooltipHost: root
                 chevron: true
                 iconName: "eraser"
@@ -117,6 +127,7 @@ Item {
             }
             AnnotationToolButton {
                 id: shapeButton
+                alternateEnabled: true
                 tooltipHost: root
                 chevron: true
                 iconName: root.shapeTool
@@ -127,6 +138,7 @@ Item {
             }
             AnnotationToolButton {
                 id: counterButton
+                alternateEnabled: true
                 tooltipHost: root
                 numberLabel: String(root.document.nextCounter)
                 tip: "Counter · C"
@@ -136,6 +148,7 @@ Item {
             }
             AnnotationToolButton {
                 id: textButton
+                alternateEnabled: true
                 tooltipHost: root
                 iconName: "text"
                 tip: "Text · T"
@@ -150,10 +163,10 @@ Item {
                 tip: "Blur · X"
                 selected: root.document.tool === "blur"
                 onClicked: root.choose("blur")
-                onAlternateRequested: root.options(blurButton, "blur")
             }
             AnnotationToolButton {
                 id: highlighterButton
+                alternateEnabled: true
                 tooltipHost: root
                 chevron: true
                 iconName: root.highlightTool === "highlighter" ? "highlighter" : "fillRectangle"
@@ -170,6 +183,7 @@ Item {
             }
             AnnotationToolButton {
                 id: copyButton
+                alternateEnabled: true
                 tooltipHost: root
                 chevron: true
                 iconName: "copy"
@@ -179,6 +193,7 @@ Item {
             }
             AnnotationToolButton {
                 id: exportButton
+                alternateEnabled: true
                 tooltipHost: root
                 chevron: true
                 iconName: "export"

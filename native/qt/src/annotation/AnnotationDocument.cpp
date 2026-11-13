@@ -93,12 +93,6 @@ void AnnotationDocument::setImage(const QImage &image) {
   emit changed();
 }
 
-void AnnotationDocument::setStatus(const QString &status) {
-  if (status == m_status) return;
-  m_status = status;
-  emit statusChanged();
-}
-
 void AnnotationDocument::commit() {
   renumberCounters();
   m_history.resize(m_historyIndex + 1);
@@ -303,7 +297,6 @@ void AnnotationDocument::copySelected() {
   auto *mime = new QMimeData;
   mime->setData(objectMime, data);
   QGuiApplication::clipboard()->setMimeData(mime);
-  setStatus("Objects copied");
 }
 
 void AnnotationDocument::cutSelected() {
@@ -315,7 +308,7 @@ void AnnotationDocument::paste() {
   finishTextEditing();
   cancelStroke();
   const auto *mime = QGuiApplication::clipboard()->mimeData();
-  if (!mime->hasFormat(objectMime)) { setStatus("Copy annotation objects to paste them here"); return; }
+  if (!mime->hasFormat(objectMime)) return;
   const QByteArray data = mime->data(objectMime);
   QDataStream stream(data);
   stream.setVersion(QDataStream::Qt_6_4);
@@ -329,7 +322,7 @@ void AnnotationDocument::paste() {
     stream >> a.tool >> a.path >> a.erased >> a.fragment >> a.fragmentSize >> a.color >> a.width >> a.opacity >> a.rect
            >> a.text >> a.number >> a.counterId >> a.radius >> a.autoHeight
            >> a.start >> a.end >> a.blur >> a.blurRect >> a.transform;
-    if (stream.status() != QDataStream::Ok) { setStatus("Could not paste the annotation objects"); return; }
+    if (stream.status() != QDataStream::Ok) return;
     if (a.tool == "counter") {
       if (!counterIds.contains(a.counterId)) counterIds.insert(a.counterId, ++m_counterSerial);
       a.counterId = counterIds.value(a.counterId);
