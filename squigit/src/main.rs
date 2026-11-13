@@ -79,6 +79,7 @@ fn run() -> Result<ExitCode> {
         .release_gpu_when_closed();
     let settings = app.handle();
     let search_settings = settings.clone();
+    let search_data = data.clone();
     let tick = tick::Player::start();
     let mut qt = squigit_qt::Runtime::start(
         models,
@@ -91,7 +92,7 @@ fn run() -> Result<ExitCode> {
             }
             squigit_qt::RuntimeEvent::Saved { action, path } if action == "circle-to-search" => {
                 image_search::submit(
-                    data.clone(),
+                    search_data.clone(),
                     path,
                     image_search::Target::Lens,
                     search_settings.clone(),
@@ -101,7 +102,7 @@ fn run() -> Result<ExitCode> {
             squigit_qt::RuntimeEvent::Exported { path } => notifications::saved(path),
             squigit_qt::RuntimeEvent::Asked { prompt, path } => {
                 image_search::submit(
-                    data.clone(),
+                    search_data.clone(),
                     path,
                     image_search::Target::Ai(prompt),
                     search_settings.clone(),
@@ -163,6 +164,7 @@ fn run() -> Result<ExitCode> {
             _ => {}
         }
     })?;
+    image_search::check_configuration(data, app.handle());
     app.run();
     drop(tray);
     qt.shutdown();

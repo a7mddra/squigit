@@ -292,8 +292,11 @@ Other capture contracts:
   ImgBB, then open Google Lens for Circle to Search, or AI Mode (`udm=50`)
   with the encoded prompt for Ask Google and the QR fallback. Do not cache
   hosted URLs or deduplicate images. Upload and browser errors use OS
-  notifications. A missing key produces a persistent Set API action that
-  opens Rune configuration directly to Image hosting.
+  notifications. On every app launch, check for a configured ImgBB key in the
+  background without decrypting it or prompting for vault access. A missing
+  key produces a persistent Set API action that opens Rune configuration
+  directly to Image hosting. Keep the same notification on missing-key image
+  action failures, suppressing duplicates while a notice is already active.
 
 - Each successful dock export emits
   `{"type":"image_exported","session":"...","path":"..."}` on Qt stdout.

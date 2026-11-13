@@ -15,6 +15,18 @@ pub enum Target {
     Ai(String),
 }
 
+pub fn check_configuration(data: AppData, settings: rune::AppHandle<settings::App>) {
+    std::thread::spawn(move || match auth::configured(&data) {
+        Ok(true) => {}
+        Ok(false) => notifications::missing_image_hosting_key(settings),
+        Err(error) => notifications::image_search_error(
+            format!("Could not check image hosting: {error:#}"),
+            false,
+            settings,
+        ),
+    });
+}
+
 pub fn submit(
     data: AppData,
     image: PathBuf,
@@ -24,11 +36,7 @@ pub fn submit(
     std::thread::spawn(move || {
         let result = (|| {
             let Some(key) = auth::load(&data)? else {
-                notifications::image_search_error(
-                    "Add your ImgBB API key to use image search.".into(),
-                    true,
-                    settings.clone(),
-                );
+                notifications::missing_image_hosting_key(settings.clone());
                 return Ok(());
             };
             let hosted = upload(&image, &key)?;
