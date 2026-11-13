@@ -8,6 +8,7 @@ Item {
     property real pixelRatio: 1
     readonly property var box: document.textBox
     property bool synchronizing: false
+    readonly property bool textFocused: input.activeFocus
     signal contextRequested(var editor, real px, real py)
     visible: document.editingText
     width: box.width || 1

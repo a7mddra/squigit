@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 
 Item {
@@ -5,44 +7,90 @@ Item {
 
     required property bool active
     readonly property int topInset: 64
-    property bool hintRevealed: false
+    property bool escapeDown: false
     property bool exitVisible: false
     property bool exitHovered: edgeSensor.containsMouse || exitMouse.containsMouse
 
-    signal exitRequested()
+    signal exitRequested
 
     visible: active
 
     onActiveChanged: {
-        lifetime.stop()
-        hideTimer.stop()
-        hintRevealed = false
-        exitVisible = false
+        lifetime.stop();
+        hideTimer.stop();
+        hintFadeIn.stop();
+        hintFadeOut.stop();
+        hintPill.opacity = 0;
+        escapeDown = false;
+        exitVisible = false;
     }
 
     onExitHoveredChanged: {
         if (exitHovered) {
-            hideTimer.stop()
-            exitVisible = true
+            hideTimer.stop();
+            root.hideHint();
+            exitVisible = true;
         } else {
-            hideTimer.restart()
+            hideTimer.restart();
         }
+    }
+
+    function showHint() {
+        if (!active || escapeDown)
+            return;
+        hideTimer.stop();
+        exitVisible = false;
+        hintFadeOut.stop();
+        hintFadeIn.restart();
+        lifetime.restart();
+    }
+
+    function beginEscape() {
+        escapeDown = true;
+        hideHint();
+    }
+
+    function replayHint() {
+        escapeDown = false;
+        showHint();
+    }
+
+    function hideHint() {
+        lifetime.stop();
+        hintFadeIn.stop();
+        hintFadeOut.restart();
+    }
+
+    NumberAnimation {
+        id: hintFadeIn
+        target: hintPill
+        property: "opacity"
+        from: 0
+        to: 1
+        duration: 180
+        easing.type: Easing.OutCubic
+    }
+
+    NumberAnimation {
+        id: hintFadeOut
+        target: hintPill
+        property: "opacity"
+        to: 0
+        duration: 180
+        easing.type: Easing.OutCubic
     }
 
     Timer {
         id: startupTimer
         interval: 1
         running: root.active
-        onTriggered: {
-            root.hintRevealed = true
-            lifetime.restart()
-        }
+        onTriggered: root.showHint()
     }
 
     Timer {
         id: lifetime
         interval: 3500
-        onTriggered: root.hintRevealed = false
+        onTriggered: root.hideHint()
     }
 
     Timer {
@@ -71,12 +119,8 @@ Item {
         color: "#292c30"
         border.width: 1
         border.color: "#45494f"
-        opacity: root.hintRevealed && !root.exitVisible ? 1 : 0
+        opacity: 0
         visible: opacity > 0
-
-        Behavior on opacity {
-            NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
-        }
 
         Row {
             id: content
@@ -121,12 +165,18 @@ Item {
         opacity: root.exitVisible ? 1 : 0
         visible: opacity > 0
 
-        Behavior on y {
-            NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+        Behavior on y  {
+            NumberAnimation {
+                duration: 220
+                easing.type: Easing.OutCubic
+            }
         }
 
-        Behavior on opacity {
-            NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+        Behavior on opacity  {
+            NumberAnimation {
+                duration: 160
+                easing.type: Easing.OutCubic
+            }
         }
 
         Canvas {
@@ -135,17 +185,17 @@ Item {
             height: 16
 
             onPaint: {
-                var ctx = getContext("2d")
-                ctx.clearRect(0, 0, width, height)
-                ctx.strokeStyle = "#ffffff"
-                ctx.lineWidth = 2.0
-                ctx.lineCap = "round"
-                ctx.beginPath()
-                ctx.moveTo(4, 4)
-                ctx.lineTo(12, 12)
-                ctx.moveTo(12, 4)
-                ctx.lineTo(4, 12)
-                ctx.stroke()
+                var ctx = getContext("2d");
+                ctx.clearRect(0, 0, width, height);
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 2.0;
+                ctx.lineCap = "round";
+                ctx.beginPath();
+                ctx.moveTo(4, 4);
+                ctx.lineTo(12, 12);
+                ctx.moveTo(12, 4);
+                ctx.lineTo(4, 12);
+                ctx.stroke();
             }
         }
 

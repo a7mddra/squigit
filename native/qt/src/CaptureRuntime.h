@@ -10,7 +10,6 @@
 
 class BackgroundImageProvider;
 class CaptureEngine;
-class CaptureCursor;
 class Grabber;
 class RadialMenu;
 
@@ -38,7 +37,6 @@ private:
   QQmlApplicationEngine m_qml;
   QQmlComponent m_captureComponent;
   std::unique_ptr<RadialMenu> m_menu;
-  std::unique_ptr<CaptureCursor> m_cursor;
   Grabber *m_grabber = nullptr;
   BackgroundImageProvider *m_backgrounds = nullptr;
   QList<CaptureEngine *> m_controllers;

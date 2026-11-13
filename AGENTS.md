@@ -193,7 +193,7 @@ on a press: use `activeFocusOnPress: false` and `persistentSelection: true`.
 The overlay copies the selected editor through its `copy()` method. Selecting
 another text line clears previous selections without focusing an editor.
 Tapping Escape clears text or annotation selection and closes open menus without
-dismissing the capture. Holding Escape for 650 ms cancels the active capture directly,
+dismissing the capture and replays the exit hint. Holding Escape for 650 ms cancels the active capture directly,
 including pending OCR or QR work. Each capture briefly fades in a hint below the
 top edge with an Esc keycap; hovering the top-center edge drops down an X exit
 button that cancels the capture. Clicking blank space or starting a crop
@@ -211,8 +211,9 @@ from another display must restore keyboard input without toggling OCR.
 Other capture contracts:
 
 - Snapshot keeps only the chosen display's overlay after selection, with a
-  movable, resizable crop and a Save button, saving to `Pictures/Squigit`. Ask
-  Google replaces the Save button with a floating composer centered at the
+  movable, resizable crop and a shared annotation dock. Its Export action saves
+  to `Pictures/squigit` and keeps the overlay open. Ask Google shares the dock
+  and adds a floating composer centered at the
   bottom of the chosen display and layered above the crop; sending writes the
   crop to app data `blob_storage`, prints the prompt, and closes the overlay.
   Circle to Search saves automatically, and QR scans automatically; neither has
@@ -244,7 +245,7 @@ Other capture contracts:
 - C++17, CMake ≥ 3.16, Qt ≥ 6.4 modules: `Core`, `Gui`, `Quick`, `Qml`, and
   `DBus` on Linux. The QML canvases
   require `Qt5Compat.GraphicalEffects`. The annotation editor also requires the
-  `QtQuick.Controls`, `QtQuick.Templates`, and `QtQuick.Dialogs` QML modules.
+  `QtQuick.Controls` and `QtQuick.Templates` QML modules.
 - `native/qt/backends/` holds the per-OS grabbers behind the `Grabber`
   interface; each platform module exposes `createUnixEngine` /
   `createWindowsEngine`.

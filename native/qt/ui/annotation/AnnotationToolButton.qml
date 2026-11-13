@@ -6,6 +6,7 @@ import Qt5Compat.GraphicalEffects
 Item {
     id: root
     property string iconName
+    property string numberLabel: ""
     property string tip
     property bool selected: false
     property bool chevron: false
@@ -25,7 +26,7 @@ Item {
         anchors.centerIn: parent
         width: 20
         height: 20
-        source: "icons/" + root.iconName + ".svg"
+        source: root.numberLabel.length === 0 ? "icons/" + root.iconName + ".svg" : ""
         sourceSize: Qt.size(40, 40)
         visible: false
     }
@@ -33,6 +34,29 @@ Item {
         anchors.fill: artwork
         source: artwork
         color: "#f0f0f0"
+        visible: root.numberLabel.length === 0
+    }
+    Rectangle {
+        anchors.centerIn: parent
+        width: 22
+        height: 22
+        radius: 11
+        color: "transparent"
+        border.color: "#f0f0f0"
+        border.width: 1.5
+        visible: root.numberLabel.length > 0
+        Text {
+            anchors.fill: parent
+            anchors.margins: 3
+            text: root.numberLabel
+            color: "#f0f0f0"
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            fontSizeMode: Text.Fit
+            minimumPixelSize: 7
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+        }
     }
     Canvas {
         anchors.right: parent.right

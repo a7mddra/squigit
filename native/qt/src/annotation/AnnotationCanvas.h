@@ -2,13 +2,13 @@
 
 #include "AnnotationDocument.h"
 #include <QPointer>
-#include <QCursor>
 #include <QQuickPaintedItem>
 
 class AnnotationCanvas : public QQuickPaintedItem {
   Q_OBJECT
   Q_PROPERTY(AnnotationDocument *document READ document WRITE setDocument NOTIFY documentChanged)
   Q_PROPERTY(qreal pixelRatio READ pixelRatio WRITE setPixelRatio NOTIFY pixelRatioChanged)
+  Q_PROPERTY(int cursorShape READ cursorShape NOTIFY cursorShapeChanged)
 
 public:
   explicit AnnotationCanvas(QQuickItem *parent = nullptr);
@@ -16,33 +16,29 @@ public:
   void setDocument(AnnotationDocument *document);
   qreal pixelRatio() const { return m_pixelRatio; }
   void setPixelRatio(qreal ratio);
+  int cursorShape() const { return m_cursorShape; }
   void paint(QPainter *painter) override;
-  Q_INVOKABLE void setDialogOpen(bool open);
+  Q_INVOKABLE void hoverAt(QPointF point);
+  Q_INVOKABLE void leave();
+  Q_INVOKABLE void pointerPress(QPointF point, int button, int modifiers);
+  Q_INVOKABLE void pointerMove(QPointF point, int modifiers);
+  Q_INVOKABLE void pointerRelease(QPointF point, int button, int modifiers);
+  Q_INVOKABLE void pointerDoubleClick(QPointF point);
+  Q_INVOKABLE void cancelPointer();
 
 signals:
   void documentChanged();
   void pixelRatioChanged();
+  void cursorShapeChanged();
   void contextRequested(qreal x, qreal y, const QString &kind);
-
-protected:
-  void mousePressEvent(QMouseEvent *event) override;
-  void mouseMoveEvent(QMouseEvent *event) override;
-  void mouseReleaseEvent(QMouseEvent *event) override;
-  void mouseDoubleClickEvent(QMouseEvent *event) override;
-  void mouseUngrabEvent() override;
-  void hoverEnterEvent(QHoverEvent *event) override;
-  void hoverMoveEvent(QHoverEvent *event) override;
-  void hoverLeaveEvent(QHoverEvent *event) override;
-  bool event(QEvent *event) override;
 
 private:
   void refreshCursor();
   QPointer<AnnotationDocument> m_document;
   qreal m_pixelRatio = 1;
-  QCursor m_rotationCursor;
-  int m_dragHandle = -1;
   QPointF m_hover;
+  int m_cursorShape = Qt::ArrowCursor;
+  int m_dragHandle = -1;
   bool m_hovering = false;
   bool m_pressed = false;
-  bool m_tablet = false;
 };

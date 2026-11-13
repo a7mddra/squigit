@@ -24,11 +24,14 @@ Window {
 
     required property var controller
     property bool ownsInput: false
-    readonly property bool nativeDialogOpen: annotationEditor.nativeDialogOpen
-    readonly property bool saveMode: controller.action === "snapshot"
-    readonly property bool annotationMode: saveMode || controller.action === "ask-google"
+    readonly property bool annotationMode: controller.action === "snapshot" || controller.action === "ask-google"
+
+    function escapePressed() {
+        exitHint.beginEscape();
+    }
 
     function escapeTapped() {
+        exitHint.replayHint();
         if (askComposer.dismissContextMenu())
             return;
         if (annotationMode && annotationEditor.handleEscape())
@@ -130,44 +133,12 @@ Window {
             id: toolbar
             z: 25
             x: Math.max(8, Math.min(parent.area.x, root.width - width - 8))
-            y: {
-                const below = Math.max(8, Math.min(parent.area.y + parent.area.height + 10, root.height - height - 8));
-                const dock = annotationEditor.dockArea;
-                if (root.annotationMode && x + width > dock.x && x < dock.x + dock.width && below + height > dock.y - 8 && below < dock.y + dock.height + 8)
-                    return Math.max(8, parent.area.y - height - 10);
-                return below;
-            }
-            width: (root.saveMode ? saveButton.width : visibilityButton.width) + 12
+            y: Math.max(8, Math.min(parent.area.y + parent.area.height + 10, root.height - height - 8))
+            width: visibilityButton.width + 12
             height: 44
             radius: 6
             color: "#202124"
-            visible: root.saveMode || root.controller.action === "ocr"
-            Rectangle {
-                id: saveButton
-                anchors.centerIn: parent
-                width: 88
-                height: 32
-                radius: 4
-                color: saveMouse.containsMouse ? "#505154" : "#353639"
-                visible: root.saveMode
-                Text {
-                    anchors.centerIn: parent
-                    text: "Save"
-                    color: "white"
-                    font.pixelSize: 14
-                }
-                MouseArea {
-                    id: saveMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.controller.save()
-                }
-                AnnotationToolTip {
-                    text: "Save annotated capture"
-                    visible: saveMouse.containsMouse
-                }
-            }
+            visible: root.controller.action === "ocr"
             Rectangle {
                 id: visibilityButton
                 anchors.centerIn: parent
@@ -231,6 +202,7 @@ Window {
     }
 
     CaptureExitHint {
+        id: exitHint
         anchors.fill: parent
         active: root.visible
         z: 100

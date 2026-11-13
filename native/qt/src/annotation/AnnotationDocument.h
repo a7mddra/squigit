@@ -9,7 +9,6 @@
 #include <QSet>
 #include <QTimer>
 #include <QTransform>
-#include <QUrl>
 #include <QVariantMap>
 #include <QVector>
 
@@ -27,15 +26,11 @@ struct Annotation {
   int number = 0;
   qreal radius = 0;
   bool autoHeight = true;
-  bool tinted = false;
   QPointF start;
   QPointF end;
-  QImage image;
-  QByteArray svg;
-  QRectF imageRect;
+  QImage blur;
+  QRectF blurRect;
   QTransform transform;
-  mutable QImage renderedImage;
-  mutable QColor renderedColor;
 };
 
 class AnnotationDocument : public QObject {
@@ -43,6 +38,8 @@ class AnnotationDocument : public QObject {
   Q_PROPERTY(bool canUndo READ canUndo NOTIFY historyChanged)
   Q_PROPERTY(bool canRedo READ canRedo NOTIFY historyChanged)
   Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
+  Q_PROPERTY(bool canTransformSelection READ canTransformSelection NOTIFY selectionChanged)
+  Q_PROPERTY(int nextCounter READ nextCounter NOTIFY changed)
   Q_PROPERTY(int selectionCount READ selectionCount NOTIFY selectionChanged)
   Q_PROPERTY(bool hasTextSelection READ hasTextSelection NOTIFY selectionChanged)
   Q_PROPERTY(bool editingText READ editingText NOTIFY textBoxChanged)
@@ -63,6 +60,8 @@ public:
   bool hasSelection() const { return !m_selected.isEmpty(); }
   int selectionCount() const { return m_selected.size(); }
   bool hasTextSelection() const;
+  bool canTransformSelection() const;
+  int nextCounter() const;
   bool editingText() const { return m_textIndex >= 0; }
   QVariantMap textBox() const;
   QString tool() const { return m_tool; }
@@ -98,7 +97,6 @@ public:
   Q_INVOKABLE void copySelected();
   Q_INVOKABLE void cutSelected();
   Q_INVOKABLE void paste();
-  Q_INVOKABLE void insertImage(const QUrl &url);
   Q_INVOKABLE void updateText(const QString &text);
   Q_INVOKABLE void setTextContentHeight(qreal height);
   Q_INVOKABLE void finishTextEditing(bool accept = true);
@@ -132,8 +130,7 @@ private:
   QRectF selectionBounds() const;
   bool lineSelection() const;
   bool radiusSelection() const;
-  void appendImage(const QImage &image, const QByteArray &svg = {});
-  int nextCounter() const;
+  void renumberCounters();
 
   QImage m_image;
   QVector<Annotation> m_items;

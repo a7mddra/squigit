@@ -89,7 +89,7 @@ Item {
             }
             AnnotationToolButton {
                 id: counterButton
-                iconName: "counter"
+                numberLabel: String(root.document.nextCounter)
                 tip: "Counter · C"
                 selected: root.document.tool === "counter"
                 onClicked: root.choose("counter")

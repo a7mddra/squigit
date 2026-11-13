@@ -1,52 +1,18 @@
 #include "AnnotationCanvas.h"
 
-#include <QCursor>
-#include <QHoverEvent>
-#include <QMouseEvent>
 #include <QPainter>
-#include <QPixmap>
-#include <QQuickWindow>
-#include <QTabletEvent>
-#include <cmath>
-#include <iostream>
 
 namespace {
 bool brushCursor(const QString &tool) {
   return tool == "brush" || tool == "blur" || tool == "highlighter"
       || tool == "eraser" || tool == "objectEraser";
 }
-
-QCursor rotationCursor() {
-  QPixmap image(64, 64);
-  image.setDevicePixelRatio(2);
-  image.fill(Qt::transparent);
-  QPainter painter(&image);
-  painter.setRenderHint(QPainter::Antialiasing);
-  QPainterPath path;
-  const QRectF circle(6, 6, 20, 20);
-  path.arcMoveTo(circle, 45);
-  path.arcTo(circle, 45, -285);
-  const auto tip = path.currentPosition();
-  const QPointF direction(.8660254037844386, -.5);
-  const QPointF side(-direction.y(), direction.x());
-  path.moveTo(tip - direction * 6 + side * 3);
-  path.lineTo(tip);
-  path.lineTo(tip - direction * 6 - side * 3);
-  painter.setPen(QPen(QColor(0, 0, 0, 220), 4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-  painter.drawPath(path);
-  painter.setPen(QPen(Qt::white, 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-  painter.drawPath(path);
-  painter.end();
-  return QCursor(image, 16, 16);
-}
 }
 
-AnnotationCanvas::AnnotationCanvas(QQuickItem *parent)
-    : QQuickPaintedItem(parent), m_rotationCursor(rotationCursor()) {
+AnnotationCanvas::AnnotationCanvas(QQuickItem *parent) : QQuickPaintedItem(parent) {
   setAntialiasing(true);
   setOpaquePainting(false);
-  setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton);
-  setAcceptHoverEvents(true);
+  setAcceptedMouseButtons(Qt::NoButton);
 }
 
 void AnnotationCanvas::setDocument(AnnotationDocument *document) {
@@ -54,7 +20,7 @@ void AnnotationCanvas::setDocument(AnnotationDocument *document) {
   if (m_document) disconnect(m_document, nullptr, this, nullptr);
   m_document = document;
   if (document) {
-    connect(document, &AnnotationDocument::changed, this, [this] { update(); });
+    connect(document, &AnnotationDocument::changed, this, [this] { refreshCursor(); update(); });
     connect(document, &AnnotationDocument::styleChanged, this, [this] { refreshCursor(); update(); });
   }
   refreshCursor();
@@ -65,15 +31,9 @@ void AnnotationCanvas::setDocument(AnnotationDocument *document) {
 void AnnotationCanvas::setPixelRatio(qreal ratio) {
   if (ratio <= 0 || ratio == m_pixelRatio) return;
   m_pixelRatio = ratio;
+  refreshCursor();
   emit pixelRatioChanged();
   update();
-}
-
-void AnnotationCanvas::setDialogOpen(bool open) {
-  if (!window() || (!open && !window()->isVisible())) return;
-  if (!open) window()->requestActivate();
-  if (!window()->setKeyboardGrabEnabled(!open))
-    std::cerr << "CAPTURE_NATIVE_ERROR: could not transfer keyboard input for the image dialog" << std::endl;
 }
 
 void AnnotationCanvas::paint(QPainter *p) {
@@ -93,8 +53,7 @@ void AnnotationCanvas::paint(QPainter *p) {
     auto polygon = m_document->selectionPolygon();
     for (auto &point : polygon) point /= m_pixelRatio;
     if (m_document->selectionCount() > 1) p->drawPolygon(polygon);
-    const auto handles = m_document->tool() == "select"
-        ? m_document->selectionHandles(m_pixelRatio) : QVector<QPointF>{};
+    const auto handles = m_document->selectionHandles(m_pixelRatio);
     p->setBrush(QColor("#282828"));
     if (handles.size() > 8) p->drawLine((polygon[0] + polygon[1]) / 2, handles[8] / m_pixelRatio);
     for (int index = 0; index < handles.size(); ++index) {
@@ -115,116 +74,84 @@ void AnnotationCanvas::paint(QPainter *p) {
 }
 
 void AnnotationCanvas::refreshCursor() {
+  int shape = Qt::ArrowCursor;
+  if (m_document) {
+    const auto tool = m_document->tool();
+    const int handle = m_document->canTransformSelection()
+        ? (m_pressed && m_dragHandle >= 0 ? m_dragHandle
+            : m_document->selectionHandleAt(m_hover * m_pixelRatio, 8 * m_pixelRatio)) : -1;
+    if (handle >= 0) {
+      const auto handles = m_document->selectionHandles(m_pixelRatio);
+      if (handle < handles.size()) {
+        if (handles.size() == 2 || handle >= 8) shape = Qt::SizeAllCursor;
+        else if (handle == 4 || handle == 6) shape = Qt::SizeVerCursor;
+        else if (handle == 5 || handle == 7) shape = Qt::SizeHorCursor;
+        else shape = handle == 0 || handle == 2 ? Qt::SizeFDiagCursor : Qt::SizeBDiagCursor;
+      }
+    } else if (brushCursor(tool)) shape = Qt::BlankCursor;
+    else if (tool == "text") shape = Qt::IBeamCursor;
+    else if (tool != "select") shape = Qt::CrossCursor;
+  }
+  if (shape == m_cursorShape) return;
+  m_cursorShape = shape;
+  emit cursorShapeChanged();
+}
+
+void AnnotationCanvas::hoverAt(QPointF point) {
+  m_hover = point;
+  m_hovering = boundingRect().contains(point);
+  refreshCursor();
+  update();
+}
+
+void AnnotationCanvas::leave() {
+  m_hovering = false;
+  update();
+}
+
+void AnnotationCanvas::pointerPress(QPointF point, int button, int modifiers) {
   if (!m_document) return;
-  const auto tool = m_document->tool();
-  if (brushCursor(tool)) {
-    setCursor(Qt::BlankCursor);
+  hoverAt(point);
+  if (button == Qt::RightButton) {
+    emit contextRequested(point.x(), point.y(), m_document->contextAt(point * m_pixelRatio, 6 * m_pixelRatio));
     return;
   }
-  const int handle = tool == "select" && m_document->hasSelection()
-      ? (m_pressed && m_dragHandle >= 0 ? m_dragHandle
-          : m_document->selectionHandleAt(m_hover * m_pixelRatio, 8 * m_pixelRatio)) : -1;
-  if (handle >= 0) {
-    const auto handles = m_document->selectionHandles(m_pixelRatio);
-    if (handle >= handles.size()) {
-      setCursor(Qt::ArrowCursor);
-      return;
-    }
-    if (handle == 8) {
-      setCursor(m_rotationCursor);
-      return;
-    }
-    if (handle >= 9) setCursor(Qt::SizeAllCursor);
-    else {
-      const auto polygon = m_document->selectionPolygon();
-      const auto center = (polygon[0] + polygon[2]) / 2;
-      const auto direction = handles[handle] - center;
-      const qreal angle = std::atan2(direction.y(), direction.x());
-      const int sector = (int(std::round(angle / (3.14159265358979323846 / 4))) + 8) % 4;
-      setCursor(sector == 0 ? Qt::SizeHorCursor : sector == 1 ? Qt::SizeFDiagCursor
-          : sector == 2 ? Qt::SizeVerCursor : Qt::SizeBDiagCursor);
-    }
-  } else if (tool == "select" && m_pressed && m_document->hasSelection()) setCursor(Qt::ClosedHandCursor);
-  else setCursor(tool == "select" ? Qt::ArrowCursor : tool == "text" ? Qt::IBeamCursor : Qt::CrossCursor);
-}
-
-void AnnotationCanvas::mousePressEvent(QMouseEvent *event) {
-  if (!m_document || m_tablet) { event->ignore(); return; }
-  m_hover = event->position();
-  m_hovering = true;
-  if (event->button() == Qt::RightButton) {
-    const auto kind = m_document->contextAt(event->position() * m_pixelRatio, 6 * m_pixelRatio);
-    emit contextRequested(event->position().x(), event->position().y(), kind);
-  } else {
-    forceActiveFocus();
-    m_pressed = true;
-    m_dragHandle = m_document->tool() == "select"
-        ? m_document->selectionHandleAt(m_hover * m_pixelRatio, 8 * m_pixelRatio) : -1;
-    m_document->begin(event->position() * m_pixelRatio, event->modifiers(), 8 * m_pixelRatio);
-  }
+  if (button != Qt::LeftButton) return;
+  forceActiveFocus();
+  m_pressed = true;
+  m_dragHandle = m_document->selectionHandleAt(point * m_pixelRatio, 8 * m_pixelRatio);
+  m_document->begin(point * m_pixelRatio, Qt::KeyboardModifiers(modifiers), 8 * m_pixelRatio);
   refreshCursor();
-  event->accept();
 }
 
-void AnnotationCanvas::mouseMoveEvent(QMouseEvent *event) {
-  m_hover = event->position(); m_hovering = true;
-  if (m_pressed && m_document) m_document->move(event->position() * m_pixelRatio, event->modifiers());
+void AnnotationCanvas::pointerMove(QPointF point, int modifiers) {
+  m_hover = point;
+  m_hovering = boundingRect().contains(point);
+  if (m_pressed && m_document) m_document->move(point * m_pixelRatio, Qt::KeyboardModifiers(modifiers));
   refreshCursor();
   update();
-  event->accept();
 }
 
-void AnnotationCanvas::mouseReleaseEvent(QMouseEvent *event) {
-  if (m_pressed && m_document && event->button() == Qt::LeftButton)
-    m_document->finish(event->position() * m_pixelRatio, event->modifiers());
+void AnnotationCanvas::pointerRelease(QPointF point, int button, int modifiers) {
+  if (m_pressed && m_document && button == Qt::LeftButton)
+    m_document->finish(point * m_pixelRatio, Qt::KeyboardModifiers(modifiers));
   m_pressed = false;
   m_dragHandle = -1;
-  refreshCursor(); update(); event->accept();
+  hoverAt(point);
 }
 
-void AnnotationCanvas::mouseDoubleClickEvent(QMouseEvent *event) {
-  if (m_document && event->button() == Qt::LeftButton
-      && (m_document->tool() == "select" || m_document->tool() == "text")) {
-    m_pressed = false;
-    m_dragHandle = -1;
-    m_document->editTextAt(event->position() * m_pixelRatio, 6 * m_pixelRatio);
-    event->accept();
-  } else mousePressEvent(event);
-}
-
-void AnnotationCanvas::mouseUngrabEvent() {
-  if (m_document) m_document->cancelStroke();
-  m_pressed = false; m_tablet = false;
+void AnnotationCanvas::pointerDoubleClick(QPointF point) {
+  if (!m_document || (m_document->tool() != "select" && m_document->tool() != "text")) return;
+  m_pressed = false;
   m_dragHandle = -1;
+  m_document->editTextAt(point * m_pixelRatio, 6 * m_pixelRatio);
+  refreshCursor();
+}
+
+void AnnotationCanvas::cancelPointer() {
+  m_pressed = false;
+  m_dragHandle = -1;
+  if (m_document) m_document->cancelStroke();
   refreshCursor();
   update();
-}
-
-void AnnotationCanvas::hoverEnterEvent(QHoverEvent *event) {
-  m_hover = event->position(); m_hovering = true;
-  refreshCursor(); update();
-}
-
-void AnnotationCanvas::hoverMoveEvent(QHoverEvent *event) {
-  m_hover = event->position(); m_hovering = true;
-  refreshCursor(); update();
-}
-
-void AnnotationCanvas::hoverLeaveEvent(QHoverEvent *) { m_hovering = false; update(); }
-
-bool AnnotationCanvas::event(QEvent *event) {
-  if (event->type() == QEvent::TabletPress || event->type() == QEvent::TabletMove || event->type() == QEvent::TabletRelease) {
-    if (!m_document) return false;
-    auto *tablet = static_cast<QTabletEvent *>(event);
-    const auto point = tablet->position() * m_pixelRatio;
-    if (event->type() == QEvent::TabletPress) {
-      m_tablet = true; forceActiveFocus();
-      m_document->begin(point, tablet->modifiers(), 8 * m_pixelRatio);
-    } else if (event->type() == QEvent::TabletMove && m_tablet) m_document->move(point, tablet->modifiers());
-    else if (event->type() == QEvent::TabletRelease && m_tablet) {
-      m_document->finish(point, tablet->modifiers()); m_tablet = false;
-    }
-    event->accept(); return true;
-  }
-  return QQuickPaintedItem::event(event);
 }

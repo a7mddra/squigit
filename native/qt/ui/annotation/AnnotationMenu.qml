@@ -61,11 +61,20 @@ Popup {
                 Rectangle {
                     anchors.fill: parent
                     visible: !entry.modelData.separator
-                    color: hover.containsMouse && entry.enabled ? "#444444" : "transparent"
+                    color: hover.containsMouse && entry.enabled ? "#4a4a4a" : entry.modelData.checked ? "#3a3a3a" : "transparent"
                     radius: 5
+                    Image {
+                        x: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 14
+                        height: 14
+                        source: "icons/check.svg"
+                        sourceSize: Qt.size(28, 28)
+                        visible: entry.modelData.checked === true
+                    }
                     Text {
                         anchors.left: parent.left
-                        anchors.leftMargin: 10
+                        anchors.leftMargin: 30
                         anchors.verticalCenter: parent.verticalCenter
                         text: entry.modelData.label || ""
                         color: entry.enabled ? "#f5f5f5" : "#858585"

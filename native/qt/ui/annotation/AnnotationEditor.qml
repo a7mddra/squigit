@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Dialogs
 import SquigitAnnotation 1.0
 import "../components"
 
@@ -11,11 +10,9 @@ Item {
     property bool ownsInput: false
     property bool composerFocused: false
     property real bottomInset: 24
-    readonly property bool nativeDialogOpen: fileDialog.visible
     readonly property var document: controller.annotations
-    readonly property bool textInput: document.editingText || composerFocused || colorPicker.visible
-    readonly property bool shortcutsActive: visible && ownsInput && !fileDialog.visible && !toolMenu.visible && !objectMenu.visible && !textMenu.visible
-    readonly property rect dockArea: Qt.rect(dock.x, dock.y, dock.width, dock.height)
+    readonly property bool textInput: textEditor.textFocused || composerFocused || colorPicker.visible
+    readonly property bool shortcutsActive: visible && ownsInput && !toolMenu.visible && !objectMenu.visible && !textMenu.visible
     property real contextX: 0
     property real contextY: 0
 
@@ -59,10 +56,12 @@ Item {
         if (tool === "eraser") {
             toolMenu.showAt(px, py, [{
                         "label": "Brush eraser",
-                        "action": "eraser"
+                        "action": "eraser",
+                        "checked": dock.eraseTool === "eraser"
                     }, {
                         "label": "Object eraser",
-                        "action": "objectEraser"
+                        "action": "objectEraser",
+                        "checked": dock.eraseTool === "objectEraser"
                     }, {
                         "separator": true
                     }, {
@@ -72,32 +71,40 @@ Item {
         } else if (tool === "shapes") {
             toolMenu.showAt(px, py, [{
                         "label": "Rectangle",
-                        "action": "rectangle"
+                        "action": "rectangle",
+                        "checked": dock.shapeTool === "rectangle"
                     }, {
                         "label": "Arrow",
-                        "action": "arrow"
+                        "action": "arrow",
+                        "checked": dock.shapeTool === "arrow"
                     }, {
                         "label": "Line",
-                        "action": "line"
+                        "action": "line",
+                        "checked": dock.shapeTool === "line"
                     }, {
                         "label": "Circle",
-                        "action": "ellipse"
+                        "action": "ellipse",
+                        "checked": dock.shapeTool === "ellipse"
                     }, {
                         "separator": true
                     }, {
                         "label": "Solid rectangle",
-                        "action": "fillRectangle"
+                        "action": "fillRectangle",
+                        "checked": dock.shapeTool === "fillRectangle"
                     }, {
                         "label": "Solid circle",
-                        "action": "fillEllipse"
+                        "action": "fillEllipse",
+                        "checked": dock.shapeTool === "fillEllipse"
                     }]);
         } else if (tool === "highlighter") {
             toolMenu.showAt(px, py, [{
                         "label": "Highlighter brush",
-                        "action": "highlighter"
+                        "action": "highlighter",
+                        "checked": dock.highlightTool === "highlighter"
                     }, {
                         "label": "Solid rectangle highlighter",
-                        "action": "highlightRectangle"
+                        "action": "highlightRectangle",
+                        "checked": dock.highlightTool === "highlightRectangle"
                     }]);
         } else if (tool === "copy") {
             toolMenu.showAt(px, py, [{
@@ -148,9 +155,10 @@ Item {
             document.redo();
         else if (action === "clear")
             document.clear();
-        else if (action === "selectAll")
+        else if (action === "selectAll") {
             document.selectAll();
-        else if (action === "delete")
+            surface.forceActiveFocus();
+        } else if (action === "delete")
             document.deleteSelected();
         else if (action === "copy")
             document.copySelected();
@@ -158,8 +166,6 @@ Item {
             document.cutSelected();
         else if (action === "paste")
             document.paste();
-        else if (action === "insert")
-            fileDialog.open();
         else if (action === "format")
             formatAt(contextX, contextY);
         else {
@@ -178,6 +184,30 @@ Item {
         anchors.fill: parent
         document: root.document
         pixelRatio: root.controller.pixelRatio
+        MouseArea {
+            id: canvasPointer
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            hoverEnabled: true
+            preventStealing: true
+            cursorShape: surface.cursorShape
+            onEntered: surface.hoverAt(Qt.point(mouseX, mouseY))
+            onExited: surface.leave()
+            onPressed: function (mouse) {
+                surface.pointerPress(Qt.point(mouse.x, mouse.y), mouse.button, mouse.modifiers);
+            }
+            onPositionChanged: function (mouse) {
+                surface.pointerMove(Qt.point(mouse.x, mouse.y), mouse.modifiers);
+            }
+            onReleased: function (mouse) {
+                surface.pointerRelease(Qt.point(mouse.x, mouse.y), mouse.button, mouse.modifiers);
+            }
+            onDoubleClicked: function (mouse) {
+                if (mouse.button === Qt.LeftButton)
+                    surface.pointerDoubleClick(Qt.point(mouse.x, mouse.y));
+            }
+            onCanceled: surface.cancelPointer()
+        }
         onContextRequested: function (px, py, kind) {
             root.contextX = px;
             root.contextY = py;
@@ -208,9 +238,6 @@ Item {
                             "shortcut": "Ctrl V",
                             "action": "paste"
                         }, {
-                            "label": "Insert…",
-                            "action": "insert"
-                        }, {
                             "separator": true
                         }, {
                             "label": "Select all",
@@ -228,6 +255,7 @@ Item {
     }
 
     AnnotationTextEditor {
+        id: textEditor
         z: 2
         document: root.document
         pixelRatio: root.controller.pixelRatio
@@ -309,18 +337,6 @@ Item {
             root.formatAt(px, py);
         }
     }
-    FileDialog {
-        id: fileDialog
-        title: "Insert image"
-        fileMode: FileDialog.OpenFile
-        nameFilters: ["Images (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.svg)"]
-        onVisibleChanged: surface.setDialogOpen(visible)
-        onAccepted: {
-            root.document.insertImage(selectedFile);
-            surface.forceActiveFocus();
-        }
-        onRejected: surface.forceActiveFocus()
-    }
 
     Repeater {
         model: [{
@@ -359,6 +375,13 @@ Item {
             }
         }
     }
+    Shortcut {
+        sequence: "Ctrl+A"
+        context: Qt.ApplicationShortcut
+        enabled: root.shortcutsActive && !root.textInput
+        onActivated: root.run("selectAll")
+    }
+
     Repeater {
         model: [{
                 "key": "Ctrl+Shift+C",
@@ -387,9 +410,6 @@ Item {
             }, {
                 "key": "Ctrl+V",
                 "action": "paste"
-            }, {
-                "key": "Ctrl+A",
-                "action": "selectAll"
             }]
         delegate: Item {
             id: commandBinding

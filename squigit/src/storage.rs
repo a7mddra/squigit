@@ -123,7 +123,7 @@ pub fn snapshots_dir() -> Result<PathBuf> {
     dirs::picture_dir()
         .or_else(|| dirs::home_dir().map(|home| home.join("Pictures")))
         .context("Could not find Pictures")
-        .map(|directory| directory.join("Squigit"))
+        .map(|directory| directory.join("squigit"))
 }
 
 impl ModelStorage for AppData {

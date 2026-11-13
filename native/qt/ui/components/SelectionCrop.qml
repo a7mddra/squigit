@@ -95,29 +95,6 @@ Item {
         color: "#70000000"
     }
 
-    MouseArea {
-        id: moveMouse
-        enabled: !root.annotationMode
-        x: root.area.x
-        y: root.area.y
-        width: root.area.width
-        height: root.area.height
-        preventStealing: true
-        cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-        onPressed: function (mouse) {
-            root.begin(moveMouse, mouse, 0, 0, true);
-        }
-        onPositionChanged: function (mouse) {
-            if (pressed)
-                root.dragTo(moveMouse, mouse);
-        }
-        onReleased: function (mouse) {
-            root.dragTo(moveMouse, mouse);
-            root.interacting = false;
-        }
-        onCanceled: root.interacting = false
-    }
-
     OcrTextLayer {
         id: ocrTextLayer
         controller: root.controller
@@ -136,7 +113,7 @@ Item {
     }
 
     Repeater {
-        model: root.annotationMode ? 4 : 0
+        model: 4
         delegate: MouseArea {
             id: borderMove
             required property int index
@@ -145,7 +122,8 @@ Item {
             width: index % 2 === 0 ? root.area.width + 6 : 6
             height: index % 2 === 0 ? 6 : root.area.height + 6
             preventStealing: true
-            cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+            hoverEnabled: true
+            cursorShape: Qt.SizeAllCursor
             onPressed: function (mouse) {
                 root.begin(borderMove, mouse, 0, 0, true);
             }
@@ -217,6 +195,7 @@ Item {
                 id: resizeMouse
                 anchors.fill: parent
                 preventStealing: true
+                hoverEnabled: true
                 cursorShape: handle.modelData.cursor
                 onPressed: function (mouse) {
                     root.begin(resizeMouse, mouse, handle.modelData.horizontal, handle.modelData.vertical, false);
