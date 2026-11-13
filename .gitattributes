@@ -42,12 +42,3 @@
 *.yaml    text
 *.yml     text
 *.md      text
-
-# -----------------------------------------------------------------------------
-# Linguist Overrides
-# -----------------------------------------------------------------------------
-*.qml     linguist-vendored
-*.sh      linguist-vendored
-*.yml     linguist-vendored
-*.json    linguist-vendored
-*.md      linguist-vendored
