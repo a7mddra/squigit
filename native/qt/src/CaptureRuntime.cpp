@@ -1,5 +1,6 @@
 #include "CaptureRuntime.h"
 #include "CaptureEngine.h"
+#include "CaptureCursor.h"
 #include "annotation/AnnotationCanvas.h"
 #include "DisplayGuard.h"
 #include "Grabber.h"
@@ -138,6 +139,7 @@ CaptureRuntime::CaptureRuntime(QObject *parent)
 #endif
   qmlRegisterType<AnnotationCanvas>("SquigitAnnotation", 1, 0, "AnnotationCanvas");
   qmlRegisterUncreatableType<AnnotationDocument>("SquigitAnnotation", 1, 0, "AnnotationDocument", "Owned by the capture");
+  m_cursor = std::make_unique<CaptureCursor>();
   m_backgrounds = new BackgroundImageProvider();
   m_qml.addImageProvider("backgrounds", m_backgrounds);
   m_captureComponent.loadUrl(QUrl("qrc:/views/CaptureWindow.qml"));
@@ -305,6 +307,11 @@ void CaptureRuntime::beginCapture(const CaptureAction &action, quint64 generatio
       window->setScreen(target);
     window->setGeometry(target ? target->geometry() : frame.geometry);
     applyPlatformWindowHacks(window);
+    m_cursor->watch(window);
+    connect(controller->annotations(), &AnnotationDocument::styleChanged,
+            m_cursor.get(), &CaptureCursor::refresh);
+    connect(controller->annotations(), &AnnotationDocument::selectionChanged,
+            m_cursor.get(), &CaptureCursor::refresh);
     new CaptureWindowFocus(window, controller);
     window->showFullScreen();
   }

@@ -2,6 +2,7 @@
 
 #include "AnnotationDocument.h"
 #include <QPointer>
+#include <QCursor>
 #include <QQuickPaintedItem>
 
 class AnnotationCanvas : public QQuickPaintedItem {
@@ -29,6 +30,7 @@ protected:
   void mouseReleaseEvent(QMouseEvent *event) override;
   void mouseDoubleClickEvent(QMouseEvent *event) override;
   void mouseUngrabEvent() override;
+  void hoverEnterEvent(QHoverEvent *event) override;
   void hoverMoveEvent(QHoverEvent *event) override;
   void hoverLeaveEvent(QHoverEvent *event) override;
   bool event(QEvent *event) override;
@@ -37,6 +39,8 @@ private:
   void refreshCursor();
   QPointer<AnnotationDocument> m_document;
   qreal m_pixelRatio = 1;
+  QCursor m_rotationCursor;
+  int m_dragHandle = -1;
   QPointF m_hover;
   bool m_hovering = false;
   bool m_pressed = false;

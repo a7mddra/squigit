@@ -68,6 +68,8 @@ Item {
         MouseArea {
             anchors.fill: parent
             acceptedButtons: Qt.RightButton
+            hoverEnabled: true
+            cursorShape: Qt.IBeamCursor
             onPressed: function (mouse) {
                 if (input.selectedText.length === 0)
                     input.cursorPosition = input.positionAt(mouse.x, mouse.y);
