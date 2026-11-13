@@ -33,6 +33,7 @@ signals:
   void contextRequested(qreal x, qreal y, const QString &kind);
 
 private:
+  void requestRepaint(const QRectF &bounds = {});
   void refreshCursor();
   void updateBrushCursor();
   QPointer<AnnotationDocument> m_document;

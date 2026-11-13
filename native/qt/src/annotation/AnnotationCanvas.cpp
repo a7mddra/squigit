@@ -23,16 +23,16 @@ void AnnotationCanvas::setDocument(AnnotationDocument *document) {
     connect(document, &AnnotationDocument::changed, this, [this] {
       refreshCursor();
       const auto bounds = m_document->repaintBounds();
-      if (bounds.isEmpty()) update();
-      else update(QRectF(bounds.x() / m_pixelRatio, bounds.y() / m_pixelRatio,
-                         bounds.width() / m_pixelRatio, bounds.height() / m_pixelRatio).adjusted(-3, -3, 3, 3).toAlignedRect());
+      if (bounds.isEmpty()) requestRepaint();
+      else requestRepaint(QRectF(bounds.x() / m_pixelRatio, bounds.y() / m_pixelRatio,
+                                 bounds.width() / m_pixelRatio, bounds.height() / m_pixelRatio).adjusted(-3, -3, 3, 3));
     });
     connect(document, &AnnotationDocument::styleChanged, this, [this] { refreshCursor(); updateBrushCursor(); });
   }
   refreshCursor();
   updateBrushCursor();
   emit documentChanged();
-  update();
+  requestRepaint();
 }
 
 void AnnotationCanvas::setPixelRatio(qreal ratio) {
@@ -41,7 +41,13 @@ void AnnotationCanvas::setPixelRatio(qreal ratio) {
   refreshCursor();
   emit pixelRatioChanged();
   updateBrushCursor();
-  update();
+  requestRepaint();
+}
+
+void AnnotationCanvas::requestRepaint(const QRectF &bounds) {
+  const auto canvasBounds = boundingRect();
+  const auto area = (bounds.isEmpty() ? canvasBounds : bounds.intersected(canvasBounds)).toAlignedRect();
+  if (!area.isEmpty()) QQuickPaintedItem::update(area);
 }
 
 void AnnotationCanvas::paint(QPainter *p) {
@@ -125,7 +131,7 @@ void AnnotationCanvas::updateBrushCursor() {
   }
   const auto damage = m_brushCursorBounds.united(bounds);
   m_brushCursorBounds = bounds;
-  if (!damage.isEmpty()) update(damage.toAlignedRect());
+  if (!damage.isEmpty()) requestRepaint(damage);
 }
 
 void AnnotationCanvas::pointerPress(QPointF point, int button, int modifiers) {
@@ -172,5 +178,5 @@ void AnnotationCanvas::cancelPointer() {
   m_dragHandle = -1;
   if (m_document) m_document->cancelStroke();
   refreshCursor();
-  update();
+  requestRepaint();
 }
