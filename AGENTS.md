@@ -218,6 +218,12 @@ from another display must restore keyboard input without toggling OCR.
 
 Other capture contracts:
 
+- Every scene uses the shared crop's icon-only Full screen action beside its
+  top-right handle. It sits outside on the dim overlay when space permits and
+  moves inside near the display edge. It expands the crop to the current
+  display through `setSelection`; resize handles stay visible within the
+  display bounds and remain available for manual resizing afterward.
+
 - OCR has no toast or separate scan/cancel toolbar. After crop selection, a
   bottom-centered capsule uses a 180 ms fade-in shared with QR, without blur
   or scale. Ask Google alone retains its 700 ms blur-and-scale opening.

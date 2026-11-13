@@ -10,6 +10,7 @@
         <file>components/OcrActionDock.qml</file>
         <file>components/QrStatusDock.qml</file>
         <file>components/icons/open-external.svg</file>
+        <file>components/icons/full-screen.svg</file>
         <file>annotation/AnnotationColorPicker.qml</file>
         <file>annotation/AnnotationSizeControl.qml</file>
         <file>annotation/AnnotationDock.qml</file>

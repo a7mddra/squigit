@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Qt5Compat.GraphicalEffects
+import "../annotation"
 
 Item {
     id: root
@@ -29,6 +31,12 @@ Item {
 
     function selectAllText() {
         ocrTextLayer.selectAll();
+    }
+
+    function expandToDisplay() {
+        clearTextSelection();
+        cropInteractionStarted();
+        controller.setSelection(Qt.rect(0, 0, width, height));
     }
 
     function begin(item, mouse, horizontal, vertical, move) {
@@ -193,8 +201,8 @@ Item {
         delegate: Item {
             id: handle
             required property var modelData
-            x: root.area.x + root.area.width * (modelData.horizontal + 1) / 2 - width / 2
-            y: root.area.y + root.area.height * (modelData.vertical + 1) / 2 - height / 2
+            x: Math.max(4, Math.min(root.width - 4, root.area.x + root.area.width * (modelData.horizontal + 1) / 2)) - width / 2
+            y: Math.max(4, Math.min(root.height - 4, root.area.y + root.area.height * (modelData.vertical + 1) / 2)) - height / 2
             width: 24
             height: 24
 
@@ -226,6 +234,47 @@ Item {
                 }
                 onCanceled: root.interacting = false
             }
+        }
+    }
+
+    Item {
+        id: fullScreenButton
+        readonly property bool fitsOutside: root.area.x + root.area.width + width + 24 <= root.width
+        x: Math.max(8, Math.min(root.width - width - 8, fitsOutside ? root.area.x + root.area.width + 16 : root.area.x + root.area.width - width - 16))
+        y: Math.max(8, Math.min(root.height - height - 8, fitsOutside ? root.area.y - height / 2 : root.area.y + 16))
+        width: 32
+        height: 32
+
+        Image {
+            anchors.centerIn: parent
+            width: 22
+            height: 22
+            source: "icons/full-screen.svg"
+            sourceSize: Qt.size(44, 44)
+            opacity: fullScreenMouse.pressed ? 0.6 : fullScreenMouse.containsMouse ? 1 : 0.85
+            layer.enabled: true
+            layer.effect: DropShadow {
+                horizontalOffset: 0
+                verticalOffset: 1
+                radius: 3
+                samples: 7
+                color: "#b0000000"
+            }
+        }
+
+        MouseArea {
+            id: fullScreenMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.expandToDisplay()
+        }
+
+        AnnotationToolTip {
+            text: "Full screen"
+            visible: fullScreenMouse.containsMouse && !fullScreenMouse.pressed && !root.interacting
+            x: Math.max(8 - fullScreenButton.x, Math.min((fullScreenButton.width - width) / 2, root.width - fullScreenButton.x - width - 8))
+            y: fullScreenButton.y < height + 8 ? fullScreenButton.height + 8 : -height - 8
         }
     }
 }
