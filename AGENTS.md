@@ -219,8 +219,10 @@ from another display must restore keyboard input without toggling OCR.
 Other capture contracts:
 
 - OCR has no toast or separate scan/cancel toolbar. After crop selection, a
-  bottom-centered capsule uses the same opening animation as Ask Google and
-  shows a circular rotator in the text color with "Recognizing display text".
+  bottom-centered capsule uses a 180 ms fade-in shared with QR, without blur
+  or scale. Ask Google alone retains its 700 ms blur-and-scale opening.
+  The OCR capsule shows a circular rotator in the text color with
+  "Recognizing display text".
   Success animates its width to fit Select all, Copy, Search, Open in Translate,
   and Hide OCR. Errors appear
   inside the capsule with Retry. Copy, Search, and Translate require text

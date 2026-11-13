@@ -5,6 +5,7 @@ import "../annotation"
 
 FloatingCapsule {
     id: root
+    focusReveal: true
 
     readonly property bool textFocused: textArea.activeFocus
     readonly property int composerWidth: 560

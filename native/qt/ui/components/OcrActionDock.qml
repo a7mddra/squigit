@@ -16,7 +16,7 @@ FloatingCapsule {
     Behavior on width  {
         enabled: root.visible
         NumberAnimation {
-            duration: 360
+            duration: 180
             easing.type: Easing.OutCubic
         }
     }
@@ -129,7 +129,7 @@ FloatingCapsule {
 
         Behavior on opacity  {
             NumberAnimation {
-                duration: 240
+                duration: 180
                 easing.type: Easing.OutCubic
             }
         }

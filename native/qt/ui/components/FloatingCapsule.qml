@@ -7,10 +7,11 @@ Item {
     id: root
     default property alias content: contentHost.data
     property real capRadius: 28
+    property bool focusReveal: false
     readonly property real startBlurRadius: 24
-    property real openScale: 1.15
+    property real openScale: focusReveal ? 1.15 : 1
     property real openOpacity: 0
-    property real openBlur: startBlurRadius
+    property real openBlur: focusReveal ? startBlurRadius : 0
 
     width: Math.min(560, parent ? parent.width - 24 : 560)
     height: 56
@@ -29,11 +30,16 @@ Item {
 
     function restartOpenAnimation() {
         openAnimation.stop();
-        openScale = 1.15;
+        fadeInAnimation.stop();
+        openScale = focusReveal ? 1.15 : 1;
         openOpacity = 0;
-        openBlur = startBlurRadius;
-        if (visible)
+        openBlur = focusReveal ? startBlurRadius : 0;
+        if (!visible)
+            return;
+        if (focusReveal)
             openAnimation.start();
+        else
+            fadeInAnimation.start();
     }
 
     Connections {
@@ -43,6 +49,16 @@ Item {
         }
     }
     Component.onCompleted: restartOpenAnimation()
+
+    NumberAnimation {
+        id: fadeInAnimation
+        target: root
+        property: "openOpacity"
+        from: 0
+        to: 1
+        duration: 180
+        easing.type: Easing.OutCubic
+    }
 
     ParallelAnimation {
         id: openAnimation
