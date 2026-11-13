@@ -470,7 +470,7 @@ void AnnotationDocument::begin(QPointF point, Qt::KeyboardModifiers modifiers, q
   if (m_image.isNull()) return;
   m_start = m_last = point;
   m_pixelSize = tolerance / 8;
-  const int handle = selectionHandleAt(point, tolerance);
+  const int handle = m_tool == "select" ? selectionHandleAt(point, tolerance) : -1;
   if (handle >= 0) {
     finishTextEditing();
     if (!hasSelection()) return;
@@ -490,8 +490,8 @@ void AnnotationDocument::begin(QPointF point, Qt::KeyboardModifiers modifiers, q
     notifySelection();
     return;
   }
-  const int hit = hitTest(point, tolerance);
-  if (m_tool == "select" || (hit >= 0 && !(modifiers & Qt::AltModifier))) {
+  const int hit = m_tool == "select" || m_tool == "text" ? hitTest(point, tolerance) : -1;
+  if (m_tool == "select") {
     if (modifiers & Qt::ControlModifier) {
       if (m_selected.contains(hit)) { m_selected.remove(hit); notifySelection(); return; }
       if (hit >= 0) m_selected.insert(hit);
@@ -510,6 +510,10 @@ void AnnotationDocument::begin(QPointF point, Qt::KeyboardModifiers modifiers, q
   }
   m_selected.clear();
   if (m_tool == "text") {
+    if (hit >= 0 && m_items[hit].tool == "text") {
+      beginTextEditing(hit);
+      return;
+    }
     Annotation item;
     item.tool = "text";
     item.color = m_color;

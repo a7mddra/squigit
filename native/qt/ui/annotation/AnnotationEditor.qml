@@ -115,18 +115,6 @@ Item {
                         "label": "Export normal image",
                         "action": "exportNormal"
                     }]);
-        } else if (tool === "history") {
-            toolMenu.showAt(px, py, [{
-                        "label": "Undo",
-                        "shortcut": "Ctrl Z",
-                        "action": "undo",
-                        "enabled": document.canUndo
-                    }, {
-                        "label": "Redo",
-                        "shortcut": "Ctrl Shift Z",
-                        "action": "redo",
-                        "enabled": document.canRedo
-                    }]);
         } else if (tool === "select") {
             toolMenu.showAt(px, py, [{
                         "label": "Select all",

@@ -33,8 +33,7 @@ Window {
             return;
         if (annotationMode && annotationEditor.handleEscape())
             return;
-        if (!selectionCrop.clearTextSelection())
-            root.controller.cancel();
+        selectionCrop.clearTextSelection();
     }
 
     Image {

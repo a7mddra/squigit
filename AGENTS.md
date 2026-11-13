@@ -192,8 +192,8 @@ overlay. OCR text editors never take keyboard focus
 on a press: use `activeFocusOnPress: false` and `persistentSelection: true`.
 The overlay copies the selected editor through its `copy()` method. Selecting
 another text line clears previous selections without focusing an editor.
-Tapping Escape clears OCR text selection before dismissing the capture on a
-subsequent tap. Holding Escape for 650 ms cancels the active capture directly,
+Tapping Escape clears text or annotation selection and closes open menus without
+dismissing the capture. Holding Escape for 650 ms cancels the active capture directly,
 including pending OCR or QR work. Each capture briefly fades in a hint below the
 top edge with an Esc keycap; hovering the top-center edge drops down an X exit
 button that cancels the capture. Clicking blank space or starting a crop

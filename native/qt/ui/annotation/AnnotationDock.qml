@@ -71,6 +71,7 @@ Item {
             }
             AnnotationToolButton {
                 id: eraseButton
+                chevron: true
                 iconName: "eraser"
                 tip: root.eraseTool === "eraser" ? "Brush eraser · E" : "Object eraser · E"
                 selected: root.document.tool === "eraser" || root.document.tool === "objectEraser"
@@ -79,6 +80,7 @@ Item {
             }
             AnnotationToolButton {
                 id: shapeButton
+                chevron: true
                 iconName: root.shapeTool
                 tip: "Shapes · R"
                 selected: ["rectangle", "arrow", "line", "ellipse", "fillRectangle", "fillEllipse"].indexOf(root.document.tool) >= 0
@@ -111,6 +113,7 @@ Item {
             }
             AnnotationToolButton {
                 id: highlighterButton
+                chevron: true
                 iconName: root.highlightTool === "highlighter" ? "highlighter" : "fillRectangle"
                 tip: "Highlighter · H"
                 selected: root.document.tool === "highlighter" || root.document.tool === "highlightRectangle"
@@ -125,6 +128,7 @@ Item {
             }
             AnnotationToolButton {
                 id: copyButton
+                chevron: true
                 iconName: "copy"
                 tip: "Copy annotated image · Ctrl Shift C"
                 onClicked: root.actionRequested("copyImage")
@@ -132,6 +136,7 @@ Item {
             }
             AnnotationToolButton {
                 id: exportButton
+                chevron: true
                 iconName: "export"
                 tip: "Export annotated image · Ctrl S"
                 onClicked: root.actionRequested("exportImage")
@@ -149,7 +154,6 @@ Item {
                 tip: "Undo · Ctrl Z"
                 enabled: root.document.canUndo
                 onClicked: root.document.undo()
-                onAlternateRequested: root.options(undoButton, "history")
             }
             AnnotationToolButton {
                 id: redoButton
@@ -157,7 +161,6 @@ Item {
                 tip: "Redo · Ctrl Shift Z"
                 enabled: root.document.canRedo
                 onClicked: root.document.redo()
-                onAlternateRequested: root.options(redoButton, "history")
             }
         }
     }

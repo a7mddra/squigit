@@ -8,7 +8,7 @@ Item {
     property string iconName
     property string tip
     property bool selected: false
-    property bool chevron: true
+    property bool chevron: false
     signal clicked
     signal alternateRequested
     width: 38
