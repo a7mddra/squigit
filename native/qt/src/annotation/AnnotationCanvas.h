@@ -34,9 +34,11 @@ signals:
 
 private:
   void refreshCursor();
+  void updateBrushCursor();
   QPointer<AnnotationDocument> m_document;
   qreal m_pixelRatio = 1;
   QPointF m_hover;
+  QRectF m_brushCursorBounds;
   int m_cursorShape = Qt::ArrowCursor;
   int m_dragHandle = -1;
   bool m_hovering = false;

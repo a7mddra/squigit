@@ -20,10 +20,17 @@ void AnnotationCanvas::setDocument(AnnotationDocument *document) {
   if (m_document) disconnect(m_document, nullptr, this, nullptr);
   m_document = document;
   if (document) {
-    connect(document, &AnnotationDocument::changed, this, [this] { refreshCursor(); update(); });
-    connect(document, &AnnotationDocument::styleChanged, this, [this] { refreshCursor(); update(); });
+    connect(document, &AnnotationDocument::changed, this, [this] {
+      refreshCursor();
+      const auto bounds = m_document->repaintBounds();
+      if (bounds.isEmpty()) update();
+      else update(QRectF(bounds.x() / m_pixelRatio, bounds.y() / m_pixelRatio,
+                         bounds.width() / m_pixelRatio, bounds.height() / m_pixelRatio).adjusted(-3, -3, 3, 3).toAlignedRect());
+    });
+    connect(document, &AnnotationDocument::styleChanged, this, [this] { refreshCursor(); updateBrushCursor(); });
   }
   refreshCursor();
+  updateBrushCursor();
   emit documentChanged();
   update();
 }
@@ -33,6 +40,7 @@ void AnnotationCanvas::setPixelRatio(qreal ratio) {
   m_pixelRatio = ratio;
   refreshCursor();
   emit pixelRatioChanged();
+  updateBrushCursor();
   update();
 }
 
@@ -101,12 +109,23 @@ void AnnotationCanvas::hoverAt(QPointF point) {
   m_hover = point;
   m_hovering = boundingRect().contains(point);
   refreshCursor();
-  update();
+  updateBrushCursor();
 }
 
 void AnnotationCanvas::leave() {
   m_hovering = false;
-  update();
+  updateBrushCursor();
+}
+
+void AnnotationCanvas::updateBrushCursor() {
+  QRectF bounds;
+  if (m_document && m_hovering && brushCursor(m_document->tool())) {
+    const qreal radius = std::max(qreal(2.5), m_document->toolSize() / m_pixelRatio / 2) + 3;
+    bounds = QRectF(m_hover - QPointF(radius, radius), QSizeF(radius * 2, radius * 2));
+  }
+  const auto damage = m_brushCursorBounds.united(bounds);
+  m_brushCursorBounds = bounds;
+  if (!damage.isEmpty()) update(damage.toAlignedRect());
 }
 
 void AnnotationCanvas::pointerPress(QPointF point, int button, int modifiers) {
@@ -129,7 +148,7 @@ void AnnotationCanvas::pointerMove(QPointF point, int modifiers) {
   m_hovering = boundingRect().contains(point);
   if (m_pressed && m_document) m_document->move(point * m_pixelRatio, Qt::KeyboardModifiers(modifiers));
   refreshCursor();
-  update();
+  updateBrushCursor();
 }
 
 void AnnotationCanvas::pointerRelease(QPointF point, int button, int modifiers) {

@@ -17,7 +17,6 @@ class QPainter;
 struct Annotation {
   QString tool;
   QPainterPath path;
-  QPainterPath erased;
   QPainterPath fragment;
   qreal fragmentSize = 0;
   QColor color;
@@ -33,6 +32,8 @@ struct Annotation {
   QPointF end;
   QImage blur;
   QRectF blurRect;
+  mutable QPainterPath blurMask;
+  mutable bool blurMaskValid = false;
   QTransform transform;
 };
 
@@ -58,6 +59,7 @@ public:
   explicit AnnotationDocument(QObject *parent = nullptr);
   void setImage(const QImage &image);
   QSize imageSize() const { return m_image.size(); }
+  QRectF repaintBounds() const { return m_repaintBounds; }
   bool canUndo() const { return m_historyIndex > 0; }
   bool canRedo() const { return m_historyIndex + 1 < m_history.size(); }
   bool hasSelection() const { return !m_selected.isEmpty(); }
@@ -117,24 +119,26 @@ private:
   enum class Gesture { None, Move, Resize, Rotate, Radius, Endpoint, CreateText, Erase };
   void commit();
   void notifySelection();
+  void notifyRegionChanged(const QRectF &bounds);
   void captureGesture();
   void transformSelection(QPointF point, Qt::KeyboardModifiers modifiers);
   void beginTextEditing(int index, bool draft = false);
-  void paintAnnotation(QPainter &painter, const Annotation &item) const;
+  void paintAnnotation(QPainter &painter, const Annotation &item, bool preview = false) const;
   void updateShape(Annotation &item) const;
   void updateActivePath(bool final);
   void prepareBlur();
   void cropBlur();
-  void eraseAt(QPointF point);
+  void flushErasure();
   void splitErasedItems();
   int hitTest(QPointF point, qreal tolerance) const;
   QRectF localBounds(const Annotation &item) const;
   QRectF selectionBounds() const;
   bool lineSelection() const;
   bool radiusSelection() const;
-  void renumberCounters();
+  QRectF renumberCounters();
 
   QImage m_image;
+  QRectF m_repaintBounds;
   QVector<Annotation> m_items;
   QVector<QVector<Annotation>> m_history;
   int m_historyIndex = 0;
@@ -149,6 +153,8 @@ private:
   bool m_drawing = false;
   bool m_erased = false;
   QVector<bool> m_erasedItems;
+  QVector<QPointF> m_erasePoints;
+  QTimer m_eraseUpdate;
   bool m_formatting = false;
   bool m_formatModified = false;
   Annotation m_active;

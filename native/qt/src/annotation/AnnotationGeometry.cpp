@@ -138,18 +138,19 @@ QPainterPath ink(const Annotation &item) {
   }
   if (item.tool.startsWith("fill") || item.tool == "highlightRectangle") return item.path;
   if (item.tool == "blur") {
-    QPainterPath clip;
-    clip.addRect(item.blurRect);
-    return outline(item).intersected(clip);
+    if (!item.blurMaskValid) {
+      QPainterPath clip;
+      clip.addRect(item.blurRect);
+      item.blurMask = outline(item).intersected(clip);
+      item.blurMaskValid = true;
+    }
+    return item.blurMask;
   }
   return outline(item);
 }
 
 QPainterPath visibleInk(const Annotation &item) {
-  auto path = ink(item);
-  if (!item.fragment.isEmpty()) path = path.intersected(item.fragment);
-  if (!item.erased.isEmpty()) path = path.subtracted(item.erased);
-  return path;
+  return item.fragment.isEmpty() ? ink(item) : item.fragment;
 }
 
 QVector<QPainterPath> connectedComponents(const QPainterPath &path) {
