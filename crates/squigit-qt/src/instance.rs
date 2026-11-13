@@ -20,7 +20,7 @@ pub enum RuntimeEvent {
     MenuTick,
     Saved { action: String, path: PathBuf },
     Exported { path: PathBuf },
-    Asked { prompt: String },
+    Asked { prompt: String, path: PathBuf },
     Failed(String),
     Stopped,
 }
@@ -363,6 +363,10 @@ fn read_events(
                             .as_str()
                             .context("Missing Ask Google prompt")?
                             .to_owned(),
+                        path: event["path"]
+                            .as_str()
+                            .context("Missing Ask Google image path")?
+                            .into(),
                     }),
                     Some("qr_open") => {
                         let url = qr::parse_url(event["url"].as_str().context("Missing QR URL")?)?;

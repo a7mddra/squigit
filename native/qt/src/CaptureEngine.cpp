@@ -164,6 +164,7 @@ void CaptureEngine::select(const QRectF &logicalRect) {
   m_selection = clipped;
   if (!m_qrStatus.isEmpty() && !m_qrPending) {
     m_qrStatus.clear();
+    m_qrFallbackAvailable = false;
     emit qrChanged();
   }
   const bool textChanged = rebuildTextBoxes();
@@ -185,6 +186,7 @@ void CaptureEngine::toggleOcr() {
     return;
   if (!m_qrPending) {
     m_qrStatus.clear();
+    m_qrFallbackAvailable = false;
     emit qrChanged();
   }
   if (!m_ocrReady) {
@@ -227,6 +229,7 @@ void CaptureEngine::recognize() {
 void CaptureEngine::scanQr() {
   if (m_retired || !hasSelection() || m_qrPending)
     return;
+  m_qrFallbackAvailable = false;
   m_qrFile = std::make_unique<QTemporaryFile>(QDir::temp().filePath("squigit-qr-XXXXXX.png"));
   const QImage image = selectedImage();
   if (image.isNull() || !m_qrFile->open() || !image.save(m_qrFile.get(), "PNG")) {
@@ -252,6 +255,7 @@ void CaptureEngine::acceptResponse(const QByteArray &line) {
     const QString url = response["url"].toString();
     if (!error.isEmpty() || url.isEmpty()) {
       m_qrStatus = error.isEmpty() ? "No QR code found in the selected region" : error;
+      m_qrFallbackAvailable = true;
       emit qrChanged();
       return;
     }
@@ -463,10 +467,20 @@ bool CaptureEngine::exportImage(bool annotated) {
 void CaptureEngine::askGoogle(const QString &prompt) {
   if (m_retired || !hasSelection() || prompt.trimmed().isEmpty())
     return;
+  if (m_action.id == "scan-qr" && (m_qrPending || !m_qrFallbackAvailable))
+    return;
   m_annotations.finishTextEditing();
   m_annotations.cancelStroke();
+  const auto directory = qEnvironmentVariable("SQUIGIT_BLOB_DIR");
+  if (directory.isEmpty()) {
+    std::cerr
+        << "CAPTURE_NATIVE_ERROR: the Ask Google capture destination is missing"
+        << std::endl;
+    fail();
+    return;
+  }
   const bool annotated = m_action.id == "snapshot" || m_action.id == "ask-google";
-  const QString savedPath = saveImage(selectedImage(annotated));
+  const QString savedPath = saveImage(selectedImage(annotated), directory);
   if (savedPath.isEmpty()) {
     std::cerr << "CAPTURE_NATIVE_ERROR: could not write the captured image"
               << std::endl;

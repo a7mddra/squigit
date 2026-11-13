@@ -1,6 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod about;
+mod ask_google;
 mod notifications;
 mod settings;
 mod storage;
@@ -83,7 +84,7 @@ fn run() -> Result<ExitCode> {
             }
             squigit_qt::RuntimeEvent::Saved { .. } => {}
             squigit_qt::RuntimeEvent::Exported { path } => notifications::saved(path),
-            squigit_qt::RuntimeEvent::Asked { prompt } => println!("{prompt}"),
+            squigit_qt::RuntimeEvent::Asked { prompt, path } => ask_google::submit(&prompt, &path),
             squigit_qt::RuntimeEvent::Failed(error) => eprintln!("[squigit] {error}"),
             squigit_qt::RuntimeEvent::Stopped => {
                 eprintln!("[squigit] The Qt runtime stopped unexpectedly");

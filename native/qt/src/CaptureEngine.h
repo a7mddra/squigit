@@ -32,6 +32,7 @@ class CaptureEngine : public QObject {
   Q_PROPERTY(QVariantList textBoxes READ textBoxes NOTIFY ocrChanged)
   Q_PROPERTY(QString ocrError READ ocrError NOTIFY ocrChanged)
   Q_PROPERTY(bool qrPending READ qrPending NOTIFY qrChanged)
+  Q_PROPERTY(bool qrFallbackAvailable READ qrFallbackAvailable NOTIFY qrChanged)
   Q_PROPERTY(QString qrStatus READ qrStatus NOTIFY qrChanged)
   Q_PROPERTY(qreal pixelRatio READ pixelRatio CONSTANT)
 
@@ -57,6 +58,7 @@ public:
   QVariantList textBoxes() const { return m_textBoxes; }
   QString ocrError() const { return m_ocrError; }
   bool qrPending() const { return m_qrPending; }
+  bool qrFallbackAvailable() const { return m_qrFallbackAvailable; }
   QString qrStatus() const { return m_qrStatus; }
   qreal pixelRatio() const { return m_devicePixelRatio; }
   void acceptResponse(const QByteArray &line);
@@ -139,6 +141,7 @@ private:
   QString m_requestId;
   int m_requestSequence = 0;
   bool m_qrPending = false;
+  bool m_qrFallbackAvailable = false;
   QString m_qrStatus;
   QString m_qrRequestId;
   int m_qrRequestSequence = 0;

@@ -141,22 +141,13 @@ Window {
             enabled: !root.controller.qrPending
         }
 
-        FloatingCapsule {
+        QrStatusDock {
             z: 30
+            controller: root.controller
             visible: root.controller.action === "scan-qr" && root.controller.qrStatus.length > 0
-            height: Math.max(56, qrStatusText.implicitHeight + 24)
             x: Math.max(8, (root.width - width) / 2)
             y: Math.max(8, root.height - height - 48)
-            Text {
-                id: qrStatusText
-                anchors.centerIn: parent
-                width: parent.width - 48
-                text: root.controller.qrStatus
-                wrapMode: Text.Wrap
-                horizontalAlignment: Text.AlignHCenter
-                font.pixelSize: 14
-                color: "#1c1c1e"
-            }
+            onAskGoogleRequested: root.controller.askGoogle("scan this qr code if found")
         }
 
         OcrActionDock {

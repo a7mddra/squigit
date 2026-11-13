@@ -177,6 +177,11 @@ and exits 0. Rust stops capture workers and waits for the Qt process to close
 before opening the URL in the default browser. Closing the overlay while a
 scan is pending discards the result without opening a browser. QR creates no
 additional sidecar and does not depend on OCR.
+After a failed local scan, its status capsule offers "Ask Google?" with an
+external-link icon. The action submits the current crop through the shared
+Ask Google path with the exact prompt "scan this qr code if found". Resizing
+the crop or starting another scan clears this fallback; image-preparation
+errors do not offer it.
 
 The first selection press chooses the sole owner of application shortcuts and
 starts Auto OCR silently. OCR controls and status stay hidden until selection
@@ -243,8 +248,13 @@ Other capture contracts:
   and adds a floating composer centered at the
   bottom of the chosen display and layered above the crop; sending writes the
   crop to app data `blob_storage`, prints the prompt, and closes the overlay.
-  Circle to Search saves automatically, and QR scans automatically; neither has
-  buttons.
+  Circle to Search saves automatically, and QR scans automatically with an
+  Ask Google fallback after local recognition fails. The composer and QR
+  fallback use `CaptureEngine::askGoogle` to save their current crop in
+  `SQUIGIT_BLOB_DIR` and finish with `capture_finished` status `ask_google`,
+  including `prompt` and `path`. Rust forwards both to the single submission
+  stub in `squigit/src/ask_google.rs`. It currently prints the prompt; future
+  image hosting and online submission belong in that shared function.
 
 - Each successful dock export emits
   `{"type":"image_exported","session":"...","path":"..."}` on Qt stdout.

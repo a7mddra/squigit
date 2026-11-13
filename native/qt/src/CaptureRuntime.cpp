@@ -352,9 +352,10 @@ void CaptureRuntime::finishCapture(const QString &status, const QString &detail,
     event.insert("path", detail);
   else if (status == "qr_open" || status == "ocr_open")
     event.insert("url", detail);
-  else if (status == "ask_google")
+  else if (status == "ask_google") {
     event.insert("prompt", prompt);
-  else if (!detail.isEmpty())
+    event.insert("path", detail);
+  } else if (!detail.isEmpty())
     event.insert("error", detail);
   m_action = {};
   m_session.clear();

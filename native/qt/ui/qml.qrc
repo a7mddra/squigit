@@ -8,6 +8,8 @@
         <file>components/AskGoogleComposer.qml</file>
         <file>components/FloatingCapsule.qml</file>
         <file>components/OcrActionDock.qml</file>
+        <file>components/QrStatusDock.qml</file>
+        <file>components/icons/open-external.svg</file>
         <file>annotation/AnnotationColorPicker.qml</file>
         <file>annotation/AnnotationSizeControl.qml</file>
         <file>annotation/AnnotationDock.qml</file>
