@@ -215,14 +215,18 @@ Other capture contracts:
 
 - OCR has no toast or separate scan/cancel toolbar. After crop selection, a
   bottom-centered capsule uses the same opening animation as Ask Google and
-  shows a spinner with "Recognizing display text". Success animates its width
-  to fit Select all, Copy, Search, Open in Translate, and Hide OCR. Errors appear
+  shows a circular rotator in the text color with "Recognizing display text".
+  Success animates its width to fit Select all, Copy, Search, Open in Translate,
+  and Hide OCR. Errors appear
   inside the capsule with Retry. Copy, Search, and Translate require text
   selection. Successful clipboard actions temporarily change Copy to Copied,
   including repeated actions and shortcuts. Hide OCR changes to Show OCR while
   results are hidden. Action buttons stay mounted across state changes to
   preserve hover. One pointer surface controls OCR text selection, crop
   movement, and crop resizing, using the crop handles' native cursor shapes.
+  A native hover item owns the OCR cursor, applies it on every hover movement,
+  and explicitly restores the default arrow over blank canvas. Its child
+  MouseArea handles gestures without owning hover or cursor state.
   Hidden drawing canvases and OCR line editors do not handle pointer input.
   Holding Escape dismisses the capture and terminates its pending jobs.
   Search and Translate percent-encode the selected text into Google URLs and

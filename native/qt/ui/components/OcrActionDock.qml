@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
 
 FloatingCapsule {
     id: root
@@ -55,14 +54,32 @@ FloatingCapsule {
         spacing: 10
         visible: !root.controller.ocrReady
 
-        BusyIndicator {
+        Canvas {
+            id: spinner
             width: 22
             height: 22
             anchors.verticalCenter: parent.verticalCenter
             visible: !root.controller.ocrFailed
-            running: visible && root.visible
+            onPaint: {
+                const ctx = getContext("2d");
+                ctx.clearRect(0, 0, width, height);
+                ctx.strokeStyle = statusLabel.color;
+                ctx.lineWidth = 2;
+                ctx.lineCap = "round";
+                ctx.beginPath();
+                ctx.arc(width / 2, height / 2, width / 2 - 3, -Math.PI / 2, Math.PI);
+                ctx.stroke();
+            }
+            RotationAnimator on rotation  {
+                from: 0
+                to: 360
+                duration: 800
+                loops: Animation.Infinite
+                running: spinner.visible
+            }
         }
         Text {
+            id: statusLabel
             anchors.verticalCenter: parent.verticalCenter
             text: root.controller.ocrFailed ? root.controller.ocrError : "Recognizing display text"
             width: Math.min(implicitWidth, Math.max(1, Math.min(720, root.availableWidth) - 48 - (root.controller.ocrFailed ? retryButton.width + statusContent.spacing : 22 + statusContent.spacing)))
