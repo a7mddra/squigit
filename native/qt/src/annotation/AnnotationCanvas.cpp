@@ -5,6 +5,8 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QTabletEvent>
+#include <QQuickWindow>
+#include <iostream>
 
 AnnotationCanvas::AnnotationCanvas(QQuickItem *parent) : QQuickPaintedItem(parent) {
   setAntialiasing(true);
@@ -30,6 +32,13 @@ void AnnotationCanvas::setPixelRatio(qreal ratio) {
   m_pixelRatio = ratio;
   emit pixelRatioChanged();
   update();
+}
+
+void AnnotationCanvas::setDialogOpen(bool open) {
+  if (!window() || (!open && !window()->isVisible())) return;
+  if (!open) window()->requestActivate();
+  if (!window()->setKeyboardGrabEnabled(!open))
+    std::cerr << "CAPTURE_NATIVE_ERROR: could not transfer keyboard input for the image dialog" << std::endl;
 }
 
 void AnnotationCanvas::paint(QPainter *p) {

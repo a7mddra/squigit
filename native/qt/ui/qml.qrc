@@ -6,6 +6,32 @@
         <file>components/OcrTextLayer.qml</file>
         <file>components/CaptureExitHint.qml</file>
         <file>components/AskGoogleComposer.qml</file>
+        <file>annotation/AnnotationColorPicker.qml</file>
+        <file>annotation/AnnotationDock.qml</file>
+        <file>annotation/AnnotationEditor.qml</file>
+        <file>annotation/AnnotationMenu.qml</file>
+        <file>annotation/AnnotationTextEditor.qml</file>
+        <file>annotation/AnnotationToolButton.qml</file>
+        <file>annotation/AnnotationToolTip.qml</file>
+        <file>annotation/TextContextMenu.qml</file>
+        <file>annotation/icons/arrow.svg</file>
+        <file>annotation/icons/blur.svg</file>
+        <file>annotation/icons/brush.svg</file>
+        <file>annotation/icons/chevron.svg</file>
+        <file>annotation/icons/copy.svg</file>
+        <file>annotation/icons/counter.svg</file>
+        <file>annotation/icons/ellipse.svg</file>
+        <file>annotation/icons/eraser.svg</file>
+        <file>annotation/icons/export.svg</file>
+        <file>annotation/icons/fillEllipse.svg</file>
+        <file>annotation/icons/fillRectangle.svg</file>
+        <file>annotation/icons/highlighter.svg</file>
+        <file>annotation/icons/line.svg</file>
+        <file>annotation/icons/rectangle.svg</file>
+        <file>annotation/icons/redo.svg</file>
+        <file>annotation/icons/select.svg</file>
+        <file>annotation/icons/text.svg</file>
+        <file>annotation/icons/undo.svg</file>
         <file>views/CaptureWindow.qml</file>
         <file>menu/RadialWindow.qml</file>
         <file>menu/RadialButton.qml</file>

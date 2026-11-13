@@ -11,6 +11,7 @@
 #include <QTransform>
 #include <QUrl>
 #include <QVariantMap>
+#include <QVector>
 
 class QPainter;
 
@@ -33,6 +34,8 @@ struct Annotation {
   QByteArray svg;
   QRectF imageRect;
   QTransform transform;
+  mutable QImage renderedImage;
+  mutable QColor renderedColor;
 };
 
 class AnnotationDocument : public QObject {
@@ -83,6 +86,8 @@ public:
   int selectionHandleAt(QPointF point, qreal tolerance) const;
   void setStatus(const QString &status);
 
+  Q_INVOKABLE void beginFormatting();
+  Q_INVOKABLE void finishFormatting();
   Q_INVOKABLE void selectTool(const QString &tool);
   Q_INVOKABLE void undo();
   Q_INVOKABLE void redo();
@@ -98,7 +103,7 @@ public:
   Q_INVOKABLE void setTextContentHeight(qreal height);
   Q_INVOKABLE void finishTextEditing(bool accept = true);
   Q_INVOKABLE void cancelStroke();
-  Q_INVOKABLE bool escape();
+  Q_INVOKABLE bool handleEscape();
 
 signals:
   void imageChanged();
@@ -144,6 +149,8 @@ private:
   Gesture m_gesture = Gesture::None;
   bool m_drawing = false;
   bool m_erased = false;
+  bool m_formatting = false;
+  bool m_formatModified = false;
   Annotation m_active;
   QVector<QPointF> m_points;
   QTimer m_strokeUpdate;

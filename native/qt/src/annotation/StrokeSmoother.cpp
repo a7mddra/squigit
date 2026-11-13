@@ -7,7 +7,6 @@
 
 namespace {
 
-
 using Curve = std::array<QPointF, 4>;
 qreal dot(QPointF a, QPointF b) { return a.x() * b.x() + a.y() * b.y(); }
 qreal len(QPointF p) { return std::hypot(p.x(), p.y()); }
@@ -25,7 +24,6 @@ qreal segDist(QPointF point, QPointF start, QPointF end) {
     const qreal t = sq > 1e-12 ? std::clamp(dot(point - start, delta) / sq, qreal(0), qreal(1)) : 0;
     return len(point - start - delta * t);
 }
-
 
 QVector<QPointF> resample(const QVector<QPointF> &points, qreal spacing) {
     QVector<QPointF> result{points.first()};
@@ -47,7 +45,6 @@ QVector<QPointF> resample(const QVector<QPointF> &points, qreal spacing) {
     if (len(points.last() - result.last()) > 1e-9) result.append(points.last());
     return result;
 }
-
 
 QVector<QPointF> denoise(const QVector<QPointF> &points, int first, int last, qreal sigma) {
     QVector<QPointF> result;
@@ -78,14 +75,12 @@ QVector<QPointF> denoise(const QVector<QPointF> &points, int first, int last, qr
     return result;
 }
 
-
 qreal turn(const QVector<QPointF> &points, int at, int radius) {
     const auto incoming = points[at] - points[std::max(0, at - radius)];
     const auto outgoing = points[std::min(int(points.size()) - 1, at + radius)] - points[at];
     const qreal scale = len(incoming) * len(outgoing);
     return scale > 1e-9 ? std::acos(std::clamp(dot(incoming, outgoing) / scale, qreal(-1), qreal(1))) : 0;
 }
-
 
 QVector<int> corners(const QVector<QPointF> &points, int support) {
     QVector<qreal> scores(points.size(), 0);
@@ -103,8 +98,6 @@ QVector<int> corners(const QVector<QPointF> &points, int support) {
         const qreal middleAngle = turn(points, i, (wide + narrow) / 2);
         const qreal narrowAngle = turn(points, i, narrow);
 
-
-
         if (wideAngle > 1.15 && narrowAngle > .85
             && narrowAngle > std::max(wideAngle, middleAngle) * .75
             && coherent(i - wide, i) && coherent(i, i + wide))
@@ -121,7 +114,6 @@ QVector<int> corners(const QVector<QPointF> &points, int support) {
     result.append(points.size() - 1);
     return result;
 }
-
 
 bool straight(const QVector<QPointF> &points, int first, int last, qreal tolerance) {
     if (last - first <= 1) return true;
@@ -148,7 +140,6 @@ bool straight(const QVector<QPointF> &points, int first, int last, qreal toleran
         && squaredError / count <= tolerance * tolerance * .45
         && backtrack <= std::max(tolerance * 2, span * .03);
 }
-
 
 Curve generate(const QVector<QPointF> &p, int first, int last,
                const QVector<qreal> &u, QPointF left, QPointF right) {
@@ -236,43 +227,21 @@ void fitSegment(QPainterPath &path, const QVector<QPointF> &p, int first, int la
 
 }
 
-
-
-
-
-
 QVector<QPointF> StrokeSmoother::streamline(const QVector<QPointF> &points, qreal factor) {
     if (points.size() < 2 || factor <= 0) return points;
 
-
-
-
-
-
-
-
-
-
-
-
-
     const qreal alpha = std::clamp(1.0 - factor, qreal(0.08), qreal(1.0));
     const int n = points.size();
-
 
     QVector<QPointF> forward(n);
     forward[0] = points[0];
     for (int i = 1; i < n; ++i)
         forward[i] = lerp(forward[i - 1], points[i], alpha);
 
-
     QVector<QPointF> backward(n);
     backward[n - 1] = points[n - 1];
     for (int i = n - 2; i >= 0; --i)
         backward[i] = lerp(backward[i + 1], points[i], alpha);
-
-
-
 
     QVector<QPointF> result(n);
     result[0] = points[0];
@@ -302,9 +271,7 @@ QPainterPath StrokeSmoother::fit(const QVector<QPointF> &points, qreal smoothing
         return path;
     }
 
-
     const qreal sigma = (.8 + strength * 6) / 1.25;
-
 
     const auto detection = denoise(sampled, 0, sampled.size() - 1, 1.4);
     const auto turns = corners(detection, qRound((14 + strength * 8) / 1.25));
@@ -313,7 +280,6 @@ QPainterPath StrokeSmoother::fit(const QVector<QPointF> &points, qreal smoothing
         const int first = turns[section - 1], last = turns[section];
         auto cleaned = denoise(sampled, first, last, std::max(qreal(.5), sigma));
         const qreal span = len(cleaned.last() - cleaned.first());
-
 
         const qreal lineTolerance = pixel * (.8 + strength * 4) + std::min(span * .015, pixel * 10) * strength;
         if (straight(cleaned, 0, cleaned.size() - 1, lineTolerance)) {

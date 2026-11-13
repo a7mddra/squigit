@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Window
 import "../components"
+import "../annotation"
 
 Window {
     id: root
@@ -14,7 +15,7 @@ Window {
     width: Screen.width
     height: Screen.height
 
-    onClosing: function(close) {
+    onClosing: function (close) {
         close.accepted = false;
         root.controller.cancel();
     }
@@ -23,9 +24,15 @@ Window {
 
     required property var controller
     property bool ownsInput: false
+    readonly property bool nativeDialogOpen: annotationEditor.nativeDialogOpen
     readonly property bool saveMode: controller.action === "snapshot"
+    readonly property bool annotationMode: saveMode || controller.action === "ask-google"
 
     function escapeTapped() {
+        if (askComposer.dismissContextMenu())
+            return;
+        if (annotationMode && annotationEditor.handleEscape())
+            return;
         if (!selectionCrop.clearTextSelection())
             root.controller.cancel();
     }
@@ -103,17 +110,34 @@ Window {
                 forceActiveFocus();
         }
 
+        AnnotationEditor {
+            id: annotationEditor
+            anchors.fill: parent
+            controller: root.controller
+            visible: root.annotationMode && root.controller.hasSelection
+            ownsInput: root.ownsInput
+            composerFocused: askComposer.textFocused
+            bottomInset: askComposer.visible ? askComposer.height + 72 : 24
+        }
+
         SelectionCrop {
             id: selectionCrop
             controller: root.controller
-            visible: root.controller.hasSelection
+            visible: root.controller.hasSelection && !root.annotationMode
             enabled: !root.controller.qrPending
         }
 
         Rectangle {
             id: toolbar
+            z: 25
             x: Math.max(8, Math.min(parent.area.x, root.width - width - 8))
-            y: Math.max(8, Math.min(parent.area.y + parent.area.height + 10, root.height - height - 8))
+            y: {
+                const below = Math.max(8, Math.min(parent.area.y + parent.area.height + 10, root.height - height - 8));
+                const dock = annotationEditor.dockArea;
+                if (root.annotationMode && x + width > dock.x && x < dock.x + dock.width && below + height > dock.y - 8 && below < dock.y + dock.height + 8)
+                    return Math.max(8, parent.area.y - height - 10);
+                return below;
+            }
             width: (root.saveMode ? saveButton.width : visibilityButton.width) + 12
             height: 44
             radius: 6
@@ -140,6 +164,10 @@ Window {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.controller.save()
                 }
+                AnnotationToolTip {
+                    text: "Save annotated capture"
+                    visible: saveMouse.containsMouse
+                }
             }
             Rectangle {
                 id: visibilityButton
@@ -152,10 +180,7 @@ Window {
                 opacity: root.controller.ocrCancelling ? 0.5 : 1
                 Text {
                     anchors.centerIn: parent
-                    text: root.controller.ocrCancelling ? "Stopping OCR..."
-                        : root.controller.ocrPending ? "Cancel OCR"
-                        : !root.controller.ocrReady ? (root.controller.ocrFailed ? "Retry OCR" : "Scan OCR")
-                        : root.controller.ocrVisible ? "Hide OCR" : "Show OCR"
+                    text: root.controller.ocrCancelling ? "Stopping OCR..." : root.controller.ocrPending ? "Cancel OCR" : !root.controller.ocrReady ? (root.controller.ocrFailed ? "Retry OCR" : "Scan OCR") : root.controller.ocrVisible ? "Hide OCR" : "Show OCR"
                     color: "white"
                     font.pixelSize: 14
                 }
@@ -196,11 +221,12 @@ Window {
 
         AskGoogleComposer {
             id: askComposer
+            z: 30
             visible: root.controller.action === "ask-google" && root.controller.hasSelection
             x: Math.max(8, (root.width - width) / 2)
             y: Math.max(8, root.height - height - 48)
-            onSent: function(text) {
-                root.controller.askGoogle(text)
+            onSent: function (text) {
+                root.controller.askGoogle(text);
             }
         }
     }
@@ -215,21 +241,21 @@ Window {
     Shortcut {
         sequence: "Q"
         context: Qt.ApplicationShortcut
-        enabled: root.ownsInput && root.visible && !askComposer.visible
+        enabled: root.ownsInput && root.visible && !root.annotationMode && !askComposer.visible
         onActivated: root.controller.cancel()
     }
 
     Shortcut {
         sequences: ["Ctrl+C", "Ctrl+Insert"]
         context: Qt.ApplicationShortcut
-        enabled: root.ownsInput && root.visible && root.controller.ocrVisible
+        enabled: root.ownsInput && root.visible && !root.annotationMode && root.controller.ocrVisible
         onActivated: selectionCrop.copyTextSelection()
     }
 
     Shortcut {
         sequences: ["Ctrl+Shift+C", "Meta+Shift+C"]
         context: Qt.ApplicationShortcut
-        enabled: root.ownsInput && root.visible && root.controller.hasSelection && !askComposer.visible
+        enabled: root.ownsInput && root.visible && !root.annotationMode && root.controller.hasSelection && !askComposer.visible
         onActivated: root.controller.copyText()
     }
 }

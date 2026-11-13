@@ -7,6 +7,8 @@ Item {
     anchors.fill: parent
 
     required property var controller
+    property bool annotationMode: false
+    signal cropInteractionStarted
     readonly property rect area: controller.selection
     property bool interacting: false
     property rect startArea
@@ -24,6 +26,8 @@ Item {
     }
 
     function begin(item, mouse, horizontal, vertical, move) {
+        clearTextSelection();
+        cropInteractionStarted();
         startArea = area;
         pressPoint = item.mapToItem(root, mouse.x, mouse.y);
         horizontalEdge = horizontal;
@@ -93,6 +97,7 @@ Item {
 
     MouseArea {
         id: moveMouse
+        enabled: !root.annotationMode
         x: root.area.x
         y: root.area.y
         width: root.area.width
@@ -117,6 +122,7 @@ Item {
         id: ocrTextLayer
         controller: root.controller
         interacting: root.interacting
+        visible: !root.annotationMode
     }
 
     Rectangle {
@@ -127,6 +133,32 @@ Item {
         color: "transparent"
         border.color: "white"
         border.width: 1
+    }
+
+    Repeater {
+        model: root.annotationMode ? 4 : 0
+        delegate: MouseArea {
+            id: borderMove
+            required property int index
+            x: index === 3 ? root.area.x + root.area.width - 3 : root.area.x - 3
+            y: index === 2 ? root.area.y + root.area.height - 3 : root.area.y - 3
+            width: index % 2 === 0 ? root.area.width + 6 : 6
+            height: index % 2 === 0 ? 6 : root.area.height + 6
+            preventStealing: true
+            cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+            onPressed: function (mouse) {
+                root.begin(borderMove, mouse, 0, 0, true);
+            }
+            onPositionChanged: function (mouse) {
+                if (pressed)
+                    root.dragTo(borderMove, mouse);
+            }
+            onReleased: function (mouse) {
+                root.dragTo(borderMove, mouse);
+                root.interacting = false;
+            }
+            onCanceled: root.interacting = false
+        }
     }
 
     Repeater {

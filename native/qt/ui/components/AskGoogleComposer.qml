@@ -1,9 +1,13 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import Qt5Compat.GraphicalEffects
+import "../annotation"
 
 Item {
     id: root
 
+    readonly property bool textFocused: textArea.activeFocus
     readonly property int composerWidth: 560
     readonly property int composerHeight: 56
     readonly property real capRadius: composerHeight / 2
@@ -13,7 +17,7 @@ Item {
 
     signal sent(string text)
 
-    width: composerWidth
+    width: Math.min(composerWidth, parent ? parent.width - 24 : composerWidth)
     height: body.height
     z: 10
     scale: openScale
@@ -34,15 +38,17 @@ Item {
     property real openBlur: startBlurRadius
 
     onVisibleChanged: {
-        openAnimation.stop()
-        openScale = 1.15
-        openOpacity = 0
-        openBlur = startBlurRadius
+        openAnimation.stop();
+        openScale = 1.15;
+        openOpacity = 0;
+        openBlur = startBlurRadius;
         if (visible) {
-            openAnimation.start()
-            Qt.callLater(function() { textArea.forceActiveFocus() })
+            openAnimation.start();
+            Qt.callLater(function () {
+                    textArea.forceActiveFocus();
+                });
         } else {
-            textArea.text = ""
+            textArea.text = "";
         }
     }
 
@@ -78,11 +84,23 @@ Item {
         }
     }
 
+    function dismissContextMenu() {
+        if (!composerMenu.visible)
+            return false;
+        composerMenu.close();
+        return true;
+    }
+
+    TextContextMenu {
+        id: composerMenu
+        parent: root.parent
+    }
+
     function send() {
         if (!hasText)
-            return
-        root.sent(textArea.text)
-        textArea.text = ""
+            return;
+        root.sent(textArea.text);
+        textArea.text = "";
     }
 
     Rectangle {
@@ -90,16 +108,14 @@ Item {
 
         anchors.bottom: root.bottom
         width: root.width
-        height: Math.min(root.maxBodyHeight,
-                         Math.max(root.composerHeight,
-                                  textArea.contentHeight + root.capRadius * 2 - textArea.font.pixelSize))
+        height: Math.min(root.maxBodyHeight, Math.max(root.composerHeight, textArea.contentHeight + root.capRadius * 2 - textArea.font.pixelSize))
         radius: root.capRadius
         color: Qt.rgba(0.96, 0.96, 0.98, 0.95)
         border.width: 1.0
         border.color: Qt.rgba(1, 1, 1, 0.6)
         antialiasing: true
 
-        Behavior on height {
+        Behavior on height  {
             NumberAnimation {
                 id: heightAnim
                 duration: 180
@@ -121,9 +137,18 @@ Item {
             anchors.fill: parent
             radius: parent.radius
             gradient: Gradient {
-                GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.18) }
-                GradientStop { position: 0.45; color: Qt.rgba(1, 1, 1, 0.0) }
-                GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.06) }
+                GradientStop {
+                    position: 0.0
+                    color: Qt.rgba(1, 1, 1, 0.18)
+                }
+                GradientStop {
+                    position: 0.45
+                    color: Qt.rgba(1, 1, 1, 0.0)
+                }
+                GradientStop {
+                    position: 1.0
+                    color: Qt.rgba(0, 0, 0, 0.06)
+                }
             }
             antialiasing: true
         }
@@ -153,21 +178,21 @@ Item {
 
             onContentHeightChanged: {
                 if (contentHeight <= height) {
-                    contentY = 0
+                    contentY = 0;
                 } else {
-                    ensureCursorVisible()
+                    ensureCursorVisible();
                 }
             }
 
             function ensureCursorVisible() {
-                var cursorRect = textArea.cursorRectangle
+                var cursorRect = textArea.cursorRectangle;
                 if (!cursorRect)
-                    return
-                var yInFlickable = cursorRect.y
+                    return;
+                var yInFlickable = cursorRect.y;
                 if (yInFlickable < contentY) {
-                    contentY = Math.max(0, yInFlickable - 4)
+                    contentY = Math.max(0, yInFlickable - 4);
                 } else if (yInFlickable + cursorRect.height > contentY + height) {
-                    contentY = Math.min(contentHeight - height, yInFlickable + cursorRect.height - height + 4)
+                    contentY = Math.min(contentHeight - height, yInFlickable + cursorRect.height - height + 4);
                 }
             }
 
@@ -182,32 +207,38 @@ Item {
                 font.weight: Font.Normal
                 wrapMode: TextEdit.Wrap
                 selectByMouse: true
+                persistentSelection: true
+                textFormat: TextEdit.PlainText
                 focus: true
                 activeFocusOnTab: true
                 renderType: Text.QtRendering
                 verticalAlignment: TextEdit.AlignVCenter
+
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.RightButton
+                    onPressed: function (mouse) {
+                        const point = mapToItem(root.parent, mouse.x, mouse.y);
+                        composerMenu.showFor(textArea, point.x, point.y, false);
+                    }
+                }
 
                 onCursorRectangleChanged: flickable.ensureCursorVisible()
 
                 Text {
                     anchors.fill: parent
                     text: "Ask anything..."
-                    color: Qt.rgba(
-                        textArea.color.r,
-                        textArea.color.g,
-                        textArea.color.b,
-                        0.8)
+                    color: Qt.rgba(textArea.color.r, textArea.color.g, textArea.color.b, 0.8)
                     font: textArea.font
                     visible: textArea.text.length === 0
                     verticalAlignment: Text.AlignVCenter
                     renderType: Text.QtRendering
                 }
 
-                Keys.onPressed: function(event) {
-                    if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
-                        && !(event.modifiers & Qt.ShiftModifier)) {
-                        event.accepted = true
-                        root.send()
+                Keys.onPressed: function (event) {
+                    if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !(event.modifiers & Qt.ShiftModifier)) {
+                        event.accepted = true;
+                        root.send();
                     }
                 }
             }
@@ -223,17 +254,17 @@ Item {
             }
             width: 4
 
-            readonly property bool confirmedToShow: (body.height >= root.maxBodyHeight - 1)
-                && !heightAnim.running
-                && (flickable.contentHeight > flickable.height)
+            readonly property bool confirmedToShow: (body.height >= root.maxBodyHeight - 1) && !heightAnim.running && (flickable.contentHeight > flickable.height)
 
             Rectangle {
                 anchors.fill: parent
                 radius: width / 2
                 color: scrollBarTrack.confirmedToShow ? Qt.rgba(0, 0, 0, 0.06) : "transparent"
 
-                Behavior on color {
-                    ColorAnimation { duration: 180 }
+                Behavior on color  {
+                    ColorAnimation {
+                        duration: 180
+                    }
                 }
             }
 
@@ -241,21 +272,17 @@ Item {
                 id: scrollThumb
                 width: parent.width
                 radius: width / 2
-                color: scrollBarTrack.confirmedToShow
-                    ? (scrollMouseArea.containsMouse || flickable.moving || flickable.flicking
-                        ? Qt.rgba(0, 0, 0, 0.55)
-                        : Qt.rgba(0, 0, 0, 0.35))
-                    : "transparent"
+                color: scrollBarTrack.confirmedToShow ? (scrollMouseArea.containsMouse || flickable.moving || flickable.flicking ? Qt.rgba(0, 0, 0, 0.55) : Qt.rgba(0, 0, 0, 0.35)) : "transparent"
 
-                Behavior on color {
-                    ColorAnimation { duration: 180 }
+                Behavior on color  {
+                    ColorAnimation {
+                        duration: 180
+                    }
                 }
 
                 readonly property real maxScroll: flickable.contentHeight - flickable.height
                 readonly property real progress: maxScroll > 0 ? Math.max(0, Math.min(1, flickable.contentY / maxScroll)) : 0
-                readonly property real availableThumbHeight: flickable.contentHeight > 0
-                    ? (flickable.height / flickable.contentHeight) * scrollBarTrack.height
-                    : scrollBarTrack.height
+                readonly property real availableThumbHeight: flickable.contentHeight > 0 ? (flickable.height / flickable.contentHeight) * scrollBarTrack.height : scrollBarTrack.height
 
                 height: Math.max(16, Math.min(scrollBarTrack.height, availableThumbHeight))
                 y: progress * (scrollBarTrack.height - height)
@@ -271,18 +298,20 @@ Item {
                 preventStealing: true
 
                 function updatePosition(mouseY) {
-                    var availableTrack = scrollBarTrack.height - scrollThumb.height
+                    var availableTrack = scrollBarTrack.height - scrollThumb.height;
                     if (availableTrack > 0) {
-                        var targetY = Math.max(0, Math.min(availableTrack, mouseY - scrollThumb.height / 2))
-                        var progress = targetY / availableTrack
-                        flickable.contentY = progress * (flickable.contentHeight - flickable.height)
+                        var targetY = Math.max(0, Math.min(availableTrack, mouseY - scrollThumb.height / 2));
+                        var progress = targetY / availableTrack;
+                        flickable.contentY = progress * (flickable.contentHeight - flickable.height);
                     }
                 }
 
-                onPressed: function(mouse) { updatePosition(mouse.y) }
-                onPositionChanged: function(mouse) {
+                onPressed: function (mouse) {
+                    updatePosition(mouse.y);
+                }
+                onPositionChanged: function (mouse) {
                     if (pressed)
-                        updatePosition(mouse.y)
+                        updatePosition(mouse.y);
                 }
             }
         }
@@ -298,13 +327,13 @@ Item {
             width: 32
             height: 32
             radius: 16
-            color: root.hasText
-                   ? "#007AFF"
-                   : Qt.rgba(0.45, 0.45, 0.50, 0.25)
+            color: root.hasText ? "#007AFF" : Qt.rgba(0.45, 0.45, 0.50, 0.25)
             antialiasing: true
 
-            Behavior on color {
-                ColorAnimation { duration: 200 }
+            Behavior on color  {
+                ColorAnimation {
+                    duration: 200
+                }
             }
 
             Canvas {
@@ -313,28 +342,28 @@ Item {
                 height: 16
 
                 onPaint: {
-                    var ctx = getContext("2d")
-                    ctx.clearRect(0, 0, width, height)
-                    ctx.strokeStyle = "#ffffff"
-                    ctx.lineWidth = 2.0
-                    ctx.lineCap = "round"
-                    ctx.lineJoin = "round"
-
-                    ctx.beginPath()
-                    ctx.moveTo(8, 14)
-                    ctx.lineTo(8, 3)
-                    ctx.stroke()
-
-                    ctx.beginPath()
-                    ctx.moveTo(3, 7)
-                    ctx.lineTo(8, 2)
-                    ctx.lineTo(13, 7)
-                    ctx.stroke()
+                    var ctx = getContext("2d");
+                    ctx.clearRect(0, 0, width, height);
+                    ctx.strokeStyle = "#ffffff";
+                    ctx.lineWidth = 2.0;
+                    ctx.lineCap = "round";
+                    ctx.lineJoin = "round";
+                    ctx.beginPath();
+                    ctx.moveTo(8, 14);
+                    ctx.lineTo(8, 3);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(3, 7);
+                    ctx.lineTo(8, 2);
+                    ctx.lineTo(13, 7);
+                    ctx.stroke();
                 }
             }
 
             MouseArea {
+                id: sendMouse
                 anchors.fill: parent
+                hoverEnabled: true
                 enabled: root.hasText
                 cursorShape: root.hasText ? Qt.PointingHandCursor : Qt.ArrowCursor
                 onPressed: sendButton.scale = 0.85
@@ -343,8 +372,16 @@ Item {
                 onClicked: root.send()
             }
 
-            Behavior on scale {
-                NumberAnimation { duration: 100; easing.type: Easing.OutCubic }
+            AnnotationToolTip {
+                text: "Send · Enter"
+                visible: sendMouse.containsMouse
+            }
+
+            Behavior on scale  {
+                NumberAnimation {
+                    duration: 100
+                    easing.type: Easing.OutCubic
+                }
             }
         }
     }

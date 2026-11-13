@@ -90,7 +90,7 @@ protected:
         return true;
       }
     }
-    if (m_controller->hasSelection() &&
+    if (m_controller->hasSelection() && !m_window->property("nativeDialogOpen").toBool() &&
         (type == QEvent::MouseButtonPress ||
          type == QEvent::MouseButtonDblClick || type == QEvent::TouchBegin)) {
       m_window->requestActivate();

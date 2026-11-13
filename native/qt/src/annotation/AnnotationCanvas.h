@@ -16,6 +16,7 @@ public:
   qreal pixelRatio() const { return m_pixelRatio; }
   void setPixelRatio(qreal ratio);
   void paint(QPainter *painter) override;
+  Q_INVOKABLE void setDialogOpen(bool open);
 
 signals:
   void documentChanged();

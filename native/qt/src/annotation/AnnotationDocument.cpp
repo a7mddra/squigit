@@ -3,6 +3,7 @@
 
 #include <QAbstractTextDocumentLayout>
 #include <QClipboard>
+#include <QColorSpace>
 #include <QDataStream>
 #include <QFile>
 #include <QFontMetricsF>
@@ -12,7 +13,7 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QPainterPathStroker>
-#include <QSvgRenderer>
+#include <QBuffer>
 #include <QTextDocument>
 #include <QTextOption>
 #include <QtMath>
@@ -72,7 +73,7 @@ QImage blurPass(const QImage &source, int radius, bool horizontal) {
 }
 
 AnnotationDocument::AnnotationDocument(QObject *parent) : QObject(parent) {
-  m_history.append({});
+  m_history.append(QVector<Annotation>{});
   m_strokeUpdate.setSingleShot(true);
   m_strokeUpdate.setInterval(8);
   m_strokeUpdate.setTimerType(Qt::PreciseTimer);
@@ -111,6 +112,11 @@ void AnnotationDocument::commit() {
 }
 
 void AnnotationDocument::notifySelection() {
+  if (m_selected.size() == 1) {
+    const auto &item = m_items[*m_selected.cbegin()];
+    m_color = item.color;
+    m_size = item.tool == "counter" ? item.rect.width() : item.width;
+  }
   emit selectionChanged();
   emit textBoxChanged();
   emit styleChanged();
@@ -145,7 +151,10 @@ void AnnotationDocument::setInkColor(const QColor &color) {
       modified = true;
     }
   }
-  if (modified && !editingText()) commit();
+  if (modified && !editingText()) {
+    if (m_formatting) m_formatModified = true;
+    else commit();
+  }
   notifySelection();
 }
 
@@ -162,10 +171,24 @@ void AnnotationDocument::setToolSize(qreal size) {
     if (item.tool == "arrow") updateShape(item);
     modified = true;
   }
-  if (modified && !editingText()) commit();
+  if (modified && !editingText()) {
+    if (m_formatting) m_formatModified = true;
+    else commit();
+  }
   emit styleChanged();
   emit textBoxChanged();
   emit changed();
+}
+
+void AnnotationDocument::beginFormatting() {
+  m_formatting = true;
+  m_formatModified = false;
+}
+
+void AnnotationDocument::finishFormatting() {
+  m_formatting = false;
+  if (m_formatModified && !editingText()) commit();
+  m_formatModified = false;
 }
 
 void AnnotationDocument::selectTool(const QString &tool) {
@@ -174,7 +197,7 @@ void AnnotationDocument::selectTool(const QString &tool) {
   m_sizes.insert(m_tool, m_size);
   m_tool = tool;
   const qreal defaultSize = tool == "text" ? 28 : tool == "counter" ? 40
-      : tool == "blur" ? 48 : tool == "highlighter" || tool == "eraser" ? 24 : 5;
+      : tool == "blur" ? 48 : tool == "highlighter" || tool == "eraser" || tool == "objectEraser" ? 24 : 5;
   m_size = m_sizes.value(tool, defaultSize);
   m_selected.clear();
   notifySelection();
@@ -236,7 +259,7 @@ void AnnotationDocument::deselect() {
   notifySelection();
 }
 
-bool AnnotationDocument::escape() {
+bool AnnotationDocument::handleEscape() {
   if (m_drawing || m_gesture != Gesture::None) { cancelStroke(); return true; }
   if (editingText()) { finishTextEditing(); return true; }
   if (hasSelection()) { deselect(); return true; }
@@ -309,11 +332,11 @@ void AnnotationDocument::insertImage(const QUrl &url) {
       setStatus("Could not open this SVG"); return;
     }
     const auto data = file.readAll();
-    QSvgRenderer renderer(data);
-    if (!renderer.isValid() || renderer.defaultSize().isEmpty()) {
-      setStatus("Could not read this SVG"); return;
+    const auto image = reader.read();
+    if (image.isNull()) {
+      setStatus("Could not read this SVG: " + reader.errorString()); return;
     }
-    appendImage({}, data);
+    appendImage(image, data);
   } else {
     const auto image = reader.read();
     if (image.isNull()) { setStatus("Could not open the image: " + reader.errorString()); return; }
@@ -326,11 +349,11 @@ void AnnotationDocument::appendImage(const QImage &image, const QByteArray &svg)
   cancelStroke();
   Annotation item;
   item.tool = "image";
+  item.color = m_color;
   item.image = image;
   item.image.setDevicePixelRatio(1);
   item.svg = svg;
   QSizeF size = image.size();
-  if (!svg.isEmpty()) { QSvgRenderer renderer(svg); size = renderer.defaultSize(); }
   size.scale(QSizeF(m_image.size()) * .6, Qt::KeepAspectRatio);
   item.rect = QRectF(QPointF(), size);
   item.transform = translation(QPointF((m_image.width() - size.width()) / 2,
@@ -449,6 +472,7 @@ void AnnotationDocument::begin(QPointF point, Qt::KeyboardModifiers modifiers, q
   const int handle = selectionHandleAt(point, tolerance);
   if (handle >= 0) {
     finishTextEditing();
+    if (!hasSelection()) return;
     m_handle = handle;
     captureGesture();
     m_gesture = lineSelection() ? Gesture::Endpoint : handle == 8 ? Gesture::Rotate
@@ -599,7 +623,16 @@ void AnnotationDocument::transformSelection(QPointF point, Qt::KeyboardModifiers
   if (m_gesture == Gesture::Endpoint) {
     const int index = *m_selected.cbegin();
     auto item = m_beforeGesture[index];
-    const auto local = item.transform.inverted().map(point);
+    const auto inverse = item.transform.inverted();
+    const auto origin = m_handle == 0 ? item.start : item.end;
+    auto local = origin + inverse.map(point) - inverse.map(m_start);
+    if (modifiers & Qt::ShiftModifier) {
+      const auto fixed = m_handle == 0 ? item.end : item.start;
+      const auto delta = local - fixed;
+      const qreal angle = std::round(qRadiansToDegrees(std::atan2(delta.y(), delta.x())) / 15) * 15;
+      const qreal length = std::hypot(delta.x(), delta.y());
+      local = fixed + QPointF(std::cos(qDegreesToRadians(angle)) * length, std::sin(qDegreesToRadians(angle)) * length);
+    }
     if (m_handle == 0) item.start = local;
     else item.end = local;
     updateShape(item);
@@ -607,10 +640,13 @@ void AnnotationDocument::transformSelection(QPointF point, Qt::KeyboardModifiers
   } else if (m_gesture == Gesture::Radius) {
     const int index = *m_selected.cbegin();
     auto item = m_beforeGesture[index];
-    const auto local = item.transform.inverted().map(point);
-    const auto corner = corners(item.rect)[m_handle - 9];
-    item.radius = std::clamp(std::min(std::abs(local.x() - corner.x()), std::abs(local.y() - corner.y())),
-                             qreal(0), std::min(item.rect.width(), item.rect.height()) / 2);
+    const auto inverse = item.transform.inverted();
+    const auto delta = inverse.map(point) - inverse.map(m_start);
+    const int corner = m_handle - 9;
+    const qreal inwardX = (corner == 0 || corner == 3) ? delta.x() : -delta.x();
+    const qreal inwardY = (corner == 0 || corner == 1) ? delta.y() : -delta.y();
+    const qreal movement = qAbs(inwardX) > qAbs(inwardY) ? inwardX : inwardY;
+    item.radius = std::clamp(item.radius + movement, qreal(0), std::min(item.rect.width(), item.rect.height()) / 2);
     updateShape(item);
     m_items[index] = item;
   } else {
@@ -632,7 +668,8 @@ void AnnotationDocument::transformSelection(QPointF point, Qt::KeyboardModifiers
       bool invertible = false;
       const auto inverse = frame.inverted(&invertible);
       if (!invertible) return;
-      const auto local = inverse.map(point);
+      const QVector<QPointF> handles{{0, 0}, {1, 0}, {1, 1}, {0, 1}, {.5, 0}, {1, .5}, {.5, 1}, {0, .5}};
+      const auto local = handles[m_handle] + inverse.map(point) - inverse.map(m_start);
       qreal left = 0, top = 0, right = 1, bottom = 1;
       const qreal minimumX = 4 * m_pixelSize / std::max(qreal(1), QLineF(polygon[0], polygon[1]).length());
       const qreal minimumY = 4 * m_pixelSize / std::max(qreal(1), QLineF(polygon[0], polygon[3]).length());
@@ -712,10 +749,9 @@ void AnnotationDocument::eraseAt(QPointF point) {
     QPainterPath ink;
     if (item.tool == "text" || item.tool == "counter" || item.tool == "image") ink.addRect(item.rect);
     else ink = shapeFill ? item.path : outline(item);
-    if (!ink.intersects(local)) continue;
-    if (m_tool == "objectEraser") { m_items.removeAt(index); modified = true; continue; }
     const auto remaining = ink.subtracted(item.erased);
     if (!remaining.intersects(local)) continue;
+    if (m_tool == "objectEraser") { m_items.removeAt(index); modified = true; continue; }
     item.erased = item.erased.united(local);
     if (ink.subtracted(item.erased).isEmpty()) m_items.removeAt(index);
     modified = true;
@@ -820,23 +856,41 @@ void AnnotationDocument::paintAnnotation(QPainter &p, const Annotation &item) co
     visible.addRect(localBounds(item).adjusted(-item.width, -item.width, item.width, item.width));
     p.setClipPath(visible.subtracted(item.erased), Qt::IntersectClip);
   }
-  if (item.tool == "blur" || item.tool == "blurArea") {
-    p.setClipPath(item.tool == "blur" ? outline(item) : item.path, Qt::IntersectClip);
+  if (item.tool == "blur") {
+    p.setClipPath(outline(item), Qt::IntersectClip);
     p.drawImage(item.imageRect, item.image);
   } else if (item.tool == "image") {
-    if (item.tinted) {
-      const auto size = item.rect.size().toSize().expandedTo(QSize(1, 1));
-      QImage image(size, QImage::Format_ARGB32_Premultiplied);
-      image.fill(Qt::transparent);
-      QPainter painter(&image);
-      if (!item.svg.isEmpty()) { QSvgRenderer renderer(item.svg); renderer.render(&painter, QRectF(QPointF(), size)); }
-      else painter.drawImage(QRectF(QPointF(), size), item.image);
-      painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
-      painter.fillRect(image.rect(), item.color);
-      painter.end();
-      p.drawImage(item.rect, image);
-    } else if (!item.svg.isEmpty()) { QSvgRenderer renderer(item.svg); renderer.render(&p, item.rect); }
-    else p.drawImage(item.rect, item.image);
+    if (item.svg.isEmpty() && !item.tinted) p.drawImage(item.rect, item.image);
+    else {
+      const auto transform = p.deviceTransform();
+      const qreal sx = std::hypot(transform.m11(), transform.m12());
+      const qreal sy = std::hypot(transform.m21(), transform.m22());
+      QSizeF requested(std::max(qreal(1), item.rect.width() * sx), std::max(qreal(1), item.rect.height() * sy));
+      const qreal pixels = requested.width() * requested.height();
+      if (pixels > 100000000) requested *= std::sqrt(100000000 / pixels);
+      const QSize size = requested.toSize().expandedTo(QSize(1, 1));
+      const QColor tint = item.tinted ? item.color : QColor();
+      if (item.renderedImage.size() != size || item.renderedColor != tint) {
+        QImage image;
+        if (!item.svg.isEmpty()) {
+          QBuffer source;
+          source.setData(item.svg);
+          source.open(QIODevice::ReadOnly);
+          QImageReader reader(&source, "svg");
+          reader.setScaledSize(size);
+          image = reader.read();
+        } else image = item.image.scaled(size, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        if (item.tinted && !image.isNull()) {
+          QPainter painter(&image);
+          painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+          painter.fillRect(image.rect(), item.color);
+        }
+        item.renderedImage = image;
+        item.renderedColor = tint;
+      }
+      p.drawImage(item.rect, item.renderedImage);
+    }
   } else if (item.tool == "counter") {
     p.setPen(QPen(Qt::white, 2)); p.setBrush(item.color); p.drawEllipse(item.rect);
     QFont font = QGuiApplication::font();

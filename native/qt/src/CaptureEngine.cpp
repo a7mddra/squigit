@@ -395,7 +395,7 @@ QImage CaptureEngine::selectedImage(bool annotated) const {
 }
 
 void CaptureEngine::save() {
-  if (!hasSelection()) return;
+  if (m_retired || !hasSelection()) return;
   m_annotations.finishTextEditing();
   m_annotations.cancelStroke();
   const bool annotated = m_action.id == "snapshot" || m_action.id == "ask-google";
