@@ -2,6 +2,8 @@ use anyhow::Result;
 use notify_rust::{Notification, NotificationResponse};
 use std::path::{Path, PathBuf};
 
+use crate::alert::Player;
+
 #[cfg(any(windows, target_os = "macos"))]
 const APP_ID: &str = "io.github.a7mddra.squigit";
 
@@ -28,19 +30,20 @@ pub fn initialize() -> Result<()> {
     Ok(())
 }
 
-pub fn saved(path: PathBuf) {
+pub fn saved(path: PathBuf, alert: Player) {
     std::thread::spawn(move || {
-        if let Err(error) = show_saved(&path) {
+        if let Err(error) = show_saved(&path, &alert) {
             eprintln!("[squigit] Image saved, but its notification failed: {error:#}");
         }
     });
 }
 
-pub fn missing_image_hosting_key(settings: rune::AppHandle<crate::settings::App>) {
+pub fn missing_image_hosting_key(settings: rune::AppHandle<crate::settings::App>, alert: Player) {
     image_search_error(
         "Set up your selected provider in Image hosting to use Circle to Search, Ask Google, and online QR scanning.".into(),
         true,
         settings,
+        alert,
     );
 }
 
@@ -48,9 +51,10 @@ pub fn image_search_error(
     message: String,
     missing_key: bool,
     settings: rune::AppHandle<crate::settings::App>,
+    alert: Player,
 ) {
     std::thread::spawn(move || {
-        if let Err(error) = show_image_search_error(&message, missing_key, settings) {
+        if let Err(error) = show_image_search_error(&message, missing_key, settings, &alert) {
             eprintln!("[squigit] {message}; notification failed: {error:#}");
         }
     });
@@ -60,7 +64,9 @@ fn show_image_search_error(
     message: &str,
     missing_key: bool,
     settings: rune::AppHandle<crate::settings::App>,
+    alert: &Player,
 ) -> Result<()> {
+    alert.play();
     let event_id = format!("{:032x}", rand::random::<u128>());
     let mut notification = Notification::new();
     notification
@@ -104,7 +110,8 @@ fn show_image_search_error(
     Ok(())
 }
 
-fn show_saved(path: &Path) -> Result<()> {
+fn show_saved(path: &Path, alert: &Player) -> Result<()> {
+    alert.play();
     let filename = path
         .file_name()
         .unwrap_or(path.as_os_str())

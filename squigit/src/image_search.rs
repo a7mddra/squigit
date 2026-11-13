@@ -2,25 +2,26 @@ use anyhow::{Context, Result};
 use std::path::PathBuf;
 use url::Url;
 
-use crate::{auth, image_hosting, notifications, settings, storage::AppData};
+use crate::{alert::Player, auth, image_hosting, notifications, settings, storage::AppData};
 
 pub enum Target {
     Lens,
     Ai(String),
 }
 
-pub fn check_configuration(data: AppData, settings: rune::AppHandle<settings::App>) {
+pub fn check_configuration(data: AppData, settings: rune::AppHandle<settings::App>, alert: Player) {
     std::thread::spawn(move || {
         match data
             .load()
             .and_then(|config| image_hosting::configured(&data, &config.hosting))
         {
             Ok(true) => {}
-            Ok(false) => notifications::missing_image_hosting_key(settings),
+            Ok(false) => notifications::missing_image_hosting_key(settings, alert),
             Err(error) => notifications::image_search_error(
                 format!("Could not check image hosting: {error:#}"),
                 false,
                 settings,
+                alert,
             ),
         }
     });
@@ -31,16 +32,17 @@ pub fn submit(
     image: PathBuf,
     target: Target,
     settings: rune::AppHandle<settings::App>,
+    alert: Player,
 ) {
     std::thread::spawn(move || {
         let result = (|| {
             let config = data.load()?.hosting;
             if !image_hosting::configured(&data, &config)? {
-                notifications::missing_image_hosting_key(settings.clone());
+                notifications::missing_image_hosting_key(settings.clone(), alert.clone());
                 return Ok(());
             }
             let Some(key) = auth::load(&data, config.provider, &config.chevereto_url)? else {
-                notifications::missing_image_hosting_key(settings.clone());
+                notifications::missing_image_hosting_key(settings.clone(), alert.clone());
                 return Ok(());
             };
             let hosted = image_hosting::upload(&image, &key, &config)?;
@@ -50,7 +52,7 @@ pub fn submit(
             Ok::<_, anyhow::Error>(())
         })();
         if let Err(error) = result {
-            notifications::image_search_error(format!("{error:#}"), false, settings);
+            notifications::image_search_error(format!("{error:#}"), false, settings, alert);
         }
     });
 }

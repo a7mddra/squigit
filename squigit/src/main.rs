@@ -1,6 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod about;
+mod alert;
 mod auth;
 mod image_hosting;
 mod image_search;
@@ -82,6 +83,8 @@ fn run() -> Result<ExitCode> {
     let search_settings = settings.clone();
     let search_data = data.clone();
     let tick = tick::Player::start();
+    let alert = alert::Player::start();
+    let event_alert = alert.clone();
     let mut qt = squigit_qt::Runtime::start(
         models,
         storage::snapshots_dir()?,
@@ -89,7 +92,7 @@ fn run() -> Result<ExitCode> {
         move |event| match event {
             squigit_qt::RuntimeEvent::MenuTick => tick.play(),
             squigit_qt::RuntimeEvent::Saved { action, path } if action == "snapshot" => {
-                notifications::saved(path);
+                notifications::saved(path, event_alert.clone());
             }
             squigit_qt::RuntimeEvent::Saved { action, path } if action == "circle-to-search" => {
                 image_search::submit(
@@ -97,16 +100,20 @@ fn run() -> Result<ExitCode> {
                     path,
                     image_search::Target::Lens,
                     search_settings.clone(),
+                    event_alert.clone(),
                 );
             }
             squigit_qt::RuntimeEvent::Saved { .. } => {}
-            squigit_qt::RuntimeEvent::Exported { path } => notifications::saved(path),
+            squigit_qt::RuntimeEvent::Exported { path } => {
+                notifications::saved(path, event_alert.clone())
+            }
             squigit_qt::RuntimeEvent::Asked { prompt, path } => {
                 image_search::submit(
                     search_data.clone(),
                     path,
                     image_search::Target::Ai(prompt),
                     search_settings.clone(),
+                    event_alert.clone(),
                 );
             }
             squigit_qt::RuntimeEvent::Failed(error) => eprintln!("[squigit] {error}"),
@@ -165,7 +172,7 @@ fn run() -> Result<ExitCode> {
             _ => {}
         }
     })?;
-    image_search::check_configuration(data, app.handle());
+    image_search::check_configuration(data, app.handle(), alert);
     app.run();
     drop(tray);
     qt.shutdown();
