@@ -48,6 +48,7 @@ class AnnotationDocument : public QObject {
   Q_PROPERTY(QColor inkColor READ inkColor WRITE setInkColor NOTIFY styleChanged)
   Q_PROPERTY(qreal toolSize READ toolSize WRITE setToolSize NOTIFY styleChanged)
   Q_PROPERTY(bool solidTool READ solidTool NOTIFY styleChanged)
+  Q_PROPERTY(bool colorTool READ colorTool NOTIFY styleChanged)
   Q_PROPERTY(bool mixedColors READ mixedColors NOTIFY selectionChanged)
   Q_PROPERTY(QString status READ status NOTIFY statusChanged)
 
@@ -68,6 +69,7 @@ public:
   QColor inkColor() const { return m_color; }
   qreal toolSize() const { return m_size; }
   bool solidTool() const;
+  bool colorTool() const;
   bool mixedColors() const;
   QString status() const { return m_status; }
   void setInkColor(const QColor &color);

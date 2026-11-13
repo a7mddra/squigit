@@ -140,6 +140,11 @@ bool AnnotationDocument::solidTool() const {
   return tool.startsWith("fill") || tool == "highlightRectangle";
 }
 
+bool AnnotationDocument::colorTool() const {
+  const QString tool = m_selected.size() == 1 ? m_items[*m_selected.cbegin()].tool : m_tool;
+  return tool != "eraser" && tool != "objectEraser" && tool != "blur";
+}
+
 bool AnnotationDocument::mixedColors() const {
   if (m_selected.size() < 2) return false;
   const auto color = m_items[*m_selected.cbegin()].color;
@@ -467,17 +472,12 @@ void AnnotationDocument::begin(QPointF point, Qt::KeyboardModifiers modifiers, q
   }
   m_selected.clear();
   if (m_tool == "text") {
-    Annotation item;
-    item.tool = "text";
-    item.color = m_color;
-    item.width = m_size;
-    QFont font = QGuiApplication::font();
-    font.setPixelSize(qRound(m_size));
-    item.rect = QRectF(point, QSizeF(std::min(qreal(280), std::max(qreal(80), m_image.width() - point.x())),
-                                    qCeil(QFontMetricsF(font).height()) + 12));
-    m_items.append(item);
-    beginTextEditing(m_items.size() - 1, true);
+    m_active = Annotation{};
+    m_active.tool = "text";
+    m_active.color = m_color;
+    m_active.width = m_size;
     m_gesture = Gesture::CreateText;
+    notifySelection();
     return;
   }
   m_active = Annotation{};
@@ -567,17 +567,16 @@ void AnnotationDocument::move(QPointF point, Qt::KeyboardModifiers modifiers) {
 }
 
 void AnnotationDocument::transformSelection(QPointF point, Qt::KeyboardModifiers modifiers) {
-  if (!hasSelection()) return;
   if (m_gesture == Gesture::CreateText) {
-    auto &item = m_items[m_textIndex];
-    if (QLineF(point, m_start).length() > 4 * m_pixelSize) {
+    if (!m_active.autoHeight || QLineF(point, m_start).length() > 4 * m_pixelSize) {
       const auto rect = QRectF(m_start, point).normalized();
-      item.rect = QRectF(rect.topLeft(), QSizeF(std::max(qreal(36), rect.width()),
-                                              std::max(m_size + 12, rect.height())));
-      item.autoHeight = false;
+      m_active.rect = rect;
+      m_active.autoHeight = false;
     }
-    emit textBoxChanged(); emit changed(); return;
+    emit changed();
+    return;
   }
+  if (!hasSelection()) return;
   if (m_gesture == Gesture::Endpoint) {
     const int index = *m_selected.cbegin();
     auto item = m_beforeGesture[index];
@@ -656,7 +655,22 @@ void AnnotationDocument::finish(QPointF point, Qt::KeyboardModifiers modifiers) 
     move(point, modifiers);
     const auto gesture = m_gesture;
     m_gesture = Gesture::None;
-    if (gesture != Gesture::CreateText && !editingText()
+    if (gesture == Gesture::CreateText) {
+      QFont font = QGuiApplication::font();
+      font.setPixelSize(std::max(1, qRound(m_active.width)));
+      const qreal height = qCeil(QFontMetricsF(font).height()) + 12;
+      if (m_active.autoHeight) {
+        m_active.rect = QRectF(m_start, QSizeF(std::min(qreal(280), std::max(qreal(80), m_image.width() - m_start.x())), height));
+      } else {
+        m_active.rect.setWidth(std::max(qreal(36), m_active.rect.width()));
+        m_active.rect.setHeight(std::max(height, m_active.rect.height()));
+      }
+      m_items.append(m_active);
+      m_active = Annotation{};
+      beginTextEditing(m_items.size() - 1, true);
+      return;
+    }
+    if (!editingText()
         && (gesture == Gesture::Erase ? m_erased : point != m_start)) commit();
     m_beforeGesture.clear();
     notifySelection();
@@ -691,8 +705,7 @@ void AnnotationDocument::cancelStroke() {
   const auto gesture = m_gesture;
   const bool active = m_drawing || gesture != Gesture::None;
   m_gesture = Gesture::None;
-  if (gesture == Gesture::CreateText) finishTextEditing(false);
-  else if (gesture != Gesture::None && !m_beforeGesture.isEmpty()) m_items = m_beforeGesture;
+  if (gesture != Gesture::None && !m_beforeGesture.isEmpty()) m_items = m_beforeGesture;
   m_beforeGesture.clear();
   m_drawing = false;
   m_active = Annotation{};
@@ -772,6 +785,8 @@ QVariantMap AnnotationDocument::textBox() const {
 
 void AnnotationDocument::beginTextEditing(int index, bool draft) {
   finishTextEditing();
+  m_sizes.insert(m_tool, m_size);
+  m_tool = "select";
   m_selected = {index};
   m_textIndex = index;
   m_textDraft = draft;
@@ -806,7 +821,6 @@ void AnnotationDocument::finishTextEditing(bool accept) {
   if (!editingText()) return;
   const int index = m_textIndex;
   m_textIndex = -1;
-  if (m_gesture == Gesture::CreateText) m_gesture = Gesture::None;
   const auto &item = m_items[index];
   const bool modified = m_textDraft || item.text != m_textOriginal.text || item.color != m_textOriginal.color
       || item.width != m_textOriginal.width || item.rect != m_textOriginal.rect
@@ -871,6 +885,13 @@ void AnnotationDocument::paint(QPainter &p, bool interactive) const {
     paintAnnotation(p, m_items[index]);
   }
   if (interactive && m_drawing) paintAnnotation(p, m_active);
+  if (interactive && m_gesture == Gesture::CreateText && !m_active.autoHeight) {
+    p.save();
+    p.setPen(QPen(Qt::white, m_pixelSize, Qt::DashLine));
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(m_active.rect);
+    p.restore();
+  }
 }
 
 QImage AnnotationDocument::flattened() const {

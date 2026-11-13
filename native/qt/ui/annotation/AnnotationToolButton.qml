@@ -8,6 +8,7 @@ Item {
     property string iconName
     property string numberLabel: ""
     property string tip
+    required property var tooltipHost
     property bool selected: false
     property bool chevron: false
     signal clicked
@@ -82,15 +83,14 @@ Item {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         hoverEnabled: true
+        onEntered: root.tooltipHost.showTip(root)
+        onExited: root.tooltipHost.leaveTip(root)
+        onPressed: root.tooltipHost.dismissTips()
         onClicked: function (mouse) {
             if (mouse.button === Qt.RightButton)
                 root.alternateRequested();
             else
                 root.clicked();
         }
-    }
-    AnnotationToolTip {
-        visible: hover.containsMouse && root.enabled
-        text: root.tip
     }
 }

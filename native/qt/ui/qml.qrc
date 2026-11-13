@@ -7,6 +7,7 @@
         <file>components/CaptureExitHint.qml</file>
         <file>components/AskGoogleComposer.qml</file>
         <file>annotation/AnnotationColorPicker.qml</file>
+        <file>annotation/AnnotationSizeControl.qml</file>
         <file>annotation/AnnotationDock.qml</file>
         <file>annotation/AnnotationEditor.qml</file>
         <file>annotation/AnnotationMenu.qml</file>

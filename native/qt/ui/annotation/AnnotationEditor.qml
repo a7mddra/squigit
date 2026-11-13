@@ -16,6 +16,14 @@ Item {
     property real contextX: 0
     property real contextY: 0
 
+    function preparePopup(popup) {
+        dock.dismissTips();
+        const popups = [colorPicker, toolMenu, objectMenu, textMenu];
+        for (let i = 0; i < popups.length; ++i) {
+            if (popups[i] !== popup && popups[i].visible)
+                popups[i].close();
+        }
+    }
     function closePopups() {
         if (colorPicker.visible) {
             colorPicker.close();
@@ -47,13 +55,17 @@ Item {
         surface.forceActiveFocus();
     }
     function formatAt(px, py) {
+        preparePopup(colorPicker);
         const nearDock = py >= dock.y - 10 && py <= dock.y + dock.height;
-        colorPicker.showAt(px, nearDock ? dock.y - colorPicker.height - 10 : py, document.selectionCount > 1);
+        colorPicker.showAt(px, nearDock ? dock.y : py, document.selectionCount > 1, nearDock);
     }
     function showOptions(tool, px, py) {
+        preparePopup(toolMenu);
         contextX = px;
         contextY = py;
         if (tool === "eraser") {
+            if (document.tool !== dock.eraseTool)
+                choose(dock.eraseTool);
             toolMenu.showAt(px, py, [{
                         "label": "Brush eraser",
                         "action": "eraser",
@@ -67,7 +79,7 @@ Item {
                     }, {
                         "label": "Clear all",
                         "action": "clear"
-                    }]);
+                    }], document);
         } else if (tool === "shapes") {
             toolMenu.showAt(px, py, [{
                         "label": "Rectangle",
@@ -209,6 +221,7 @@ Item {
             onCanceled: surface.cancelPointer()
         }
         onContextRequested: function (px, py, kind) {
+            root.preparePopup(objectMenu);
             root.contextX = px;
             root.contextY = py;
             if (kind === "format")
@@ -260,6 +273,7 @@ Item {
         document: root.document
         pixelRatio: root.controller.pixelRatio
         onContextRequested: function (editor, px, py) {
+            root.preparePopup(textMenu);
             textMenu.showFor(editor, px, py, true);
         }
     }
@@ -268,6 +282,7 @@ Item {
         id: dock
         z: 20
         document: root.document
+        menusOpen: toolMenu.visible || objectMenu.visible || textMenu.visible || colorPicker.visible
         x: (root.width - width) / 2
         y: Math.max(12, root.height - height - root.bottomInset)
         onActionRequested: function (action) {
@@ -280,9 +295,9 @@ Item {
 
     Rectangle {
         id: notice
-        z: 25
+        z: 100
         x: Math.max(12, Math.min((root.width - width) / 2, root.width - width - 12))
-        y: Math.max(12, dock.y - height - 12)
+        y: Math.max(12, dock.y - height - 76)
         width: Math.min(root.width - 24, noticeText.implicitWidth + 24)
         height: noticeText.implicitHeight + 16
         radius: 7

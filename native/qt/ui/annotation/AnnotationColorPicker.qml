@@ -11,9 +11,11 @@ Popup {
     property real hue: 0
     property real saturation: 1
     property real brightness: 1
+    readonly property bool sizeOnly: !selectionOnly && document.selectionCount < 2 && !document.colorTool
     readonly property bool showSize: !selectionOnly && document.selectionCount < 2 && !document.solidTool
-    width: showSize ? 226 : 184
-    height: 212
+    width: sizeOnly ? 218 : showSize ? 226 : 184
+    height: sizeOnly ? 32 : 212
+    z: 200
     padding: 0
     focus: true
     modal: false
@@ -23,14 +25,14 @@ Popup {
     background: Item {
     }
 
-    function showAt(px, py, groupOnly) {
+    function showAt(px, py, groupOnly, aboveAnchor) {
         selectionOnly = groupOnly;
         colorChosen = !document.mixedColors;
         hue = Math.max(0, document.inkColor.hsvHue);
         saturation = document.inkColor.hsvSaturation;
         brightness = document.inkColor.hsvValue;
         x = Math.max(12, Math.min(px, parent.width - width - 12));
-        y = Math.max(12, Math.min(py, parent.height - height - 12));
+        y = Math.max(12, Math.min(aboveAnchor ? py - height - 10 : py, parent.height - height - 12));
         open();
     }
     function applyColor() {
@@ -41,6 +43,7 @@ Popup {
     contentItem: Item {
         Rectangle {
             id: spectrum
+            visible: !root.sizeOnly
             width: 184
             height: 150
             radius: 5
@@ -103,6 +106,7 @@ Popup {
         }
         Slider {
             id: hueSlider
+            visible: !root.sizeOnly
             y: spectrum.height + 8
             width: spectrum.width
             height: 16
@@ -164,6 +168,7 @@ Popup {
         }
         TextField {
             id: hexInput
+            visible: !root.sizeOnly
             y: hueSlider.y + hueSlider.height + 8
             width: spectrum.width
             height: 30
@@ -191,47 +196,12 @@ Popup {
                 }
             }
         }
-        Slider {
-            id: sizeSlider
-            x: spectrum.width + 14
-            width: 28
-            height: root.height - 26
-            padding: 0
-            orientation: Qt.Vertical
-            from: 1
-            to: 160
-            stepSize: 1
-            value: root.document.toolSize
-            visible: root.showSize
-            onMoved: root.document.toolSize = value
-            background: Rectangle {
-                x: (sizeSlider.width - width) / 2
-                width: 5
-                height: sizeSlider.height
-                radius: 2.5
-                color: "#f0f0f0"
-                border.color: "#555555"
-            }
-            handle: Rectangle {
-                x: (sizeSlider.width - width) / 2
-                y: sizeSlider.visualPosition * (sizeSlider.height - height)
-                width: 16
-                height: 16
-                radius: 8
-                color: "#f5f5f5"
-                border.color: "#555555"
-            }
-        }
-        Text {
-            x: sizeSlider.x - 4
-            y: sizeSlider.height + 6
-            width: sizeSlider.width + 8
-            horizontalAlignment: Text.AlignHCenter
-            text: Math.round(root.document.toolSize)
-            color: "white"
-            style: Text.Outline
-            styleColor: "#333333"
-            font.pixelSize: 11
+        AnnotationSizeControl {
+            document: root.document
+            x: root.sizeOnly ? 0 : spectrum.width + 10
+            width: root.sizeOnly ? root.width : 36
+            height: root.height
+            orientation: root.sizeOnly ? Qt.Horizontal : Qt.Vertical
             visible: root.showSize
         }
     }
