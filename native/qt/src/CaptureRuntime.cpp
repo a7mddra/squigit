@@ -59,6 +59,10 @@ public:
 protected:
   bool eventFilter(QObject *object, QEvent *event) override {
     const auto type = event->type();
+#ifdef Q_OS_LINUX
+    if (type == QEvent::CursorChange && m_window->isVisible())
+      m_window->update();
+#endif
     if (type == QEvent::Hide || type == QEvent::WindowDeactivate) {
       m_escapeTimer.stop();
       m_escapePressed = false;

@@ -228,6 +228,8 @@ Other capture contracts:
   controls. The blank-canvas surface remains active while OCR is hidden.
   Text lines share one selection range while owning fixed I-beam hover regions.
   Do not add native cursor overrides or a covering pointer layer above the crop.
+  On Linux, native cursor changes request a capture-window frame so cursor
+  presentation stays current after recognition and opening animations stop.
   Hidden drawing canvases and OCR line editors do not handle pointer input.
   Holding Escape dismisses the capture and terminates its pending jobs.
   Search and Translate percent-encode the selected text into Google URLs and
