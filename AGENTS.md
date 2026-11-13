@@ -229,6 +229,9 @@ Other capture contracts:
   The dim area uses one native `CropOverlay` scene-graph mesh with fixed vertex
   and index buffers rather than resizing separate QML rectangles.
   Annotation brush-hover painting pauses while a crop gesture is active.
+  During a held crop gesture, canvas cursor bindings retain the pressed
+  handle's native cursor shape even if the pointer outruns the crop geometry.
+  Releasing or cancelling the gesture restores normal hover cursor shapes.
   OCR crop partitioning runs once when the gesture ends rather than rebuilding
   text delegates on every pointer event. Hidden OCR layers do not instantiate
   text delegates, and clearing an empty text selection does not walk the model.

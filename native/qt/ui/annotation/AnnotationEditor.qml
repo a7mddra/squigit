@@ -190,7 +190,7 @@ Item {
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             hoverEnabled: !selectionCrop.interacting
             preventStealing: true
-            cursorShape: surface.cursorShape
+            cursorShape: selectionCrop.interacting ? selectionCrop.dragCursorShape : surface.cursorShape
             onEntered: surface.hoverAt(Qt.point(mouseX, mouseY))
             onExited: surface.leave()
             onPressed: function (mouse) {

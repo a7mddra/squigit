@@ -20,6 +20,7 @@ Item {
     property int horizontalEdge: 0
     property int verticalEdge: 0
     property bool moving: false
+    property int dragCursorShape: Qt.ArrowCursor
     readonly property string selectedText: ocrTextLayer.selectedText
     readonly property bool hasTextSelection: ocrTextLayer.hasTextSelection
 
@@ -42,13 +43,14 @@ Item {
         controller.setSelection(Qt.rect(0, 0, width, height));
     }
 
-    function begin(item, mouse, horizontal, vertical, move) {
+    function begin(item, mouse, horizontal, vertical, move, cursor) {
         cancelInteraction();
         startArea = area;
         pressPoint = item.mapToItem(root, mouse.x, mouse.y);
         horizontalEdge = horizontal;
         verticalEdge = vertical;
         moving = move;
+        dragCursorShape = cursor;
         controller.beginCropInteraction();
         interacting = true;
         clearTextSelection();
@@ -139,7 +141,7 @@ Item {
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         hoverEnabled: true
         preventStealing: true
-        cursorShape: Qt.ArrowCursor
+        cursorShape: root.interacting ? root.dragCursorShape : Qt.ArrowCursor
         onPressed: function (mouse) {
             if (mouse.button === Qt.RightButton)
                 root.contextRequested(mouse.x, mouse.y);
@@ -166,9 +168,9 @@ Item {
         acceptedButtons: Qt.LeftButton
         hoverEnabled: true
         preventStealing: true
-        cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+        cursorShape: root.interacting ? root.dragCursorShape : pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
         onPressed: function (mouse) {
-            root.begin(qrMove, mouse, 0, 0, true);
+            root.begin(qrMove, mouse, 0, 0, true, Qt.ClosedHandCursor);
         }
         onPositionChanged: function (mouse) {
             if (pressed)
@@ -201,9 +203,9 @@ Item {
             height: index % 2 === 0 ? 6 : root.area.height + 6
             preventStealing: true
             hoverEnabled: true
-            cursorShape: Qt.SizeAllCursor
+            cursorShape: root.interacting ? root.dragCursorShape : Qt.SizeAllCursor
             onPressed: function (mouse) {
-                root.begin(borderMove, mouse, 0, 0, true);
+                root.begin(borderMove, mouse, 0, 0, true, Qt.SizeAllCursor);
             }
             onPositionChanged: function (mouse) {
                 if (pressed)
@@ -273,9 +275,9 @@ Item {
                 anchors.fill: parent
                 preventStealing: true
                 hoverEnabled: true
-                cursorShape: handle.modelData.cursor
+                cursorShape: root.interacting ? root.dragCursorShape : handle.modelData.cursor
                 onPressed: function (mouse) {
-                    root.begin(resizeMouse, mouse, handle.modelData.horizontal, handle.modelData.vertical, false);
+                    root.begin(resizeMouse, mouse, handle.modelData.horizontal, handle.modelData.vertical, false, handle.modelData.cursor);
                 }
                 onPositionChanged: function (mouse) {
                     if (pressed)
