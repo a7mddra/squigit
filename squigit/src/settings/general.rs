@@ -97,6 +97,7 @@ impl General {
         let enabled = !self.config.play_sounds;
         self.work(Task::Sounds, move || {
             AppData::open()?.update(|config| config.general.play_sounds = enabled)?;
+            crate::audio::set_enabled(enabled);
             Ok(Outcome::Sounds(enabled))
         });
     }

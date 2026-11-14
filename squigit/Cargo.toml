@@ -18,7 +18,7 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 notify-rust = "4.19"
 keyring = "4.2"
 opener = { version = "0.8", features = ["reveal"] }
-rodio = { version = "=0.20.1", default-features = false, features = ["mp3"] }
+rodio = { version = "=0.20.1", default-features = false, features = ["mp3", "wav"] }
 rand = "0.8"
 reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
 rune = { git = "https://github.com/anomalyco/rune", rev = "2259d0c82af372dbb4d43dfd5989f72c44d152be" }

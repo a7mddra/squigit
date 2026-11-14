@@ -2,7 +2,7 @@ use anyhow::Result;
 use notify_rust::{Notification, NotificationResponse};
 use std::path::{Path, PathBuf};
 
-use crate::alert::Player;
+use crate::audio::{Player, Sound};
 
 #[cfg(any(windows, target_os = "macos"))]
 const APP_ID: &str = "io.github.a7mddra.squigit";
@@ -30,20 +30,20 @@ pub fn initialize() -> Result<()> {
     Ok(())
 }
 
-pub fn saved(path: PathBuf, alert: Player) {
+pub fn saved(path: PathBuf, sounds: Player) {
     std::thread::spawn(move || {
-        if let Err(error) = show_saved(&path, &alert) {
+        if let Err(error) = show_saved(&path, &sounds) {
             eprintln!("[squigit] Image saved, but its notification failed: {error:#}");
         }
     });
 }
 
-pub fn missing_image_hosting_key(settings: rune::AppHandle<crate::settings::App>, alert: Player) {
+pub fn missing_image_hosting_key(settings: rune::AppHandle<crate::settings::App>, sounds: Player) {
     image_search_error(
         "Set up your selected provider in Image hosting to use Circle to Search, Ask Google, and online QR scanning.".into(),
         true,
         settings,
-        alert,
+        sounds,
     );
 }
 
@@ -51,10 +51,10 @@ pub fn image_search_error(
     message: String,
     missing_key: bool,
     settings: rune::AppHandle<crate::settings::App>,
-    alert: Player,
+    sounds: Player,
 ) {
     std::thread::spawn(move || {
-        if let Err(error) = show_image_search_error(&message, missing_key, settings, &alert) {
+        if let Err(error) = show_image_search_error(&message, missing_key, settings, &sounds) {
             eprintln!("[squigit] {message}; notification failed: {error:#}");
         }
     });
@@ -64,9 +64,8 @@ fn show_image_search_error(
     message: &str,
     missing_key: bool,
     settings: rune::AppHandle<crate::settings::App>,
-    alert: &Player,
+    sounds: &Player,
 ) -> Result<()> {
-    alert.play();
     let event_id = format!("{:032x}", rand::random::<u128>());
     let mut notification = Notification::new();
     notification
@@ -97,6 +96,7 @@ fn show_image_search_error(
             .hint(notify_rust::Hint::Resident(true))
             .action("default", "Set API");
         let handle = notification.show()?;
+        sounds.play(Sound::Alert);
         handle.wait_for_response(|response: &NotificationResponse| {
             if matches!(response, NotificationResponse::Default)
                 || matches!(response, NotificationResponse::Action(action) if action == &settings_action)
@@ -107,12 +107,12 @@ fn show_image_search_error(
         })?;
     } else {
         notification.show()?;
+        sounds.play(Sound::Alert);
     }
     Ok(())
 }
 
-fn show_saved(path: &Path, alert: &Player) -> Result<()> {
-    alert.play();
+fn show_saved(path: &Path, sounds: &Player) -> Result<()> {
     let filename = path
         .file_name()
         .unwrap_or(path.as_os_str())
@@ -137,7 +137,9 @@ fn show_saved(path: &Path, alert: &Player) -> Result<()> {
     #[cfg(windows)]
     notification.app_id(APP_ID);
 
-    notification.show()?.wait_for_response(|response: &NotificationResponse| {
+    let handle = notification.show()?;
+    sounds.play(Sound::Alert);
+    handle.wait_for_response(|response: &NotificationResponse| {
         if matches!(response, NotificationResponse::Default)
             || matches!(response, NotificationResponse::Action(action) if action == "open-folder")
         {

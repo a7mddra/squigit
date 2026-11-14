@@ -42,7 +42,7 @@ provider = "imgbb"
 chevereto_url = ""
 ```
 
-**Play sounds** controls both menu ticks and notification alerts, and takes effect on the next sound without restarting. Sound preferences are read on the audio worker threads, including when a separate configuration window changes them.
+**Play sounds** controls both menu ticks and notification alerts without restarting. Changes in the tray's configuration window update the in-memory preference immediately; a separate configuration process is picked up by a background monitor within 250 ms. Playback does not read configuration files. Both embedded sounds are decoded once and share one bounded audio worker and output stream. The worker detects backend errors, stalled callbacks, and default-device changes, then recreates output with a bounded retry delay. Stale feedback is discarded, and failures use rate-limited stderr diagnostics. Notification alerts are queued only after the OS accepts the notification.
 
 **Open on startup** registers the current executable for the current user's OS login: an XDG autostart entry on Linux, a LaunchAgent on macOS, or a Run registry value on Windows. It starts Squigit in the tray with its windows and radial menu hidden. The switch reads the OS registration directly; it is off until enabled.
 

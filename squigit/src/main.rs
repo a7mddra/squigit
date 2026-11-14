@@ -1,7 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod about;
-mod alert;
+mod audio;
 mod auth;
 mod cache;
 mod image_hosting;
@@ -10,7 +10,6 @@ mod notifications;
 mod settings;
 mod startup;
 mod storage;
-mod tick;
 
 use anyhow::{Context, Result};
 use fs2::FileExt;
@@ -84,17 +83,16 @@ fn run() -> Result<ExitCode> {
     let settings = app.handle();
     let search_settings = settings.clone();
     let search_data = data.clone();
-    let tick = tick::Player::start(data.clone());
-    let alert = alert::Player::start(data.clone());
-    let event_alert = alert.clone();
+    let sounds = audio::Player::start(data.clone());
+    let event_sounds = sounds.clone();
     let mut qt = squigit_qt::Runtime::start(
         models,
         storage::snapshots_dir()?,
         data.blobs_dir(),
         move |event| match event {
-            squigit_qt::RuntimeEvent::MenuTick => tick.play(),
+            squigit_qt::RuntimeEvent::MenuTick => event_sounds.play(audio::Sound::Tick),
             squigit_qt::RuntimeEvent::Saved { action, path } if action == "snapshot" => {
-                notifications::saved(path, event_alert.clone());
+                notifications::saved(path, event_sounds.clone());
             }
             squigit_qt::RuntimeEvent::Saved { action, path } if action == "circle-to-search" => {
                 image_search::submit(
@@ -102,12 +100,12 @@ fn run() -> Result<ExitCode> {
                     path,
                     image_search::Target::Lens,
                     search_settings.clone(),
-                    event_alert.clone(),
+                    event_sounds.clone(),
                 );
             }
             squigit_qt::RuntimeEvent::Saved { .. } => {}
             squigit_qt::RuntimeEvent::Exported { path } => {
-                notifications::saved(path, event_alert.clone())
+                notifications::saved(path, event_sounds.clone())
             }
             squigit_qt::RuntimeEvent::Asked { prompt, path } => {
                 image_search::submit(
@@ -115,7 +113,7 @@ fn run() -> Result<ExitCode> {
                     path,
                     image_search::Target::Ai(prompt),
                     search_settings.clone(),
-                    event_alert.clone(),
+                    event_sounds.clone(),
                 );
             }
             squigit_qt::RuntimeEvent::Failed(error) => eprintln!("[squigit] {error}"),
@@ -174,7 +172,7 @@ fn run() -> Result<ExitCode> {
             _ => {}
         }
     })?;
-    image_search::check_configuration(data, app.handle(), alert);
+    image_search::check_configuration(data, app.handle(), sounds);
     app.run();
     drop(tray);
     qt.shutdown();

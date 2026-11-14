@@ -370,9 +370,20 @@ Use `~/.config/squigit` (or `$XDG_CONFIG_HOME/squigit`) on Linux,
 do not restore the removed capture or demo preferences.
 The General page is the initial settings page. Its OCR selector lists installed
 models and links to the OCR Models download page; do not duplicate the selector
-on OCR Models. The sound preference defaults to enabled and controls both tick
-and alert players, read on their worker threads so separate settings processes
-take effect without restarting. Linux notifications suppress their system sound
+on OCR Models. The sound preference defaults to enabled and controls tick and
+alert playback through `squigit/src/audio.rs`. Keep one shared bounded audio
+worker and output stream. Decode the embedded WAV and MP3 once with Rodio;
+use its CPAL backend with explicit stream-error callbacks, a callback
+heartbeat, and default-device checks so failed or changed output can reopen.
+Retry failed output at most once a second, drop stale feedback, and rate-limit
+stderr diagnostics for worker, queue, preference, and stream failures.
+Playback reads only the atomic preference cache. Update it after a successful
+General settings save; a separate background monitor checks the config file
+revision every 250 ms for changes from other processes. Retain the last valid
+preference if reading fails. Preference generations invalidate queued feedback
+across mute/unmute changes. Do not read configuration from playback.
+Queue notification alerts only after `Notification::show` succeeds and before
+waiting for interaction. Linux notifications suppress their system sound
 because Squigit plays its own alert.
 Open on startup reads and updates the current user's OS registration rather
 than a separate boolean: XDG `autostart/squigit.desktop`, macOS
