@@ -338,12 +338,6 @@ fn read_events(
                 };
                 handle.write(&response)?;
             }
-            "image_exported" => on_event(RuntimeEvent::Exported {
-                path: event["path"]
-                    .as_str()
-                    .context("Missing exported path")?
-                    .into(),
-            }),
             "capture_finished" => {
                 jobs.cancel_all();
                 let session = event["session"]
@@ -357,6 +351,12 @@ fn read_events(
                             .context("Missing capture action")?
                             .to_owned(),
                         path: event["path"].as_str().context("Missing saved path")?.into(),
+                    }),
+                    Some("exported") => on_event(RuntimeEvent::Exported {
+                        path: event["path"]
+                            .as_str()
+                            .context("Missing exported path")?
+                            .into(),
                     }),
                     Some("ask_google") => on_event(RuntimeEvent::Asked {
                         prompt: event["prompt"]

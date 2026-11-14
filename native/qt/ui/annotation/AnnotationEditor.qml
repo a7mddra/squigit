@@ -131,6 +131,11 @@ Item {
                     }, {
                         "label": "Export normal image",
                         "action": "exportNormal"
+                    }, {
+                        "separator": true
+                    }, {
+                        "label": "Export as a copy",
+                        "action": "exportCopy"
                     }]);
         } else {
             if (document.tool !== tool)
@@ -144,8 +149,10 @@ Item {
         else if (action === "copyImage" || action === "copyNormal") {
             if (controller.copyImage(action === "copyImage"))
                 dock.confirmCopy();
-        } else if (action === "exportImage" || action === "exportNormal") {
-            if (controller.exportImage(action === "exportImage"))
+        } else if (action === "exportImage" || action === "exportNormal")
+            controller.exportImage(action === "exportImage");
+        else if (action === "exportCopy") {
+            if (controller.exportImage(true, true))
                 dock.confirmExport();
         } else if (action === "undo")
             document.undo();

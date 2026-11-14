@@ -476,7 +476,7 @@ bool CaptureEngine::copyImage(bool annotated) {
   return true;
 }
 
-bool CaptureEngine::exportImage(bool annotated) {
+bool CaptureEngine::exportImage(bool annotated, bool asCopy) {
   if (m_retired || !hasSelection()) return false;
   m_annotations.finishTextEditing();
   m_annotations.cancelStroke();
@@ -486,7 +486,8 @@ bool CaptureEngine::exportImage(bool annotated) {
     std::cerr << "CAPTURE_NATIVE_ERROR: could not export the image" << std::endl;
     return false;
   }
-  emit imageExported(path);
+  if (!asCopy)
+    emit completed("exported", path);
   return true;
 }
 

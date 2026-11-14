@@ -280,7 +280,9 @@ Other capture contracts:
 
 - Snapshot keeps only the chosen display's overlay after selection, with a
   movable, resizable crop and a shared annotation dock. Its Export action saves
-  to `Pictures/squigit` and keeps the overlay open. Ask Google shares the dock
+  to `Pictures/squigit` and closes the overlay before the saved-image notification.
+  Export as a copy saves to the same folder and keeps the overlay open, with
+  check-icon feedback and no notification or sound. Ask Google shares the dock
   and adds a floating composer centered at the
   bottom of the chosen display and layered above the crop; sending writes the
   crop to app data `blob_storage` and closes the overlay before uploading.
@@ -304,12 +306,14 @@ Other capture contracts:
   occurrences; keep the visible text unchanged without counters. Each Set API
   action must still open Image hosting.
 
-- Each successful dock export emits
-  `{"type":"image_exported","session":"...","path":"..."}` on Qt stdout.
-  Rust forwards it to the existing saved-image OS notification without releasing
-  the capture or cancelling its workers. Copy and Export confirm each successful
-  action with a temporary check icon, including repeated clicks and shortcuts.
-  Annotation operations do not show toasts.
+- Normal annotated and original-image exports finish with `capture_finished`
+  status `exported` and a `path` field after hiding the overlay. Rust cancels
+  capture workers and releases the capture before forwarding the path to the
+  saved-image OS notification. The shared behavior applies to Snapshot and
+  Ask Google, including Ctrl+S. Export as a copy emits no completion or export
+  event, stays open, and confirms each successful save with a temporary check
+  icon. Image copy also uses check-icon feedback. Annotation operations do not
+  show toasts.
 
 - Hide the radial window and its center label immediately, with zero hide
   animation. Disable native transitions where supported and allow 350 ms for
